@@ -11,6 +11,7 @@ from docker.client import DockerClient
 
 from app.config.settings import DEFAULT_HOST
 from app.core.docker_local import LocalDockerConnector
+from app.core.docker_ssh import SSHDockerConnector
 
 
 class DockerClientFactory:
@@ -25,13 +26,10 @@ class DockerClientFactory:
         """
 
         if DEFAULT_HOST.is_local:
-            connector = LocalDockerConnector()
-            return connector.get_client()
+            return LocalDockerConnector().get_client()
 
         if DEFAULT_HOST.is_ssh:
-            raise NotImplementedError(
-                "La conexión SSH se implementará en la Entrega 4.3.2."
-            )
+            return SSHDockerConnector(DEFAULT_HOST).get_client()
 
         if DEFAULT_HOST.is_tcp:
             raise NotImplementedError(
