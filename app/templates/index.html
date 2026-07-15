@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{{ app_name }}</title>
+
+    <link rel="stylesheet" href="/static/css/style.css">
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <header class="header">
+
+        <div>
+
+            <h1>{{ app_name }}</h1>
+
+            <span class="version">v{{ app_version }}</span>
+
+        </div>
+
+    </header>
+
+    <section class="grid">
+
+        <div class="card">
+
+            <h2>🐳 Docker</h2>
+
+            {% if docker.available %}
+
+                <p class="ok">En funcionamiento</p>
+
+                <p>Engine: {{ docker.engine_version }}</p>
+
+                <p>Contenedores activos: {{ docker.containers_running }}</p>
+
+                <p>Contenedores detenidos: {{ docker.containers_stopped }}</p>
+
+                <p>Imágenes: {{ docker.images }}</p>
+
+                <p>Volúmenes: {{ docker.volumes }}</p>
+
+                <p>Redes: {{ docker.networks }}</p>
+
+            {% else %}
+
+                <p class="error">{{ docker.error }}</p>
+
+            {% endif %}
+
+        </div>
+
+        <div class="card">
+
+            <h2>💾 Disco</h2>
+
+            <p>Total: {{ disk.total_gb }} GB</p>
+
+            <p>Usado: {{ disk.used_gb }} GB</p>
+
+            <p>Libre: {{ disk.free_gb }} GB</p>
+
+            <p>Uso: {{ disk.percent }}%</p>
+
+        </div>
+
+    </section>
+
+    <section class="card">
+
+        <h2>📦 Aplicaciones Docker Compose</h2>
+
+        {% if applications %}
+
+            <table class="services">
+
+                <thead>
+
+                    <tr>
+
+                        <th>Aplicación</th>
+
+                        <th>Contenedores</th>
+
+                        <th>Estado</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                {% for app in applications %}
+
+                    <tr>
+
+                        <td>{{ app.name }}</td>
+
+                        <td>{{ app.containers }}</td>
+
+                        <td>
+
+                            {% if app.status == "running" %}
+
+                                <span class="ok">🟢 Running</span>
+
+                            {% else %}
+
+                                <span class="error">🔴 {{ app.status|capitalize }}</span>
+
+                            {% endif %}
+
+                        </td>
+
+                    </tr>
+
+                {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        {% else %}
+
+            <p>No se han detectado aplicaciones Docker Compose.</p>
+
+        {% endif %}
+
+    </section>
+
+    <section class="card">
+
+        <h2>Contenedores Docker</h2>
+
+        <table class="services">
+
+            <thead>
+
+                <tr>
+
+                    <th>Contenedor</th>
+
+                    <th>Imagen</th>
+
+                    <th>Estado</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+            {% if services %}
+
+                {% for service in services %}
+
+                <tr>
+
+                    <td>{{ service.name }}</td>
+
+                    <td>{{ service.image }}</td>
+
+                    <td>
+
+                        {% if service.running %}
+
+                            <span class="ok">🟢 Running</span>
+
+                        {% else %}
+
+                            <span class="error">🔴 {{ service.status|capitalize }}</span>
+
+                        {% endif %}
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            {% else %}
+
+                <tr>
+
+                    <td colspan="3">
+
+                        No se han encontrado contenedores Docker.
+
+                    </td>
+
+                </tr>
+
+            {% endif %}
+
+            </tbody>
+
+        </table>
+
+    </section>
+
+    <section class="actions">
+
+        <button>Escanear</button>
+
+        <button>Crear Backup</button>
+
+        <button>Restaurar</button>
+
+        <button>Configuración</button>
+
+    </section>
+
+</div>
+
+</body>
+
+</html>

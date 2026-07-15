@@ -1,0 +1,97 @@
+body{
+
+    margin:0;
+
+    background:#0f172a;
+
+    color:white;
+
+    font-family:Arial,Helvetica,sans-serif;
+
+}
+
+.container{
+
+    width:900px;
+
+    margin:auto;
+
+    margin-top:70px;
+
+    text-align:center;
+
+}
+
+h1{
+
+    color:#42d392;
+
+    font-size:48px;
+
+}
+
+h2{
+
+    color:#94a3b8;
+
+}
+
+.card{
+
+    margin-top:40px;
+
+    background:#1e293b;
+
+    border-radius:12px;
+
+    padding:30px;
+
+    box-shadow:0 0 20px rgba(0,0,0,.3);
+
+    text-align:left;
+
+    font-size:20px;
+
+}
+.actions{
+    margin-top:30px;
+    display:flex;
+    gap:15px;
+    flex-wrap:wrap;
+}
+
+.actions button{
+
+    background:#3fbf7f;
+    color:white;
+
+    border:none;
+    border-radius:8px;
+
+    padding:12px 22px;
+
+    font-size:16px;
+
+    cursor:pointer;
+
+    transition:.25s;
+}
+
+.actions button:hover{
+
+    background:#2fa36a;
+
+    transform:translateY(-2px);
+
+}
+.backup-card{
+
+    margin-top:35px;
+
+    padding:20px;
+
+    border-radius:10px;
+
+    background:#252c3c;
+
+}
