@@ -21,7 +21,7 @@ class AppDiscoveryService:
         Devuelve una lista con la información de cada aplicación.
         """
 
-        containers = self.docker.client.containers.list(all=True)
+        containers = self.docker.list_raw_containers()
 
         projects = defaultdict(list)
 
@@ -39,8 +39,8 @@ class AppDiscoveryService:
         for project, project_containers in projects.items():
 
             running = all(
-                c.status == "running"
-                for c in project_containers
+                container.status == "running"
+                for container in project_containers
             )
 
             applications.append(
@@ -51,7 +51,8 @@ class AppDiscoveryService:
                 }
             )
 
-        return sorted(
-            applications,
-            key=lambda app: app["name"].lower(),
+        applications.sort(
+            key=lambda app: app["name"].lower()
         )
+
+        return applications

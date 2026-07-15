@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-import docker
 from docker.errors import DockerException
+
+from app.core.docker_client import DockerClientFactory
 
 
 class DockerService:
@@ -12,22 +13,21 @@ class DockerService:
     """
 
     def __init__(self) -> None:
-        self.client = self._connect()
+        self._client = DockerClientFactory.get_client()
 
-    def _connect(self):
+    @property
+    def client(self):
         """
-        Intenta conectar con Docker Engine.
-        """
-        try:
-            client = docker.from_env()
-            client.ping()
-            return client
+        Expone el cliente Docker en modo solo lectura.
 
-        except Exception:
-            return None
+        Este acceso se mantiene por compatibilidad durante la transición.
+        En futuras entregas los servicios dejarán de acceder directamente
+        al cliente Docker.
+        """
+        return self._client
 
     def is_available(self) -> bool:
-        return self.client is not None
+        return self._client is not None
 
     def get_status(self) -> dict[str, Any]:
         """
@@ -45,13 +45,13 @@ class DockerService:
             "error": "",
         }
 
-        if self.client is None:
+        if self._client is None:
             default["error"] = "No se pudo conectar con Docker Engine."
             return default
 
         try:
 
-            containers = self.client.containers.list(all=True)
+            containers = self._client.containers.list(all=True)
 
             running = sum(
                 1
@@ -61,14 +61,13 @@ class DockerService:
 
             stopped = len(containers) - running
 
-            version = self.client.version().get("Version", "-")
+            version = self._client.version().get("Version", "-")
 
-            images = len(self.client.images.list())
+            images = len(self._client.images.list())
 
-            # Compatible con docker-sdk 7.x
-            volumes = len(self.client.volumes.list())
+            volumes = len(self._client.volumes.list())
 
-            networks = len(self.client.networks.list())
+            networks = len(self._client.networks.list())
 
             return {
                 "available": True,
@@ -96,15 +95,19 @@ class DockerService:
         Devuelve la lista de contenedores Docker normalizada para la aplicación.
         """
 
-        if self.client is None:
+        if self._client is None:
             return []
 
         try:
             containers = []
 
-            for container in self.client.containers.list(all=True):
+            for container in self._client.containers.list(all=True):
 
-                image = container.image.tags[0] if container.image.tags else container.image.short_id
+                image = (
+                    container.image.tags[0]
+                    if container.image.tags
+                    else container.image.short_id
+                )
 
                 containers.append(
                     {
@@ -129,6 +132,24 @@ class DockerService:
 
         except DockerException:
             return []
+
+        except Exception:
+            return []
+
+    def list_raw_containers(self):
+        """
+        Devuelve los objetos Container del SDK Docker.
+
+        Este método será el único punto de acceso al cliente Docker para el
+        resto de servicios. De esta forma evitamos que conozcan la estructura
+        interna del cliente.
+        """
+
+        if self._client is None:
+            return []
+
+        try:
+            return self._client.containers.list(all=True)
 
         except Exception:
             return []
