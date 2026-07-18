@@ -1,0 +1,118 @@
+<section class="card">
+
+    <h2>💽 Destinos de almacenamiento</h2>
+
+    {% if storage %}
+
+    <div class="storage-grid">
+
+        {% for device in storage %}
+
+        <div class="storage-card">
+
+            <div class="storage-header">
+
+                <h3>{{ device.name }}</h3>
+
+                {% if device.device_type == "USB" %}
+
+                    <span class="badge badge-success">
+                        🔌 USB
+                    </span>
+
+                {% elif device.device_type == "Sistema" %}
+
+                    <span class="badge badge-warning">
+                        🖥️ Sistema
+                    </span>
+
+                {% else %}
+
+                    <span class="badge">
+                        {{ device.device_type }}
+                    </span>
+
+                {% endif %}
+
+            </div>
+
+            <div class="storage-info">
+
+                {% if device.model %}
+                <p>
+                    <strong>Modelo:</strong>
+                    {{ device.model }}
+                </p>
+                {% endif %}
+
+                {% if device.transport %}
+                <p>
+                    <strong>Transporte:</strong>
+                    {{ device.transport }}
+                </p>
+                {% endif %}
+
+                <p>
+                    <strong>Ruta:</strong>
+                    {{ device.mount_point }}
+                </p>
+
+                <p>
+                    <strong>Sistema:</strong>
+                    {{ device.filesystem }}
+                </p>
+
+            </div>
+
+            <div class="storage-capacity">
+
+                <p>
+                    <strong>Total:</strong>
+                    {{ (device.total / 1024 / 1024 / 1024)|round(2) }} GB
+                </p>
+
+                <p>
+                    <strong>Libre:</strong>
+                    {{ (device.free / 1024 / 1024 / 1024)|round(2) }} GB
+                </p>
+
+                <div class="progress">
+
+                    <div
+                        class="progress-bar"
+                        style="width: {{ device.percent }}%;"
+                    ></div>
+
+                </div>
+
+                {% if device.percent < 80 %}
+
+                    <p class="ok">
+                        Uso {{ device.percent }}%
+                    </p>
+
+                {% else %}
+
+                    <p class="error">
+                        Uso {{ device.percent }}%
+                    </p>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+    {% else %}
+
+        <p>
+            No se han detectado destinos de almacenamiento.
+        </p>
+
+    {% endif %}
+
+</section>

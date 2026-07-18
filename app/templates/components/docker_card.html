@@ -1,0 +1,59 @@
+<div class="card">
+
+    <h2>🐳 Docker</h2>
+
+    {% if docker.available %}
+
+        <p class="ok">
+            En funcionamiento
+        </p>
+
+        <p>
+            <strong>Engine:</strong>
+            {{ docker.engine_version }}
+        </p>
+
+        <p>
+            <strong>API:</strong>
+            {{ engine.api_version }}
+        </p>
+
+        <p>
+            <strong>Hostname:</strong>
+            {{ engine.hostname }}
+        </p>
+
+        <p>
+            <strong>Contenedores activos:</strong>
+            {{ docker.containers_running }}
+        </p>
+
+        <p>
+            <strong>Contenedores detenidos:</strong>
+            {{ docker.containers_stopped }}
+        </p>
+
+        <p>
+            <strong>Imágenes:</strong>
+            {{ docker.images }}
+        </p>
+
+        <p>
+            <strong>Volúmenes:</strong>
+            {{ docker.volumes }}
+        </p>
+
+        <p>
+            <strong>Redes:</strong>
+            {{ docker.networks }}
+        </p>
+
+    {% else %}
+
+        <p class="error">
+            {{ docker.error }}
+        </p>
+
+    {% endif %}
+
+</div>

@@ -15,7 +15,9 @@ from app.core.host import HostConfig
 # -----------------------------------------------------------------------------
 
 APP_NAME: str = "CasaOS Backup Manager"
-APP_VERSION: str = "0.1.0-alpha4"
+
+APP_VERSION: str = "0.3.0-alpha1"
+
 APP_DESCRIPTION: str = (
     "Professional backup manager for CasaOS Docker applications."
 )
@@ -25,6 +27,7 @@ APP_DESCRIPTION: str = (
 # -----------------------------------------------------------------------------
 
 HOST: str = "0.0.0.0"
+
 PORT: int = 8088
 
 DEBUG: bool = True
@@ -45,7 +48,15 @@ DEFAULT_HOST = HostConfig(
 DEFAULT_LANGUAGE: str = "es"
 
 # -----------------------------------------------------------------------------
-# Logging (se utilizará en próximas entregas)
+# Funcionalidades experimentales
+# -----------------------------------------------------------------------------
+
+FEATURE_APPLICATION_PROFILES: bool = True
+
+FEATURE_BACKUP_PLANNER: bool = True
+
+# -----------------------------------------------------------------------------
+# Logging
 # -----------------------------------------------------------------------------
 
 LOG_LEVEL: str = "INFO"

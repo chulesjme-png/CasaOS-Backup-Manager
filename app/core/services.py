@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from app.services.app_discovery_service import AppDiscoveryService
 from app.services.disk_service import DiskService
 from app.services.docker_service import DockerService
-from app.services.app_discovery_service import AppDiscoveryService
 
 
 docker_service = DockerService()
@@ -15,6 +15,13 @@ def get_docker_status():
     Devuelve el estado general del motor Docker.
     """
     return docker_service.get_status()
+
+
+def get_engine_info():
+    """
+    Devuelve información técnica del motor Docker y del host.
+    """
+    return docker_service.get_engine_info()
 
 
 def get_disk_usage():

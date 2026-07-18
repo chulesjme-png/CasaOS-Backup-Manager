@@ -90,6 +90,61 @@ class DockerService:
             default["error"] = str(e)
             return default
 
+    def get_engine_info(self) -> dict[str, Any]:
+        """
+        Devuelve información técnica del motor Docker y del host.
+
+        Este método está pensado para enriquecer el Dashboard con
+        información del servidor sin mezclarla con get_status().
+        """
+
+        default = {
+            "server_version": "-",
+            "api_version": "-",
+            "operating_system": "-",
+            "os_type": "-",
+            "architecture": "-",
+            "kernel_version": "-",
+            "hostname": "-",
+            "cpus": 0,
+            "memory_gb": 0,
+            "docker_root_dir": "-",
+            "error": "",
+        }
+
+        if self._client is None:
+            default["error"] = "No se pudo conectar con Docker Engine."
+            return default
+
+        try:
+
+            info = self._client.info()
+            version = self._client.version()
+
+            return {
+                "server_version": version.get("Version", "-"),
+                "api_version": version.get("ApiVersion", "-"),
+                "operating_system": info.get("OperatingSystem", "-"),
+                "os_type": info.get("OSType", "-"),
+                "architecture": info.get("Architecture", "-"),
+                "kernel_version": info.get("KernelVersion", "-"),
+                "hostname": info.get("Name", "-"),
+                "cpus": info.get("NCPU", 0),
+                "memory_gb": round(info.get("MemTotal", 0) / 1024**3, 2),
+                "docker_root_dir": info.get("DockerRootDir", "-"),
+                "error": "",
+            }
+
+        except DockerException as e:
+
+            default["error"] = str(e)
+            return default
+
+        except Exception as e:
+
+            default["error"] = str(e)
+            return default
+
     def list_containers(self) -> list[dict[str, Any]]:
         """
         Devuelve la lista de contenedores Docker normalizada para la aplicación.
