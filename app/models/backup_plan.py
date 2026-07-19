@@ -1,81 +1,33 @@
-<section class="card">
+from __future__ import annotations
 
-    <div class="card-header">
-        <h2>Backup Plans</h2>
-        <span class="badge">{{ backup_plans|length }}</span>
-    </div>
+from dataclasses import dataclass, field
 
-    <div class="card-body">
+from app.models.application_profile import ApplicationProfile
 
-        {% if backup_plans %}
 
-        <table class="table">
+@dataclass
+class BackupPlan:
+    """
+    Plan de copia generado para una aplicación.
 
-            <thead>
-                <tr>
-                    <th>Application</th>
-                    <th>Profile</th>
-                    <th>Sources</th>
-                    <th>Estimated Size</th>
-                    <th>Warnings</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
+    Este modelo representa el resultado de procesar un
+    ApplicationProfile.
 
-            <tbody>
+    Su finalidad es describir qué debe respaldarse, sin entrar
+    todavía en la resolución física de los recursos ni depender
+    de ningún backend de ejecución.
+    """
 
-                {% for plan in backup_plans %}
+    application: str
 
-                <tr>
+    profile: ApplicationProfile
 
-                    <td>{{ plan.application }}</td>
+    enabled: bool = True
 
-                    <td>{{ plan.profile.name }}</td>
+    sources: list[str] = field(default_factory=list)
 
-                    <td>{{ plan.sources|length }}</td>
+    estimated_size: int = 0
 
-                    <td>{{ plan.estimated_size }}</td>
+    warnings: list[str] = field(default_factory=list)
 
-                    <td>{{ plan.warnings|length }}</td>
-
-                    <td>
-
-                        {% if plan.ready %}
-
-                        <span class="badge badge-success">
-                            Ready
-                        </span>
-
-                        {% else %}
-
-                        <span class="badge badge-warning">
-                            Pending
-                        </span>
-
-                        {% endif %}
-
-                    </td>
-
-                </tr>
-
-                {% endfor %}
-
-            </tbody>
-
-        </table>
-
-        {% else %}
-
-        <div class="empty-state">
-
-            <p>
-                No backup plans have been generated yet.
-            </p>
-
-        </div>
-
-        {% endif %}
-
-    </div>
-
-</section>
+    ready: bool = False

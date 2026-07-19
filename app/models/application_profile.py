@@ -1,77 +1,30 @@
-<section class="card">
+from dataclasses import dataclass, field
 
-    <div class="card-header">
-        <h2>Application Profiles</h2>
-        <span class="badge">{{ application_profiles|length }}</span>
-    </div>
 
-    <div class="card-body">
+@dataclass
+class ApplicationProfile:
+    """
+    Perfil de backup de una aplicación.
 
-        {% if application_profiles %}
+    Este modelo representa la configuración de backup
+    asociada a una aplicación descubierta.
 
-        <table class="table">
+    Un ApplicationProfile describe qué datos deben
+    protegerse y servirá como entrada para la generación
+    de un BackupPlan.
 
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Application</th>
-                    <th>Description</th>
-                    <th>Sources</th>
-                    <th>Tags</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
+    En futuras versiones podrá persistirse y editarse
+    desde la interfaz web.
+    """
 
-            <tbody>
+    name: str
 
-                {% for profile in application_profiles %}
+    application: str
 
-                <tr>
+    description: str
 
-                    <td>{{ profile.name }}</td>
+    enabled: bool = True
 
-                    <td>{{ profile.application }}</td>
+    backup_sources: list[str] = field(default_factory=list)
 
-                    <td>{{ profile.description }}</td>
-
-                    <td>{{ profile.backup_sources|length }}</td>
-
-                    <td>{{ profile.tags|join(", ") }}</td>
-
-                    <td>
-
-                        {% if profile.enabled %}
-                        <span class="badge badge-success">
-                            Enabled
-                        </span>
-                        {% else %}
-                        <span class="badge badge-secondary">
-                            Disabled
-                        </span>
-                        {% endif %}
-
-                    </td>
-
-                </tr>
-
-                {% endfor %}
-
-            </tbody>
-
-        </table>
-
-        {% else %}
-
-        <div class="empty-state">
-
-            <p>
-                No application profiles have been generated yet.
-            </p>
-
-        </div>
-
-        {% endif %}
-
-    </div>
-
-</section>
+    tags: list[str] = field(default_factory=list)
