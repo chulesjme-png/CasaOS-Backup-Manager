@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.services.app_discovery_service import AppDiscoveryService
 from app.services.application_profile_service import ApplicationProfileService
 from app.services.backup_discovery_service import BackupDiscoveryService
+from app.services.backup_job_builder_service import BackupJobBuilderService
 from app.services.backup_planner_service import BackupPlannerService
 from app.services.disk_service import DiskService
 from app.services.docker_service import DockerService
@@ -26,9 +27,10 @@ class DashboardService:
         self.storage_service = StorageService()
         self.backup_service = BackupDiscoveryService()
 
-        # Nuevo en v0.3.0-alpha1
+        # Arquitectura Backup Engine
         self.application_profile_service = ApplicationProfileService()
         self.backup_planner_service = BackupPlannerService()
+        self.backup_job_builder_service = BackupJobBuilderService()
 
     def get_dashboard_data(self) -> dict:
         """
@@ -43,8 +45,15 @@ class DashboardService:
         )
 
         backup_plans = (
-            self.backup_planner_service.build_plans(application_profiles)
+            self.backup_planner_service.build_plans(
+                application_profiles
+            )
         )
+
+        backup_jobs = [
+            self.backup_job_builder_service.build(plan)
+            for plan in backup_plans
+        ]
 
         return {
 
@@ -66,12 +75,15 @@ class DashboardService:
             # Dispositivos de almacenamiento
             "storage": self.storage_service.get_storage_devices(),
 
-            # Datos protegibles
+            # Compatibilidad temporal v0.x
             "backup_sources": self.backup_service.discover_sources(),
 
-            # Nuevo en v0.3.0-alpha1
+            # Application Profiles
             "application_profiles": application_profiles,
 
-            # Nuevo en v0.3.0-alpha1
+            # Backup Plans
             "backup_plans": backup_plans,
+
+            # Backup Engine
+            "backup_jobs": backup_jobs,
         }

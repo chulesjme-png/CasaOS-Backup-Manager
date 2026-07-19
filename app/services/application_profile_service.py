@@ -1,5 +1,6 @@
 from app.models.application_profile import ApplicationProfile
 from app.services.app_discovery_service import AppDiscoveryService
+from app.services.storage_resolver_service import StorageResolverService
 
 
 class ApplicationProfileService:
@@ -14,6 +15,7 @@ class ApplicationProfileService:
 
     def __init__(self):
         self._discovery = AppDiscoveryService()
+        self._storage_resolver = StorageResolverService()
 
     def build_profiles(self, applications):
         """
@@ -25,27 +27,9 @@ class ApplicationProfileService:
 
         for app in applications:
 
-            backup_sources = []
+            name = app.get("name", "unknown")
 
-            if isinstance(app, dict):
-                mounts = app.get("mounts", [])
-
-                for mount in mounts:
-                    source = mount.get("source")
-                    if source:
-                        backup_sources.append(source)
-
-                name = app.get("name", "unknown")
-
-            else:
-                mounts = getattr(app, "mounts", [])
-
-                for mount in mounts:
-                    source = getattr(mount, "source", None)
-                    if source:
-                        backup_sources.append(source)
-
-                name = getattr(app, "name", "unknown")
+            resources = self._storage_resolver.resolve(app)
 
             profiles.append(
                 ApplicationProfile(
@@ -53,12 +37,14 @@ class ApplicationProfileService:
                     application=name,
                     description=f"Perfil generado automáticamente para {name}",
                     enabled=True,
-                    backup_sources=sorted(set(backup_sources)),
+                    resources=resources,
                     tags=["auto"],
                 )
             )
 
-        profiles.sort(key=lambda p: p.name.lower())
+        profiles.sort(
+            key=lambda profile: profile.name.lower()
+        )
 
         return profiles
 
@@ -78,6 +64,7 @@ class ApplicationProfileService:
         """
 
         for profile in self.get_profiles():
+
             if profile.application == application_name:
                 return profile
 

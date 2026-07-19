@@ -1,20 +1,15 @@
 from dataclasses import dataclass, field
 
+from app.models.storage_resource import StorageResource
+
 
 @dataclass
 class ApplicationProfile:
     """
-    Perfil de backup de una aplicación.
+    Perfil de backup asociado a una aplicación.
 
-    Este modelo representa la configuración de backup
-    asociada a una aplicación descubierta.
-
-    Un ApplicationProfile describe qué datos deben
-    protegerse y servirá como entrada para la generación
-    de un BackupPlan.
-
-    En futuras versiones podrá persistirse y editarse
-    desde la interfaz web.
+    Describe la configuración necesaria para construir
+    un BackupPlan a partir de los recursos detectados.
     """
 
     name: str
@@ -25,6 +20,6 @@ class ApplicationProfile:
 
     enabled: bool = True
 
-    backup_sources: list[str] = field(default_factory=list)
+    resources: list[StorageResource] = field(default_factory=list)
 
     tags: list[str] = field(default_factory=list)

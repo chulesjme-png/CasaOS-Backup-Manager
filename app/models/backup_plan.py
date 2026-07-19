@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 from app.models.application_profile import ApplicationProfile
+from app.models.storage_resource import StorageResource
 
 
 @dataclass
@@ -10,12 +9,9 @@ class BackupPlan:
     """
     Plan de copia generado para una aplicación.
 
-    Este modelo representa el resultado de procesar un
-    ApplicationProfile.
-
-    Su finalidad es describir qué debe respaldarse, sin entrar
-    todavía en la resolución física de los recursos ni depender
-    de ningún backend de ejecución.
+    Representa el resultado de transformar un
+    ApplicationProfile en un plan preparado para
+    construir posteriormente un BackupJob.
     """
 
     application: str
@@ -24,7 +20,7 @@ class BackupPlan:
 
     enabled: bool = True
 
-    sources: list[str] = field(default_factory=list)
+    resources: list[StorageResource] = field(default_factory=list)
 
     estimated_size: int = 0
 

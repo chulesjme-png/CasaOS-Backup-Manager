@@ -18,7 +18,8 @@ class AppDiscoveryService:
         """
         Agrupa los contenedores por proyecto Docker Compose.
 
-        Devuelve una lista con la información de cada aplicación.
+        Devuelve información de cada aplicación incluyendo
+        los recursos de almacenamiento detectados.
         """
 
         containers = self.docker.list_raw_containers()
@@ -43,11 +44,29 @@ class AppDiscoveryService:
                 for container in project_containers
             )
 
+            mounts = []
+
+            for container in project_containers:
+
+                for mount in container.attrs.get(
+                    "Mounts",
+                    [],
+                ):
+
+                    mounts.append(
+                        {
+                            "source": mount.get("Source", ""),
+                            "destination": mount.get("Destination", ""),
+                            "type": mount.get("Type", "bind"),
+                        }
+                    )
+
             applications.append(
                 {
                     "name": project,
                     "containers": len(project_containers),
                     "status": "running" if running else "stopped",
+                    "mounts": mounts,
                 }
             )
 

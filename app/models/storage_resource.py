@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -8,8 +8,8 @@ class StorageResource:
     Representa un recurso de almacenamiento detectado en una
     aplicación Docker.
 
-    Este modelo describe un punto de almacenamiento susceptible
-    de formar parte de un Backup Source.
+    Mantiene la ruta original del host y la ruta utilizada
+    para validación dentro del contexto disponible.
     """
 
     application: str
@@ -23,3 +23,21 @@ class StorageResource:
     backup_candidate: bool = True
 
     ignore_reason: Optional[str] = None
+
+    # Ruta utilizada para validar el recurso.
+    #
+    # En entornos Docker normalmente será la ruta interna
+    # del contenedor (destination).
+    validation_path: Optional[str] = None
+
+    # Estado de validación
+
+    exists: bool = False
+
+    readable: bool = False
+
+    size: int = 0
+
+    validation_errors: list[str] = field(
+        default_factory=list
+    )
