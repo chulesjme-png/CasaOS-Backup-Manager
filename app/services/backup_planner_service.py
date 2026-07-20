@@ -22,7 +22,6 @@ class BackupPlannerService:
             StorageValidationService()
         )
 
-
     def build_plans(
         self,
         application_profiles: List[ApplicationProfile],
@@ -30,9 +29,7 @@ class BackupPlannerService:
 
         plans: List[BackupPlan] = []
 
-
         for profile in application_profiles:
-
 
             resources = (
                 self._storage_validator.validate(
@@ -40,9 +37,9 @@ class BackupPlannerService:
                 )
             )
 
-
             warnings = []
 
+            ready = True
 
             if not any(
                 resource.backup_candidate
@@ -53,22 +50,67 @@ class BackupPlannerService:
                     "No se han detectado recursos válidos para respaldar."
                 )
 
+                ready = False
+
+            estimated_size = 0
 
             for resource in resources:
 
-                for error in resource.validation_errors:
+                if not resource.backup_candidate:
+                    continue
+
+                status = resource.validation_status
+
+                if status == "ready":
+
+                    estimated_size += resource.size
+
+                elif status == "empty":
 
                     warnings.append(
+                        f"{resource.source}: recurso vacío."
+                    )
+
+                elif status == "missing":
+
+                    warnings.append(
+                        f"{resource.source}: ruta inexistente."
+                    )
+
+                    ready = False
+
+                elif status == "unreadable":
+
+                    warnings.append(
+                        f"{resource.source}: permiso insuficiente de lectura."
+                    )
+
+                    ready = False
+
+                elif status == "error":
+
+                    warnings.append(
+                        f"{resource.source}: error durante la validación."
+                    )
+
+                    ready = False
+
+                elif status == "unknown":
+
+                    warnings.append(
+                        f"{resource.source}: recurso sin validar."
+                    )
+
+                    ready = False
+
+                for error in resource.validation_errors:
+
+                    warning = (
                         f"{resource.source}: {error}"
                     )
 
-
-            estimated_size = sum(
-                resource.size
-                for resource in resources
-                if resource.backup_candidate
-            )
-
+                    if warning not in warnings:
+                        warnings.append(warning)
 
             plans.append(
                 BackupPlan(
@@ -78,14 +120,12 @@ class BackupPlannerService:
                     resources=resources,
                     estimated_size=estimated_size,
                     warnings=warnings,
-                    ready=len(warnings) == 0,
+                    ready=ready,
                 )
             )
-
 
         plans.sort(
             key=lambda plan: plan.application.lower()
         )
-
 
         return plans

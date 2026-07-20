@@ -41,3 +41,14 @@ class StorageResource:
     validation_errors: list[str] = field(
         default_factory=list
     )
+
+    # Estado resumido de la validación.
+    #
+    # Valores posibles:
+    #   - unknown
+    #   - ready
+    #   - missing
+    #   - unreadable
+    #   - empty
+    #   - error
+    validation_status: str = "unknown"

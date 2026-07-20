@@ -38,19 +38,26 @@ class StorageValidationService:
 
         return validated_resources
 
-
     def _validate_resource(
         self,
         resource: StorageResource,
     ):
+
+        # Reiniciar el estado de la validación
+        resource.exists = False
+        resource.readable = False
+        resource.size = 0
+        resource.validation_status = "unknown"
+        resource.validation_errors.clear()
 
         path = (
             resource.validation_path
             or resource.source
         )
 
-
         if not path:
+
+            resource.validation_status = "error"
 
             resource.validation_errors.append(
                 "Ruta de validación vacía"
@@ -58,10 +65,9 @@ class StorageValidationService:
 
             return
 
-
         if not os.path.exists(path):
 
-            resource.exists = False
+            resource.validation_status = "missing"
 
             resource.validation_errors.append(
                 "Ruta inexistente"
@@ -69,9 +75,7 @@ class StorageValidationService:
 
             return
 
-
         resource.exists = True
-
 
         if os.access(
             path,
@@ -82,12 +86,13 @@ class StorageValidationService:
 
         else:
 
-            resource.readable = False
+            resource.validation_status = "unreadable"
 
             resource.validation_errors.append(
                 "Permiso insuficiente de lectura"
             )
 
+            return
 
         try:
 
@@ -97,10 +102,21 @@ class StorageValidationService:
 
         except Exception as error:
 
+            resource.validation_status = "error"
+
             resource.validation_errors.append(
                 f"Error calculando tamaño: {error}"
             )
 
+            return
+
+        if resource.size == 0:
+
+            resource.validation_status = "empty"
+
+        else:
+
+            resource.validation_status = "ready"
 
     def _calculate_size(
         self,
@@ -109,11 +125,9 @@ class StorageValidationService:
 
         total_size = 0
 
-
         if os.path.isfile(path):
 
             return os.path.getsize(path)
-
 
         for root, _, files in os.walk(path):
 
@@ -133,6 +147,5 @@ class StorageValidationService:
                 except OSError:
 
                     continue
-
 
         return total_size

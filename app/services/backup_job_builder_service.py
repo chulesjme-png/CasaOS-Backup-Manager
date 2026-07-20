@@ -28,23 +28,29 @@ class BackupJobBuilderService:
         for resource in plan.resources:
 
             if not resource.backup_candidate:
+
                 excluded_sources.append(resource)
                 continue
 
-            if not resource.source:
-                missing_sources.append(resource)
-                warnings.append(
-                    f"Recurso sin origen válido: {resource.destination}"
-                )
-                continue
+            status = resource.validation_status
 
-            sources.append(resource)
+            if status == "ready":
+
+                sources.append(resource)
+
+            elif status == "empty":
+
+                # Un recurso vacío sigue siendo válido
+                sources.append(resource)
+
+            else:
+
+                missing_sources.append(resource)
 
         ready = (
             plan.enabled
+            and plan.ready
             and len(sources) > 0
-            and len(missing_sources) == 0
-            and len(warnings) == 0
         )
 
         return BackupJob(
