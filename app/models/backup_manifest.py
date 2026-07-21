@@ -9,7 +9,7 @@ No conoce implementaciones concretas.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from app.models.storage_resource import StorageResource
 
@@ -26,7 +26,7 @@ class BackupManifest:
         excluded_sources: list[StorageResource],
         warnings: list[str],
         estimated_size: int,
-        metadata: dict[str, Any] | None = None,
+        metadata: Optional[dict[str, Any]] = None,
         version: str = "1.0",
     ):
         self.application = application

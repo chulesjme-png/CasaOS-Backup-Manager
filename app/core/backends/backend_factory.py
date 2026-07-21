@@ -10,7 +10,7 @@ las implementaciones disponibles.
 """
 
 from app.core.backends.backend_registry import BackendRegistry
-from app.core.backends.null import NullBackupBackend
+from app.core.backends.null_backup_backend import NullBackupBackend
 
 
 class BackendFactory:

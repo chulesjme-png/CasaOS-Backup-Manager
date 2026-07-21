@@ -12,7 +12,7 @@ Contiene:
 from app.core.backends.backup_backend import BackupBackend
 from app.core.backends.backend_factory import BackendFactory
 from app.core.backends.backend_registry import BackendRegistry
-from app.core.backends.null import NullBackupBackend
+from app.core.backends.null_backup_backend import NullBackupBackend
 
 __all__ = [
     "BackupBackend",

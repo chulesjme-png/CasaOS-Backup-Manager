@@ -16,8 +16,8 @@ from app.services.backend_execution_service import (
     BackendExecutionService,
 )
 
-from app.core.backends.backend_registry import (
-    BackendRegistry,
+from app.core.backends.backend_factory import (
+    BackendFactory,
 )
 
 from app.models.backup_execution_request import (
@@ -31,7 +31,7 @@ from app.models.backup_manifest import (
 
 def test_backend_execution_service_resolves_backend():
 
-    registry = BackendRegistry()
+    registry = BackendFactory.create_registry()
 
     service = BackendExecutionService(
         registry

@@ -6,6 +6,8 @@ No ejecuta backups.
 No contiene lógica específica de motores.
 """
 
+from typing import Optional
+
 from app.models.backup_execution_request import (
     BackupExecutionRequest,
 )
@@ -33,7 +35,7 @@ class BackendExecutionService:
     def resolve(
         self,
         request: BackupExecutionRequest,
-    ) -> BackupBackend | None:
+    ) -> Optional[BackupBackend]:
         """
         Obtiene el backend solicitado.
         """

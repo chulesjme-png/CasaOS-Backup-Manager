@@ -11,6 +11,8 @@ Su responsabilidad es coordinar
 la generación de artefactos internos.
 """
 
+from typing import Optional
+
 from app.models.backup_job import BackupJob
 from app.models.backup_manifest import BackupManifest
 
@@ -26,7 +28,7 @@ class BackupEngineService:
 
     def __init__(
         self,
-        manifest_builder: BackupManifestBuilderService | None = None,
+        manifest_builder: Optional[BackupManifestBuilderService] = None,
     ):
         self.manifest_builder = (
             manifest_builder
