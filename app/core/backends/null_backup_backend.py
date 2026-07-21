@@ -1,48 +1,65 @@
 """
-Backend de prueba para validar el contrato BackupBackend.
+Backend nulo de pruebas.
 
-No realiza operaciones reales de backup.
+No realiza ninguna copia real.
+Sirve para validar el pipeline completo
+del Backup Engine.
 
-Su finalidad es comprobar que el Backup Engine
-puede trabajar contra cualquier implementación
-del contrato de backend.
+Implementa el contrato BackupBackend.
 """
 
-from app.core.backends.backup_backend import BackupBackend
-from app.models.backup_manifest import BackupManifest
+from datetime import datetime
+
+from app.core.backends.backup_backend import (
+    BackupBackend,
+)
+
+from app.models.backup_execution_request import (
+    BackupExecutionRequest,
+)
+
+from app.models.backup_result import (
+    BackupResult,
+)
 
 
 class NullBackupBackend(BackupBackend):
     """
-    Implementación vacía del contrato de backend.
-
-    Utilizada únicamente para pruebas internas.
+    Backend de prueba que simula
+    una ejecución correcta.
     """
 
     @property
     def name(self) -> str:
+        """
+        Nombre identificador del backend.
+        """
+
         return "null"
 
-    def supports(self, manifest: BackupManifest) -> bool:
+    def execute(
+        self,
+        request: BackupExecutionRequest,
+    ) -> BackupResult:
         """
-        El backend nulo acepta cualquier manifiesto.
+        Simula una ejecución de backup
+        devolviendo un resultado válido.
         """
-        return True
 
-    def execute(self, manifest: BackupManifest) -> None:
-        """
-        No realiza ninguna operación.
-        """
-        return None
+        started_at = datetime.utcnow()
 
-    def verify(self, manifest: BackupManifest) -> bool:
-        """
-        Siempre devuelve válido.
-        """
-        return True
+        finished_at = datetime.utcnow()
 
-    def restore(self, manifest: BackupManifest) -> None:
-        """
-        No realiza restauraciones.
-        """
-        return None
+        return BackupResult(
+            success=True,
+            backend=self.name,
+            application=request.manifest.application,
+            started_at=started_at,
+            finished_at=finished_at,
+            bytes_processed=0,
+            warnings=[],
+            errors=[],
+            metadata={
+                "message": "Null backend executed successfully."
+            },
+        )

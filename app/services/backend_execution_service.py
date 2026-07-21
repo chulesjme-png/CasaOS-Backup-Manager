@@ -23,7 +23,8 @@ from app.core.backends.backup_backend import (
 
 class BackendExecutionService:
     """
-    Servicio de resolución de backends.
+    Servicio encargado de resolver el backend
+    correspondiente a una solicitud de ejecución.
     """
 
     def __init__(
@@ -37,7 +38,8 @@ class BackendExecutionService:
         request: BackupExecutionRequest,
     ) -> Optional[BackupBackend]:
         """
-        Obtiene el backend solicitado.
+        Devuelve la implementación del backend solicitada
+        por la petición de ejecución.
         """
 
         return self.registry.get(
