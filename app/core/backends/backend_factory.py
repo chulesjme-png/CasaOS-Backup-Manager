@@ -9,8 +9,17 @@ No decide qué backend utilizar.
 las implementaciones disponibles.
 """
 
-from app.core.backends.backend_registry import BackendRegistry
-from app.core.backends.null_backup_backend import NullBackupBackend
+from app.core.backends.backend_registry import (
+    BackendRegistry,
+)
+
+from app.core.backends.null_backup_backend import (
+    NullBackupBackend,
+)
+
+from app.core.backends.duplicati_backend import (
+    DuplicatiBackend,
+)
 
 
 class BackendFactory:
@@ -28,6 +37,10 @@ class BackendFactory:
 
         registry.register(
             NullBackupBackend()
+        )
+
+        registry.register(
+            DuplicatiBackend()
         )
 
         return registry

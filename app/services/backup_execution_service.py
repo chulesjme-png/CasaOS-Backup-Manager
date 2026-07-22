@@ -14,7 +14,13 @@ No resuelve backends.
 No conoce implementaciones concretas.
 """
 
+from typing import Optional
+
 from app.models.backup_manifest import BackupManifest
+
+from app.models.backend_configuration import (
+    BackendConfiguration,
+)
 
 from app.models.backup_execution_request import (
     BackupExecutionRequest,
@@ -31,6 +37,7 @@ class BackupExecutionService:
         self,
         manifest: BackupManifest,
         backend_name: str,
+        backend_configuration: Optional[BackendConfiguration] = None,
     ) -> BackupExecutionRequest:
         """
         Construye una solicitud de ejecución
@@ -40,4 +47,5 @@ class BackupExecutionService:
         return BackupExecutionRequest(
             manifest=manifest,
             backend_name=backend_name,
+            backend_configuration=backend_configuration,
         )
