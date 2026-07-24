@@ -27,6 +27,11 @@ from datetime import datetime
 from typing import Optional
 
 from app.models.backup_job import BackupJob
+
+from app.models.backup_operation import (
+    BackupOperationType,
+)
+
 from app.models.backup_result import BackupResult
 
 from app.services.backup_engine_service import (
@@ -41,15 +46,11 @@ from app.services.backend_execution_service import (
     BackendExecutionService,
 )
 
-from app.services.backend_capability_service import (
-    BackendCapabilityService,
-)
-
 
 class BackupRunnerService:
     """
     Orquestador principal de una ejecución
-    de backup.
+    del Backup Engine.
     """
 
     def __init__(
@@ -57,7 +58,6 @@ class BackupRunnerService:
         backend_execution_service: BackendExecutionService,
         engine_service: Optional[BackupEngineService] = None,
         execution_service: Optional[BackupExecutionService] = None,
-        capability_service: Optional[BackendCapabilityService] = None,
     ):
         self.engine_service = (
             engine_service
@@ -73,18 +73,17 @@ class BackupRunnerService:
             backend_execution_service
         )
 
-        self.capability_service = (
-            capability_service
-            or BackendCapabilityService()
-        )
-
     def run(
         self,
         backup_job: BackupJob,
         backend_name: str,
+        operation: BackupOperationType = (
+            BackupOperationType.RUN_BACKUP
+        ),
     ) -> BackupResult:
         """
-        Ejecuta un flujo completo de backup.
+        Ejecuta una operación completa
+        del Backup Engine.
         """
 
         manifest = self.engine_service.prepare(
@@ -92,8 +91,9 @@ class BackupRunnerService:
         )
 
         request = self.execution_service.prepare(
-            manifest,
-            backend_name,
+            manifest=manifest,
+            backend_name=backend_name,
+            operation=operation,
         )
 
         backend = (
@@ -103,17 +103,14 @@ class BackupRunnerService:
         )
 
         if backend is None:
+
             raise RuntimeError(
                 f"Backend '{backend_name}' no registrado."
             )
 
-        capabilities = (
-            self.capability_service.discover(
-                backend
-            )
-        )
-
-        if not capabilities.can_run_backup:
+        if not backend.supports_operation(
+            request.operation
+        ):
 
             now = datetime.utcnow()
 
@@ -126,10 +123,13 @@ class BackupRunnerService:
                 bytes_processed=0,
                 warnings=[],
                 errors=[
-                    "Backend does not support backup execution."
+                    (
+                        "Backend does not support "
+                        f"operation '{request.operation.value}'."
+                    )
                 ],
                 metadata={
-                    "capabilities": capabilities,
+                    "operation": request.operation.value,
                 },
             )
 

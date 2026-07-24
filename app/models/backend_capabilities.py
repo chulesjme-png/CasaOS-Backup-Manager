@@ -30,9 +30,13 @@ class BackendCapabilities:
 
     can_run_backup: bool = False
 
+    can_get_status: bool = False
+
     can_cancel_backup: bool = False
 
     can_restore: bool = False
+
+    can_verify: bool = False
 
     supports_encryption: bool = False
 

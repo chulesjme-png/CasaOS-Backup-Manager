@@ -40,8 +40,16 @@ from app.models.backup_execution_request import (
     BackupExecutionRequest,
 )
 
+from app.models.backup_operation import (
+    BackupOperationType,
+)
+
 from app.models.backup_result import (
     BackupResult,
+)
+
+from app.services.duplicati_job_builder import (
+    DuplicatiJobBuilder,
 )
 
 
@@ -52,27 +60,20 @@ class DuplicatiBackend(BackupBackend):
 
     @property
     def name(self) -> str:
-        """
-        Nombre identificador del backend.
-        """
-
         return "duplicati"
-
 
     @property
     def capabilities(self) -> BackendCapabilities:
-        """
-        Capacidades soportadas por Duplicati.
-        """
-
         return BackendCapabilities(
             backend=self.name,
             version="unknown",
             api_available=True,
             can_create_jobs=True,
             can_run_backup=True,
+            can_get_status=True,
             can_cancel_backup=True,
             can_restore=True,
+            can_verify=False,
             supports_encryption=True,
             supports_compression=True,
             supports_retention=True,
@@ -82,108 +83,226 @@ class DuplicatiBackend(BackupBackend):
             },
         )
 
-
     def execute(
         self,
         request: BackupExecutionRequest,
     ) -> BackupResult:
         """
-        Ejecuta una operación mediante Duplicati.
-
-        Actualmente:
-
-        - valida configuración;
-        - autentica contra Duplicati;
-        - consulta estado del servidor;
-        - devuelve información en BackupResult.
-
-        Todavía no lanza backups reales.
+        Dispatcher principal del backend.
         """
+
+        operation = request.operation
+
+        if operation == BackupOperationType.CREATE_JOB:
+            return self._create_job(request)
+
+        if operation == BackupOperationType.RUN_BACKUP:
+            return self._run_backup(request)
+
+        if operation == BackupOperationType.GET_STATUS:
+            return self._get_status(request)
+
+        if operation == BackupOperationType.CANCEL:
+            return self._cancel(request)
+
+        if operation == BackupOperationType.RESTORE:
+            return self._restore(request)
+
+        if operation == BackupOperationType.VERIFY:
+            return self._verify(request)
+
+        raise ValueError(
+            f"Operación no soportada: {operation}"
+        )
+
+    def _create_job(
+        self,
+        request: BackupExecutionRequest,
+    ) -> BackupResult:
+        """
+        Construye un trabajo Duplicati.
+
+        En esta primera versión únicamente transforma el
+        BackupManifest en un DuplicatiJob.
+        """
+
+        builder = DuplicatiJobBuilder()
+
+        builder.build(
+            request.manifest,
+        )
+
+        return self._not_implemented(
+            request,
+            "CREATE_JOB",
+        )
+
+    def _run_backup(
+        self,
+        request: BackupExecutionRequest,
+    ) -> BackupResult:
+        """
+        Compatibilidad temporal.
+
+        Hasta que exista la ejecución real del backup,
+        RUN_BACKUP mantiene el comportamiento histórico
+        consultando el estado del servidor Duplicati.
+        """
+
+        return self._get_status(
+            request,
+        )
+
+    def _get_status(
+        self,
+        request: BackupExecutionRequest,
+    ) -> BackupResult:
 
         started_at = datetime.utcnow()
 
         warnings = []
+
         errors = []
+
         metadata = {}
+
+        success = False
 
         try:
 
-            configuration = {}
-
-            if request.backend_configuration:
-
-                configuration = (
-                    request.backend_configuration.configuration
-                )
-
-
-            url = configuration.get(
-                "url"
-            )
-
-            if not url:
-
-                raise ConnectorError(
-                    "Duplicati URL no configurada"
-                )
-
-
-            timeout = configuration.get(
-                "timeout",
-                30,
-            )
-
-
-            password = configuration.get(
-                "password",
-                "",
-            )
-
-
-            client = DuplicatiClient(
-                base_url=url,
-                timeout=timeout,
-                password=password,
-            )
-
+            client = self._build_client(request)
 
             server_state = client.get_server_state()
 
-
             metadata = {
                 "duplicati_server_state": server_state,
-                "duplicati_version": (
-                    server_state.get(
-                        "Version",
-                        "unknown",
-                    )
+                "duplicati_version": server_state.get(
+                    "Version",
+                    "unknown",
                 ),
             }
 
-
             success = True
 
-
         except ConnectorError as exc:
-
-            success = False
 
             errors.append(
                 str(exc)
             )
 
+        return self._build_result(
+            request=request,
+            success=success,
+            started_at=started_at,
+            warnings=warnings,
+            errors=errors,
+            metadata=metadata,
+        )
 
-        finished_at = datetime.utcnow()
+    def _cancel(
+        self,
+        request: BackupExecutionRequest,
+    ) -> BackupResult:
 
+        return self._not_implemented(
+            request,
+            "CANCEL",
+        )
+
+    def _restore(
+        self,
+        request: BackupExecutionRequest,
+    ) -> BackupResult:
+
+        return self._not_implemented(
+            request,
+            "RESTORE",
+        )
+
+    def _verify(
+        self,
+        request: BackupExecutionRequest,
+    ) -> BackupResult:
+
+        return self._not_implemented(
+            request,
+            "VERIFY",
+        )
+
+    def _build_client(
+        self,
+        request: BackupExecutionRequest,
+    ) -> DuplicatiClient:
+
+        configuration = {}
+
+        if request.backend_configuration:
+
+            configuration = (
+                request.backend_configuration.configuration
+            )
+
+        url = configuration.get(
+            "url"
+        )
+
+        if not url:
+
+            raise ConnectorError(
+                "Duplicati URL no configurada"
+            )
+
+        timeout = configuration.get(
+            "timeout",
+            30,
+        )
+
+        password = configuration.get(
+            "password",
+            "",
+        )
+
+        return DuplicatiClient(
+            base_url=url,
+            timeout=timeout,
+            password=password,
+        )
+
+    def _build_result(
+        self,
+        request: BackupExecutionRequest,
+        success: bool,
+        started_at: datetime,
+        warnings,
+        errors,
+        metadata,
+    ) -> BackupResult:
 
         return BackupResult(
             success=success,
             backend=self.name,
             application=request.manifest.application,
             started_at=started_at,
-            finished_at=finished_at,
+            finished_at=datetime.utcnow(),
             bytes_processed=0,
             warnings=warnings,
             errors=errors,
             metadata=metadata,
+        )
+
+    def _not_implemented(
+        self,
+        request: BackupExecutionRequest,
+        operation: str,
+    ) -> BackupResult:
+
+        return self._build_result(
+            request=request,
+            success=False,
+            started_at=datetime.utcnow(),
+            warnings=[],
+            errors=[
+                f"Operación {operation} todavía no implementada."
+            ],
+            metadata={},
         )

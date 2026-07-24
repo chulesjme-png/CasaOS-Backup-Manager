@@ -13,6 +13,7 @@ services:
     environment:
       TZ: Europe/Madrid
       PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /app
 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

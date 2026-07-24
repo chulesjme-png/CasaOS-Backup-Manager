@@ -16,6 +16,10 @@ from app.models.backend_capabilities import (
     BackendCapabilities,
 )
 
+from app.models.backup_operation import (
+    BackupOperationType,
+)
+
 
 class BackupBackend(ABC):
     """
@@ -30,6 +34,7 @@ class BackupBackend(ABC):
         """
         raise NotImplementedError
 
+
     @property
     @abstractmethod
     def capabilities(self) -> BackendCapabilities:
@@ -38,12 +43,51 @@ class BackupBackend(ABC):
         """
         raise NotImplementedError
 
+
+    def supports_operation(
+        self,
+        operation: BackupOperationType,
+    ) -> bool:
+        """
+        Indica si el backend soporta
+        una operación concreta.
+        """
+
+        capabilities = self.capabilities
+
+        mapping = {
+            BackupOperationType.CREATE_JOB:
+                capabilities.can_create_jobs,
+
+            BackupOperationType.RUN_BACKUP:
+                capabilities.can_run_backup,
+
+            BackupOperationType.GET_STATUS:
+                capabilities.can_get_status,
+
+            BackupOperationType.CANCEL:
+                capabilities.can_cancel_backup,
+
+            BackupOperationType.RESTORE:
+                capabilities.can_restore,
+
+            BackupOperationType.VERIFY:
+                capabilities.can_verify,
+        }
+
+        return mapping.get(
+            operation,
+            False,
+        )
+
+
     @abstractmethod
     def execute(
         self,
         request: BackupExecutionRequest,
     ) -> BackupResult:
         """
-        Ejecuta un backup y devuelve un resultado normalizado.
+        Ejecuta una operación y devuelve
+        un resultado normalizado.
         """
         raise NotImplementedError

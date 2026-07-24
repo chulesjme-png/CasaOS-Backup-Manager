@@ -9,6 +9,7 @@ Implementa el contrato BackupBackend.
 """
 
 from datetime import datetime
+from typing import Optional
 
 from app.core.backends.backup_backend import (
     BackupBackend,
@@ -29,9 +30,18 @@ from app.models.backup_result import (
 
 class NullBackupBackend(BackupBackend):
     """
-    Backend de prueba que simula
-    una ejecución correcta.
+    Backend de prueba configurable.
+
+    Puede utilizar las capacidades por defecto
+    o unas capacidades inyectadas desde un test.
     """
+
+    def __init__(
+        self,
+        capabilities: Optional[BackendCapabilities] = None,
+    ):
+        self._capabilities = capabilities
+
 
     @property
     def name(self) -> str:
@@ -47,22 +57,31 @@ class NullBackupBackend(BackupBackend):
         """
         Capacidades del backend nulo.
 
-        Este backend solo existe para pruebas
-        del pipeline interno.
+        Si el test ha proporcionado unas capacidades,
+        se utilizan esas. En caso contrario se devuelven
+        las capacidades por defecto.
         """
+
+        if self._capabilities is not None:
+            return self._capabilities
 
         return BackendCapabilities(
             backend=self.name,
             version="test",
             api_available=False,
+
             can_create_jobs=False,
             can_run_backup=True,
+            can_get_status=False,
             can_cancel_backup=False,
             can_restore=False,
+            can_verify=False,
+
             supports_encryption=False,
             supports_compression=False,
             supports_retention=False,
             supports_scheduling=False,
+
             metadata={
                 "purpose": "testing",
             },
@@ -74,8 +93,7 @@ class NullBackupBackend(BackupBackend):
         request: BackupExecutionRequest,
     ) -> BackupResult:
         """
-        Simula una ejecución de backup
-        devolviendo un resultado válido.
+        Simula una ejecución correcta.
         """
 
         started_at = datetime.utcnow()
