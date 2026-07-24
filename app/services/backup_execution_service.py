@@ -22,6 +22,10 @@ from app.models.backend_configuration import (
     BackendConfiguration,
 )
 
+from app.models.backup_operation import (
+    BackupOperationType,
+)
+
 from app.models.backup_execution_request import (
     BackupExecutionRequest,
 )
@@ -37,6 +41,7 @@ class BackupExecutionService:
         self,
         manifest: BackupManifest,
         backend_name: str,
+        operation: BackupOperationType = BackupOperationType.RUN_BACKUP,
         backend_configuration: Optional[BackendConfiguration] = None,
     ) -> BackupExecutionRequest:
         """
@@ -47,5 +52,6 @@ class BackupExecutionService:
         return BackupExecutionRequest(
             manifest=manifest,
             backend_name=backend_name,
+            operation=operation,
             backend_configuration=backend_configuration,
         )

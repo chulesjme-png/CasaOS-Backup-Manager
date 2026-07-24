@@ -9,6 +9,11 @@ BackupExecutionRequest
 """
 
 from app.models.backup_manifest import BackupManifest
+
+from app.models.backup_operation import (
+    BackupOperationType,
+)
+
 from app.services.backup_execution_service import (
     BackupExecutionService,
 )
@@ -37,3 +42,35 @@ def test_backup_execution_service_creates_request():
     assert request.manifest == manifest
 
     assert request.backend_name == "null"
+
+    assert (
+        request.operation
+        == BackupOperationType.RUN_BACKUP
+    )
+
+
+def test_backup_execution_service_accepts_operation():
+
+    manifest = BackupManifest(
+        application="test-app",
+        sources=[],
+        excluded_sources=[],
+        warnings=[],
+        estimated_size=4096,
+        metadata={
+            "environment": "test"
+        },
+    )
+
+    service = BackupExecutionService()
+
+    request = service.prepare(
+        manifest,
+        "null",
+        operation=BackupOperationType.VERIFY,
+    )
+
+    assert (
+        request.operation
+        == BackupOperationType.VERIFY
+    )
