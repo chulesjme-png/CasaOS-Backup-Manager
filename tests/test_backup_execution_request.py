@@ -1,3 +1,7 @@
+"""
+Tests para BackupExecutionRequest.
+"""
+
 from app.models.backup_execution_request import (
     BackupExecutionRequest,
 )
@@ -8,6 +12,10 @@ from app.models.backend_configuration import (
 
 from app.models.backup_manifest import (
     BackupManifest,
+)
+
+from app.models.backup_operation import (
+    BackupOperationType,
 )
 
 
@@ -48,8 +56,23 @@ def test_backup_execution_request_accepts_configuration():
     request = BackupExecutionRequest(
         manifest,
         "duplicati",
-        configuration,
+        backend_configuration=configuration,
     )
 
     assert request.backend_configuration.backend_name == "duplicati"
-    assert request.backend_configuration.configuration["destination"] == "/backup"
+    assert (
+        request.backend_configuration.configuration["destination"]
+        == "/backup"
+    )
+
+
+def test_backup_execution_request_default_operation():
+
+    manifest = create_test_manifest()
+
+    request = BackupExecutionRequest(
+        manifest,
+        "duplicati",
+    )
+
+    assert request.operation == BackupOperationType.RUN_BACKUP
