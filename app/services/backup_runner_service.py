@@ -23,6 +23,7 @@ No conoce motores concretos.
 Su responsabilidad es coordinar el flujo.
 """
 
+from datetime import datetime
 from typing import Optional
 
 from app.models.backup_job import BackupJob
@@ -40,6 +41,10 @@ from app.services.backend_execution_service import (
     BackendExecutionService,
 )
 
+from app.services.backend_capability_service import (
+    BackendCapabilityService,
+)
+
 
 class BackupRunnerService:
     """
@@ -52,6 +57,7 @@ class BackupRunnerService:
         backend_execution_service: BackendExecutionService,
         engine_service: Optional[BackupEngineService] = None,
         execution_service: Optional[BackupExecutionService] = None,
+        capability_service: Optional[BackendCapabilityService] = None,
     ):
         self.engine_service = (
             engine_service
@@ -67,6 +73,11 @@ class BackupRunnerService:
             backend_execution_service
         )
 
+        self.capability_service = (
+            capability_service
+            or BackendCapabilityService()
+        )
+
     def run(
         self,
         backup_job: BackupJob,
@@ -76,18 +87,15 @@ class BackupRunnerService:
         Ejecuta un flujo completo de backup.
         """
 
-        # 1. Construcción del manifiesto
         manifest = self.engine_service.prepare(
             backup_job
         )
 
-        # 2. Preparación de la solicitud
         request = self.execution_service.prepare(
             manifest,
             backend_name,
         )
 
-        # 3. Resolución del backend
         backend = (
             self.backend_execution_service.resolve(
                 request
@@ -99,7 +107,32 @@ class BackupRunnerService:
                 f"Backend '{backend_name}' no registrado."
             )
 
-        # 4. Ejecución
+        capabilities = (
+            self.capability_service.discover(
+                backend
+            )
+        )
+
+        if not capabilities.can_run_backup:
+
+            now = datetime.utcnow()
+
+            return BackupResult(
+                success=False,
+                backend=backend.name,
+                application=request.manifest.application,
+                started_at=now,
+                finished_at=now,
+                bytes_processed=0,
+                warnings=[],
+                errors=[
+                    "Backend does not support backup execution."
+                ],
+                metadata={
+                    "capabilities": capabilities,
+                },
+            )
+
         return backend.execute(
             request
         )
