@@ -38,23 +38,30 @@ class BackendConfigurationService:
         """
 
         if backend_name == "duplicati":
+
             return BackendConfiguration(
                 backend_name="duplicati",
+
                 enabled=True,
+
                 configuration={
-                    "url": "http://duplicati:8200",
+                    "url": "http://192.168.1.10:8200",
+                    "api_version": "v1",
                     "username": "",
                     "password": "",
                     "verify_ssl": False,
                     "timeout": 30,
                 },
+
                 metadata={
                     "display_name": "Duplicati",
-                    "version": "default",
+                    "version": "2.3.x",
                 },
             )
 
+
         if backend_name == "null":
+
             return BackendConfiguration(
                 backend_name="null",
                 enabled=True,
@@ -63,6 +70,7 @@ class BackendConfigurationService:
                     "display_name": "Null Backend",
                 },
             )
+
 
         return BackendConfiguration(
             backend_name=backend_name,

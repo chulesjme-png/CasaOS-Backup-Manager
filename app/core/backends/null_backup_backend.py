@@ -14,6 +14,10 @@ from app.core.backends.backup_backend import (
     BackupBackend,
 )
 
+from app.models.backend_capabilities import (
+    BackendCapabilities,
+)
+
 from app.models.backup_execution_request import (
     BackupExecutionRequest,
 )
@@ -36,6 +40,34 @@ class NullBackupBackend(BackupBackend):
         """
 
         return "null"
+
+
+    @property
+    def capabilities(self) -> BackendCapabilities:
+        """
+        Capacidades del backend nulo.
+
+        Este backend solo existe para pruebas
+        del pipeline interno.
+        """
+
+        return BackendCapabilities(
+            backend=self.name,
+            version="test",
+            api_available=False,
+            can_create_jobs=False,
+            can_run_backup=True,
+            can_cancel_backup=False,
+            can_restore=False,
+            supports_encryption=False,
+            supports_compression=False,
+            supports_retention=False,
+            supports_scheduling=False,
+            metadata={
+                "purpose": "testing",
+            },
+        )
+
 
     def execute(
         self,

@@ -1,29 +1,161 @@
-# CasaOS Backup Manager - Architecture
+# ARCHITECTURE
 
 ## Introducción
 
-CasaOS Backup Manager es una aplicación diseñada para crear un sistema profesional de copias de seguridad para entornos CasaOS.
+CasaOS Backup Manager está diseñado siguiendo los principios de **Clean Architecture**, con una estructura modular y desacoplada que permite integrar distintos motores de backup sin modificar el núcleo del sistema.
 
-El objetivo principal no es monitorizar contenedores ni mostrar información del sistema.
+La arquitectura está organizada en capas, donde cada componente tiene una única responsabilidad y las dependencias fluyen siempre en la misma dirección.
 
-El objetivo es:
+---
 
-- detectar aplicaciones;
-- comprender sus datos importantes;
-- generar planes de copia;
-- preparar trabajos de backup;
-- ejecutar copias mediante diferentes motores;
-- permitir restauraciones completas.
+# Arquitectura general
+
+```
+Docker Engine
+        │
+        ▼
+DockerService
+        │
+        ▼
+AppDiscoveryService
+        │
+        ▼
+ApplicationProfileService
+        │
+        ▼
+StorageResolverService
+        │
+        ▼
+StorageValidationService
+        │
+        ▼
+BackupPlannerService
+        │
+        ▼
+BackupJobBuilderService
+        │
+        ▼
+BackupExecutionService
+        │
+        ▼
+BackupManifestBuilderService
+        │
+        ▼
+BackupRunnerService
+        │
+        ▼
+BackendFactory
+        │
+        ▼
+BackupBackend
+   ├── NullBackupBackend
+   └── DuplicatiBackend
+        │
+        ▼
+Connector
+        │
+        ▼
+Motor de Backup
+```
+
+---
+
+# Capas del sistema
+
+## Descubrimiento
+
+Responsable de detectar las aplicaciones instaladas y obtener la información necesaria para construir un perfil de backup.
+
+Componentes principales:
+
+- DockerService
+- AppDiscoveryService
+- ApplicationProfileService
+
+---
+
+## Storage Intelligence
+
+Analiza y valida todos los recursos de almacenamiento asociados a una aplicación.
+
+Componentes:
+
+- StorageResolverService
+- StorageValidationService
+
+---
+
+## Planificación
+
+Genera un plan de backup independiente del backend que finalmente realizará la copia.
+
+Componentes:
+
+- BackupPlannerService
+- BackupJobBuilderService
+
+---
+
+## Backup Engine
+
+Coordina la ejecución completa del proceso de backup.
+
+Componentes:
+
+- BackupExecutionService
+- BackupManifestBuilderService
+- BackupRunnerService
+
+---
+
+## Backends
+
+Implementan la integración con un motor de backup concreto.
+
+Actualmente:
+
+- NullBackupBackend
+- DuplicatiBackend
+
+En el futuro:
+
+- ResticBackend
+- BorgBackend
+- RsyncBackend
+- KopiaBackend
+
+---
+
+## Connectors
+
+Encapsulan toda la comunicación con sistemas externos.
+
+Actualmente:
+
+- DuplicatiClient
+
+Los Connectors son el único punto autorizado para realizar llamadas HTTP o interactuar con APIs externas.
 
 ---
 
 # Principios arquitectónicos
 
-## Clean Architecture
+La arquitectura del proyecto sigue las siguientes reglas:
 
-El proyecto sigue una arquitectura basada en separación de responsabilidades.
+- Clean Architecture.
+- SOLID.
+- Single Responsibility Principle.
+- Dependency Inversion.
+- Bajo acoplamiento.
+- Alta cohesión.
 
-Las capas principales son:
+Cada componente debe tener una única responsabilidad claramente definida.
+
+---
+
+# Dirección de las dependencias
+
+Las dependencias siempre fluyen en una única dirección:
 
 ```
 Routers
@@ -32,163 +164,18 @@ Routers
 Services
         │
         ▼
-Models
+Core
+        │
+        ▼
+Connectors
 ```
 
-Cada servicio tiene una única responsabilidad y el dominio permanece independiente de la interfaz web y de los motores de ejecución.
+Los modelos del dominio son compartidos entre las distintas capas y permanecen independientes de la infraestructura.
 
 ---
 
-# Flujo principal del Backup Engine
+# Evolución
 
-El flujo funcional del proyecto es el siguiente:
+La arquitectura ha sido diseñada para permitir la incorporación de nuevos motores de backup sin modificar el dominio del proyecto.
 
-```
-Docker
-
-    │
-    ▼
-
-Application Discovery
-
-    │
-    ▼
-
-Application
-
-    │
-    ▼
-
-ApplicationProfile
-
-    │
-    ▼
-
-BackupPlan
-
-    │
-    ▼
-
-StorageResolverService
-
-    │
-    ▼
-
-StorageResource
-
-    │
-    ▼
-
-BackupEngineService
-
-    │
-    ▼
-
-BackupJob
-
-    │
-    ▼
-
-Execution Backend
-
-    ├── Duplicati
-    ├── Restic
-    ├── Borg
-    ├── Rsync
-    └── futuros backends
-```
-
----
-
-# Responsabilidades
-
-## Application Discovery
-
-Detecta automáticamente las aplicaciones instaladas mediante Docker Compose.
-
----
-
-## ApplicationProfile
-
-Describe qué datos pertenecen a una aplicación y cuáles son candidatos para formar parte de una copia de seguridad.
-
----
-
-## BackupPlan
-
-Representa un plan lógico de copia.
-
-No contiene información física del almacenamiento ni depende del backend que ejecutará la copia.
-
----
-
-## StorageResolverService
-
-Resolverá cada origen definido en un `BackupPlan` y determinará los recursos físicos realmente disponibles.
-
-Será responsable de:
-
-- validar rutas;
-- identificar volúmenes;
-- identificar bind mounts;
-- detectar recursos inexistentes;
-- generar objetos `StorageResource`.
-
----
-
-## StorageResource
-
-Representa un recurso físico de almacenamiento susceptible de formar parte de una copia de seguridad.
-
----
-
-## BackupEngineService
-
-Transformará los recursos resueltos en un `BackupJob` completamente preparado para su ejecución.
-
-No dependerá de ningún motor concreto.
-
----
-
-## BackupJob
-
-Representa un trabajo de copia completamente resuelto y listo para ser ejecutado por cualquier backend soportado.
-
----
-
-## Execution Backend
-
-La ejecución del backup será intercambiable.
-
-Inicialmente se prevén:
-
-- Duplicati
-- Restic
-- Borg
-- Rsync
-
-La arquitectura permitirá incorporar nuevos motores sin modificar el dominio.
-
----
-
-# Integridad del dominio
-
-Durante el desarrollo de la versión **v0.4.0-alpha1** se detectó una incidencia importante: varios modelos del dominio habían sido sobrescritos accidentalmente con contenido HTML y el error había quedado registrado en el historial de Git.
-
-Los modelos afectados fueron:
-
-- `Application`
-- `Container`
-- `ApplicationProfile`
-- `BackupPlan`
-
-La reparación consistió en reconstruir completamente estos modelos, verificando previamente todos los imports para garantizar que no existían implementaciones alternativas ni dependencias ocultas.
-
-Esta incidencia reafirma uno de los principios fundamentales del proyecto:
-
-- los modelos del dominio únicamente contienen datos del dominio;
-- las plantillas HTML únicamente residen en `app/templates`;
-- los servicios implementan la lógica de negocio;
-- la interfaz web nunca forma parte del dominio.
-
-Toda modificación estructural del dominio debe validarse mediante una compilación completa del proyecto y el arranque satisfactorio de la aplicación.
+Los próximos desarrollos comenzarán con la detección automática de capacidades del backend (**Duplicati Capability Detection**), seguida de la implementación de la ejecución real de copias de seguridad.

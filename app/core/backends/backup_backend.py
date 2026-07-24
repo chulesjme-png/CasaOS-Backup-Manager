@@ -12,6 +12,10 @@ from app.models.backup_result import (
     BackupResult,
 )
 
+from app.models.backend_capabilities import (
+    BackendCapabilities,
+)
+
 
 class BackupBackend(ABC):
     """
@@ -23,6 +27,14 @@ class BackupBackend(ABC):
     def name(self) -> str:
         """
         Nombre único del backend.
+        """
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def capabilities(self) -> BackendCapabilities:
+        """
+        Capacidades declaradas por el backend.
         """
         raise NotImplementedError
 
