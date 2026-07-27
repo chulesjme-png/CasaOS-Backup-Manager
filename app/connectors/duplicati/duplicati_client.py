@@ -9,6 +9,7 @@ Responsabilidades:
 - Gestionar autenticación mediante tokens.
 - Consultar el estado del servidor.
 - Obtener información de la API.
+- Enviar payloads a la API REST.
 - Lanzar excepciones propias de la aplicación.
 
 No conoce el dominio del Backup Engine.
@@ -39,51 +40,26 @@ class DuplicatiClient:
     Cliente para la API REST de Duplicati.
     """
 
-
     def __init__(
         self,
         base_url: str,
         timeout: int = 10,
         password: str = "",
     ) -> None:
-        """
-        Inicializa el cliente.
-
-        Args:
-
-            base_url:
-                URL base del servidor Duplicati.
-
-            timeout:
-                Timeout de las peticiones HTTP.
-
-            password:
-                Contraseña del servidor Duplicati.
-        """
 
         self.base_url = base_url.rstrip("/")
-
         self.timeout = timeout
-
         self.password = password
 
         self.session: Session = requests.Session()
 
         self._access_token: str | None = None
-
         self._refresh_token: str | None = None
-
         self._authenticated = False
 
-
-
-    def authenticate(self) -> bool:
-        """
-        Autentica contra Duplicati.
-
-        Obtiene los tokens necesarios para
-        realizar llamadas autenticadas.
-        """
+    def authenticate(
+        self,
+    ) -> bool:
 
         try:
 
@@ -110,6 +86,7 @@ class DuplicatiClient:
             )
 
             if not self._access_token:
+
                 raise ConnectorResponseError(
                     "Duplicati no devolvió AccessToken."
                 )
@@ -126,13 +103,11 @@ class DuplicatiClient:
 
             return True
 
-
         except ConnectionError as exc:
 
             raise DuplicatiConnectionError(
                 str(exc)
             ) from exc
-
 
         except Timeout as exc:
 
@@ -140,14 +115,11 @@ class DuplicatiClient:
                 str(exc)
             ) from exc
 
-
         except HTTPError as exc:
 
             raise ConnectorResponseError(
                 str(exc)
             ) from exc
-
-
 
         except ValueError as exc:
 
@@ -155,21 +127,14 @@ class DuplicatiClient:
                 "La respuesta recibida no es un JSON válido."
             ) from exc
 
-
-
     def _ensure_authenticated(
         self,
     ) -> None:
-        """
-        Garantiza que existe autenticación válida.
-        """
 
         if self._authenticated:
             return
 
         self.authenticate()
-
-
 
     def _request(
         self,
@@ -177,9 +142,6 @@ class DuplicatiClient:
         endpoint: str,
         **kwargs: Any,
     ) -> Any:
-        """
-        Ejecuta una petición HTTP contra Duplicati.
-        """
 
         self._ensure_authenticated()
 
@@ -197,7 +159,6 @@ class DuplicatiClient:
                 **kwargs,
             )
 
-
             if response.status_code == 401:
 
                 self._authenticated = False
@@ -211,16 +172,12 @@ class DuplicatiClient:
                     **kwargs,
                 )
 
-
             response.raise_for_status()
-
 
             if not response.content:
                 return None
 
-
             return response.json()
-
 
         except ConnectionError as exc:
 
@@ -228,13 +185,11 @@ class DuplicatiClient:
                 str(exc)
             ) from exc
 
-
         except Timeout as exc:
 
             raise ConnectorTimeoutError(
                 str(exc)
             ) from exc
-
 
         except HTTPError as exc:
 
@@ -242,66 +197,120 @@ class DuplicatiClient:
                 str(exc)
             ) from exc
 
-
         except ValueError as exc:
 
             raise ConnectorResponseError(
                 "La respuesta recibida no es un JSON válido."
             ) from exc
 
-
-
     def _get(
         self,
         endpoint: str,
     ) -> Any:
-        """
-        Ejecuta una petición GET.
-        """
 
         return self._request(
             "GET",
             endpoint,
         )
 
+    def _post(
+        self,
+        endpoint: str,
+        payload: dict[str, Any] | None = None,
+    ) -> Any:
 
+        if payload is None:
+
+            return self._request(
+                "POST",
+                endpoint,
+            )
+
+        return self._request(
+            "POST",
+            endpoint,
+            json=payload,
+        )
 
     def ping(
         self,
     ) -> bool:
-        """
-        Comprueba disponibilidad del servidor Duplicati.
-        """
 
         self.get_server_state()
 
         return True
 
-
-
     def get_server_state(
         self,
     ) -> dict[str, Any]:
-        """
-        Obtiene el estado del servidor Duplicati.
-        """
 
         return self._get(
             "/api/v1/serverstate"
         )
 
-
-
     def get_version(
         self,
     ) -> str:
-        """
-        Devuelve la versión de Duplicati.
-        """
 
         state = self.get_server_state()
 
         return state.get(
             "Version",
             "unknown",
+        )
+
+    def create_job(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Envía a Duplicati el payload de creación
+        de un trabajo de backup.
+        """
+
+        return self._post(
+            "/api/v1/backups",
+            payload,
+        )
+
+    def get_backups(
+        self,
+    ) -> list[dict[str, Any]]:
+        """
+        Devuelve todos los trabajos existentes
+        en Duplicati.
+        """
+
+        response = self._get(
+            "/api/v1/backups"
+        )
+
+        if response is None:
+            return []
+
+        return response
+
+    def get_backup(
+        self,
+        backup_id: str,
+    ) -> dict[str, Any]:
+        """
+        Devuelve un trabajo concreto de Duplicati.
+        """
+
+        return self._get(
+            f"/api/v1/backups/{backup_id}"
+        )
+
+    def run_backup(
+        self,
+        backup_id: str,
+    ) -> dict[str, Any]:
+        """
+        Ejecuta un trabajo de backup existente
+        en Duplicati.
+        """
+
+        return self._post(
+            f"/api/v1/backup/{backup_id}/run",
         )
