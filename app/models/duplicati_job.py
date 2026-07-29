@@ -32,6 +32,8 @@ class DuplicatiJob:
 
     encryption: Optional[str] = None
 
+    passphrase: Optional[str] = None
+
     compression: Optional[str] = None
 
     retention_policy: Optional[str] = None
@@ -45,7 +47,6 @@ class DuplicatiJob:
     metadata: Dict[str, Any] = field(
         default_factory=dict
     )
-
 
     def to_payload(self) -> Dict[str, Any]:
         """
@@ -73,6 +74,10 @@ class DuplicatiJob:
 
             "encryption": (
                 self.encryption
+            ),
+
+            "passphrase": (
+                self.passphrase
             ),
 
             "compression": (

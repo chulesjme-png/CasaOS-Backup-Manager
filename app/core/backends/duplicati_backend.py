@@ -7,6 +7,9 @@ Responsabilidades:
 
 - Implementar el contrato BackupBackend.
 - Consumir BackendConfiguration.
+- Consumir BackupConfiguration.
+- Construir trabajos internos de Duplicati.
+- Construir payloads REST para Duplicati.
 - Comunicarse con Duplicati mediante DuplicatiClient.
 - Transformar la respuesta en BackupResult.
 
@@ -23,31 +26,27 @@ from datetime import datetime
 from app.connectors.duplicati.duplicati_client import (
     DuplicatiClient,
 )
-
+from app.connectors.duplicati.duplicati_payload_builder import (
+    DuplicatiPayloadBuilder,
+)
 from app.connectors.exceptions import (
     ConnectorError,
 )
-
 from app.core.backends.backup_backend import (
     BackupBackend,
 )
-
 from app.models.backend_capabilities import (
     BackendCapabilities,
 )
-
 from app.models.backup_execution_request import (
     BackupExecutionRequest,
 )
-
 from app.models.backup_operation import (
     BackupOperationType,
 )
-
 from app.models.backup_result import (
     BackupResult,
 )
-
 from app.services.duplicati_job_builder import (
     DuplicatiJobBuilder,
 )
@@ -87,9 +86,6 @@ class DuplicatiBackend(BackupBackend):
         self,
         request: BackupExecutionRequest,
     ) -> BackupResult:
-        """
-        Dispatcher principal del backend.
-        """
 
         operation = request.operation
 
@@ -119,35 +115,67 @@ class DuplicatiBackend(BackupBackend):
         self,
         request: BackupExecutionRequest,
     ) -> BackupResult:
-        """
-        Construye un trabajo Duplicati.
 
-        En esta primera versión únicamente transforma el
-        BackupManifest en un DuplicatiJob.
-        """
+        started_at = datetime.utcnow()
 
-        builder = DuplicatiJobBuilder()
+        warnings = []
 
-        builder.build(
-            request.manifest,
-        )
+        errors = []
 
-        return self._not_implemented(
-            request,
-            "CREATE_JOB",
+        metadata = {}
+
+        success = False
+
+        try:
+
+            job_builder = DuplicatiJobBuilder()
+
+            job = job_builder.build(
+                manifest=request.manifest,
+                configuration=request.backup_configuration,
+            )
+
+            payload_builder = DuplicatiPayloadBuilder()
+
+            payload = payload_builder.build(job)
+
+            client = self._build_client(request)
+
+            response = client.create_job(payload)
+
+            metadata = {
+                "duplicati_job": job.to_payload(),
+                "duplicati_payload": payload,
+                "duplicati_response": response,
+            }
+
+            success = True
+
+        except ConnectorError as exc:
+
+            errors.append(
+                str(exc)
+            )
+
+        except Exception as exc:
+
+            errors.append(
+                str(exc)
+            )
+
+        return self._build_result(
+            request=request,
+            success=success,
+            started_at=started_at,
+            warnings=warnings,
+            errors=errors,
+            metadata=metadata,
         )
 
     def _run_backup(
         self,
         request: BackupExecutionRequest,
     ) -> BackupResult:
-        """
-        Compatibilidad temporal.
-
-        Hasta que exista la ejecución real del backup,
-        RUN_BACKUP mantiene el comportamiento histórico
-        consultando el estado del servidor Duplicati.
-        """
 
         return self._get_status(
             request,
@@ -242,9 +270,7 @@ class DuplicatiBackend(BackupBackend):
                 request.backend_configuration.configuration
             )
 
-        url = configuration.get(
-            "url"
-        )
+        url = configuration.get("url")
 
         if not url:
 

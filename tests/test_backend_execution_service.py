@@ -12,6 +12,7 @@ BackendRegistry
 BackupBackend
 """
 
+
 from app.services.backend_execution_service import (
     BackendExecutionService,
 )
@@ -26,6 +27,10 @@ from app.models.backup_execution_request import (
 
 from app.models.backup_manifest import (
     BackupManifest,
+)
+
+from app.models.backup_configuration import (
+    BackupConfiguration,
 )
 
 
@@ -46,8 +51,13 @@ def test_backend_execution_service_resolves_backend():
         metadata={},
     )
 
+    configuration = BackupConfiguration(
+        destination_url="file:///tmp/test-backup",
+    )
+
     request = BackupExecutionRequest(
         manifest=manifest,
+        backup_configuration=configuration,
         backend_name="null",
     )
 

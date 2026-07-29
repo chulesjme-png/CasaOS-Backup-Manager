@@ -6,6 +6,10 @@ from app.models.backend_configuration import (
     BackendConfiguration,
 )
 
+from app.models.backup_configuration import (
+    BackupConfiguration,
+)
+
 from app.models.backup_execution_request import (
     BackupExecutionRequest,
 )
@@ -25,6 +29,10 @@ def test_null_backend_receives_configuration():
         estimated_size=0,
     )
 
+    backup_configuration = BackupConfiguration(
+        destination_url="file:///tmp/test-backup",
+    )
+
     configuration = BackendConfiguration(
         backend_name="null",
         configuration={
@@ -34,6 +42,7 @@ def test_null_backend_receives_configuration():
 
     request = BackupExecutionRequest(
         manifest=manifest,
+        backup_configuration=backup_configuration,
         backend_name="null",
         backend_configuration=configuration,
     )
@@ -43,4 +52,10 @@ def test_null_backend_receives_configuration():
     result = backend.execute(request)
 
     assert result.success is True
-    assert request.backend_configuration.configuration["test_option"] is True
+
+    assert (
+        request.backend_configuration.configuration[
+            "test_option"
+        ]
+        is True
+    )

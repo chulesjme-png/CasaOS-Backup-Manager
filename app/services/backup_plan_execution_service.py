@@ -12,6 +12,9 @@ BackupJob
 BackupManifest
     |
     v
+BackupExecutionService
+    |
+    v
 BackupExecutionRequest
     |
     v
@@ -20,19 +23,20 @@ BackendExecutionService
 
 from typing import Optional
 
-from app.models.backup_plan import BackupPlan
-from app.models.backup_execution_request import (
-    BackupExecutionRequest,
+from app.models.backup_configuration import (
+    BackupConfiguration,
 )
+from app.models.backup_plan import BackupPlan
 
 from app.services.backup_job_builder_service import (
     BackupJobBuilderService,
 )
-
 from app.services.backup_engine_service import (
     BackupEngineService,
 )
-
+from app.services.backup_execution_service import (
+    BackupExecutionService,
+)
 from app.services.backend_execution_service import (
     BackendExecutionService,
 )
@@ -49,9 +53,18 @@ class BackupPlanExecutionService:
 
     def __init__(
         self,
-        backup_job_builder_service: Optional[BackupJobBuilderService] = None,
-        backup_engine_service: Optional[BackupEngineService] = None,
-        backend_execution_service: Optional[BackendExecutionService] = None,
+        backup_job_builder_service: Optional[
+            BackupJobBuilderService
+        ] = None,
+        backup_engine_service: Optional[
+            BackupEngineService
+        ] = None,
+        backup_execution_service: Optional[
+            BackupExecutionService
+        ] = None,
+        backend_execution_service: Optional[
+            BackendExecutionService
+        ] = None,
     ):
 
         self.backup_job_builder_service = (
@@ -64,6 +77,11 @@ class BackupPlanExecutionService:
             or BackupEngineService()
         )
 
+        self.backup_execution_service = (
+            backup_execution_service
+            or BackupExecutionService()
+        )
+
         self.backend_execution_service = (
             backend_execution_service
             or BackendExecutionService(
@@ -74,7 +92,8 @@ class BackupPlanExecutionService:
     def execute(
         self,
         backup_plan: BackupPlan,
-        backend_name: str = "null",
+        backup_configuration: BackupConfiguration,
+        backend_name: str,
     ):
         """
         Prepara una ejecución de backup.
@@ -94,9 +113,12 @@ class BackupPlanExecutionService:
             )
         )
 
-        execution_request = BackupExecutionRequest(
-            manifest=manifest,
-            backend_name=backend_name,
+        execution_request = (
+            self.backup_execution_service.prepare(
+                manifest=manifest,
+                backup_configuration=backup_configuration,
+                backend_name=backend_name,
+            )
         )
 
         backend = (

@@ -26,6 +26,10 @@ from app.models.backend_configuration import (
     BackendConfiguration,
 )
 
+from app.models.backup_configuration import (
+    BackupConfiguration,
+)
+
 from app.models.backup_execution_request import (
     BackupExecutionRequest,
 )
@@ -61,6 +65,10 @@ def test_duplicati_backend_executes(
         estimated_size=0,
     )
 
+    backup_configuration = BackupConfiguration(
+        destination_url="file:///backups",
+    )
+
     configuration = BackendConfiguration(
         backend_name="duplicati",
         configuration={
@@ -72,6 +80,7 @@ def test_duplicati_backend_executes(
 
     request = BackupExecutionRequest(
         manifest=manifest,
+        backup_configuration=backup_configuration,
         backend_name="duplicati",
         backend_configuration=configuration,
     )
@@ -83,9 +92,7 @@ def test_duplicati_backend_executes(
     )
 
     assert result.success is True
-
     assert result.backend == "duplicati"
-
     assert result.application == "test-app"
 
     assert (
@@ -94,8 +101,9 @@ def test_duplicati_backend_executes(
     )
 
     assert (
-        result.metadata["duplicati_server_state"]
-        ["MachineName"]
+        result.metadata["duplicati_server_state"][
+            "MachineName"
+        ]
         == "Duplicati"
     )
 
@@ -131,8 +139,12 @@ def test_duplicati_backend_connection_failure(
         application="test-app",
         sources=[],
         excluded_sources=[],
-        warnings=[],
+       warnings=[],
         estimated_size=0,
+    )
+
+    backup_configuration = BackupConfiguration(
+        destination_url="file:///backups",
     )
 
     configuration = BackendConfiguration(
@@ -146,6 +158,7 @@ def test_duplicati_backend_connection_failure(
 
     request = BackupExecutionRequest(
         manifest=manifest,
+        backup_configuration=backup_configuration,
         backend_name="duplicati",
         backend_configuration=configuration,
     )
@@ -157,9 +170,7 @@ def test_duplicati_backend_connection_failure(
     )
 
     assert result.success is False
-
     assert result.backend == "duplicati"
-
     assert result.application == "test-app"
 
     assert len(result.errors) == 1

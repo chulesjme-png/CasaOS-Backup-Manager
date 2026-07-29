@@ -13,32 +13,44 @@ class BackupJob:
     """
     Trabajo de copia completamente resuelto.
 
-    Este modelo representa el resultado del Backup Engine
-    tras procesar un BackupPlan.
+    Este modelo representa una ejecución preparada
+    por el Backup Engine.
 
-    Un BackupJob ya contiene todos los recursos finales que
-    deberán ser entregados al backend de ejecución
-    (Duplicati, Restic, Borg, Rsync, etc.).
+    Contiene únicamente los recursos que deberán ser
+    procesados durante la ejecución.
 
-    El modelo es completamente independiente del backend
-    utilizado para realizar la copia.
+    No almacena la configuración elegida por el usuario.
+    Esa responsabilidad pertenece al BackupPlan y será
+    transportada posteriormente mediante
+    BackupExecutionRequest.
     """
 
     application: Application
+
     profile: ApplicationProfile
 
     ready: bool = False
 
-    sources: list[StorageResource] = field(default_factory=list)
+    sources: list[StorageResource] = field(
+        default_factory=list
+    )
 
-    excluded_sources: list[StorageResource] = field(default_factory=list)
+    excluded_sources: list[StorageResource] = field(
+        default_factory=list
+    )
 
-    missing_sources: list[StorageResource] = field(default_factory=list)
+    missing_sources: list[StorageResource] = field(
+        default_factory=list
+    )
 
     estimated_size: int = 0
 
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[str] = field(
+        default_factory=list
+    )
 
     backend: str | None = None
 
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(
+        default_factory=dict
+    )

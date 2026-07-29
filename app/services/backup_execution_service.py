@@ -16,18 +16,23 @@ No conoce implementaciones concretas.
 
 from typing import Optional
 
-from app.models.backup_manifest import BackupManifest
-
+from app.models.backup_configuration import (
+    BackupConfiguration,
+)
+from app.models.backup_execution_reference import (
+    BackupExecutionReference,
+)
+from app.models.backup_execution_request import (
+    BackupExecutionRequest,
+)
+from app.models.backup_manifest import (
+    BackupManifest,
+)
 from app.models.backend_configuration import (
     BackendConfiguration,
 )
-
 from app.models.backup_operation import (
     BackupOperationType,
-)
-
-from app.models.backup_execution_request import (
-    BackupExecutionRequest,
 )
 
 
@@ -40,9 +45,17 @@ class BackupExecutionService:
     def prepare(
         self,
         manifest: BackupManifest,
+        backup_configuration: BackupConfiguration,
         backend_name: str,
-        operation: BackupOperationType = BackupOperationType.RUN_BACKUP,
-        backend_configuration: Optional[BackendConfiguration] = None,
+        operation: BackupOperationType = (
+            BackupOperationType.RUN_BACKUP
+        ),
+        backend_configuration: Optional[
+            BackendConfiguration
+        ] = None,
+        execution_reference: Optional[
+            BackupExecutionReference
+        ] = None,
     ) -> BackupExecutionRequest:
         """
         Construye una solicitud de ejecución
@@ -51,7 +64,9 @@ class BackupExecutionService:
 
         return BackupExecutionRequest(
             manifest=manifest,
+            backup_configuration=backup_configuration,
             backend_name=backend_name,
             operation=operation,
             backend_configuration=backend_configuration,
+            execution_reference=execution_reference,
         )

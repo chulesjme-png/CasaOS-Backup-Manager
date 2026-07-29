@@ -26,22 +26,21 @@ Su responsabilidad es coordinar el flujo.
 from datetime import datetime
 from typing import Optional
 
+from app.models.backup_configuration import (
+    BackupConfiguration,
+)
 from app.models.backup_job import BackupJob
-
 from app.models.backup_operation import (
     BackupOperationType,
 )
-
 from app.models.backup_result import BackupResult
 
 from app.services.backup_engine_service import (
     BackupEngineService,
 )
-
 from app.services.backup_execution_service import (
     BackupExecutionService,
 )
-
 from app.services.backend_execution_service import (
     BackendExecutionService,
 )
@@ -76,6 +75,7 @@ class BackupRunnerService:
     def run(
         self,
         backup_job: BackupJob,
+        backup_configuration: BackupConfiguration,
         backend_name: str,
         operation: BackupOperationType = (
             BackupOperationType.RUN_BACKUP
@@ -92,6 +92,7 @@ class BackupRunnerService:
 
         request = self.execution_service.prepare(
             manifest=manifest,
+            backup_configuration=backup_configuration,
             backend_name=backend_name,
             operation=operation,
         )

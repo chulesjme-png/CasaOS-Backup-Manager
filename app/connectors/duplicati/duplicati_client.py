@@ -20,6 +20,7 @@ No conoce CasaOS.
 from __future__ import annotations
 
 from typing import Any
+import json
 
 import requests
 
@@ -117,8 +118,15 @@ class DuplicatiClient:
 
         except HTTPError as exc:
 
+            response = exc.response
+
+            details = ""
+
+            if response is not None:
+                details = response.text
+
             raise ConnectorResponseError(
-                str(exc)
+                f"{exc}. Response: {details}"
             ) from exc
 
         except ValueError as exc:
@@ -149,6 +157,25 @@ class DuplicatiClient:
             f"{self.base_url}/"
             f"{endpoint.lstrip('/')}"
         )
+
+        if kwargs.get("json") is not None:
+
+            print("\n===== DUPLICATI REQUEST =====")
+            print(
+                f"{method} {url}"
+            )
+
+            print(
+                json.dumps(
+                    kwargs["json"],
+                    indent=4,
+                    default=str,
+                )
+            )
+
+            print(
+                "=============================\n"
+            )
 
         try:
 
@@ -193,8 +220,32 @@ class DuplicatiClient:
 
         except HTTPError as exc:
 
+            response = exc.response
+
+            details = ""
+
+            if response is not None:
+
+                details = response.text
+
+                print(
+                    "\n===== DUPLICATI ERROR RESPONSE ====="
+                )
+
+                print(
+                    f"STATUS: {response.status_code}"
+                )
+
+                print(
+                    details
+                )
+
+                print(
+                    "====================================\n"
+                )
+
             raise ConnectorResponseError(
-                str(exc)
+                f"{exc}. Response: {details}"
             ) from exc
 
         except ValueError as exc:
@@ -263,10 +314,6 @@ class DuplicatiClient:
         self,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        """
-        Envía a Duplicati el payload de creación
-        de un trabajo de backup.
-        """
 
         return self._post(
             "/api/v1/backups",
@@ -276,10 +323,6 @@ class DuplicatiClient:
     def get_backups(
         self,
     ) -> list[dict[str, Any]]:
-        """
-        Devuelve todos los trabajos existentes
-        en Duplicati.
-        """
 
         response = self._get(
             "/api/v1/backups"
@@ -290,27 +333,51 @@ class DuplicatiClient:
 
         return response
 
-    def get_backup(
-        self,
-        backup_id: str,
-    ) -> dict[str, Any]:
-        """
-        Devuelve un trabajo concreto de Duplicati.
-        """
-
-        return self._get(
-            f"/api/v1/backups/{backup_id}"
-        )
-
     def run_backup(
         self,
-        backup_id: str,
+        backup_id: int,
     ) -> dict[str, Any]:
-        """
-        Ejecuta un trabajo de backup existente
-        en Duplicati.
-        """
 
         return self._post(
             f"/api/v1/backup/{backup_id}/run",
+        )
+
+    def get_task(
+        self,
+        task_id: int,
+    ) -> dict[str, Any]:
+
+        return self._get(
+            f"/api/v1/task/{task_id}"
+        )
+
+    def get_tasks(
+        self,
+    ) -> list[dict[str, Any]]:
+
+        response = self._get(
+            "/api/v1/tasks"
+        )
+
+        if response is None:
+            return []
+
+        return response
+
+    def stop_task(
+        self,
+        task_id: int,
+    ) -> None:
+
+        self._post(
+            f"/api/v1/task/{task_id}/stop"
+        )
+
+    def abort_task(
+        self,
+        task_id: int,
+    ) -> None:
+
+        self._post(
+            f"/api/v1/task/{task_id}/abort"
         )

@@ -10,7 +10,8 @@ API REST Duplicati simulada
 Respuesta procesada
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
+from unittest.mock import patch
 
 from app.connectors.duplicati.duplicati_client import (
     DuplicatiClient,
@@ -43,9 +44,7 @@ def test_authenticate_success():
 
     assert result is True
 
-    assert client._access_token == (
-        "token123"
-    )
+    assert client._access_token == "token123"
 
     assert client._authenticated is True
 
@@ -76,13 +75,9 @@ def test_get_server_state_returns_data():
 
         result = client.get_server_state()
 
-    assert result["Version"] == (
-        "2.0.8.1"
-    )
+    assert result["Version"] == "2.0.8.1"
 
-    assert result["MachineName"] == (
-        "Duplicati"
-    )
+    assert result["MachineName"] == "Duplicati"
 
 
 def test_get_version_returns_version():
@@ -96,7 +91,7 @@ def test_get_version_returns_version():
         client,
         "get_server_state",
         return_value={
-            "Version": "2.0.8.1"
+            "Version": "2.0.8.1",
         },
     ):
 
@@ -175,48 +170,7 @@ def test_get_backups_returns_list():
         list,
     )
 
-    assert result[0]["Backup"]["ID"] == (
-        "1"
-    )
-
-
-def test_get_backup_returns_backup():
-
-    client = DuplicatiClient(
-        base_url="http://duplicati:8200",
-        password="secret",
-    )
-
-    client._authenticated = True
-
-    backup = {
-        "Backup": {
-            "ID": "1",
-            "Name": "CasaOS Completo",
-        }
-    }
-
-    with patch.object(
-        client,
-        "_get",
-        return_value=backup,
-    ) as mock_get:
-
-        result = client.get_backup(
-            "1",
-        )
-
-    assert result["Backup"]["ID"] == (
-        "1"
-    )
-
-    assert result["Backup"]["Name"] == (
-        "CasaOS Completo"
-    )
-
-    mock_get.assert_called_once_with(
-        "/api/v1/backups/1",
-    )
+    assert result[0]["Backup"]["ID"] == "1"
 
 
 def test_run_backup_starts_backup():
@@ -240,15 +194,126 @@ def test_run_backup_starts_backup():
     ) as mock_post:
 
         result = client.run_backup(
-            "1",
+            1,
         )
 
-    assert result["Status"] == (
-        "OK"
-    )
+    assert result["Status"] == "OK"
 
     assert result["ID"] == 6
 
     mock_post.assert_called_once_with(
         "/api/v1/backup/1/run",
+    )
+
+
+def test_get_task_returns_task():
+
+    client = DuplicatiClient(
+        base_url="http://duplicati:8200",
+        password="secret",
+    )
+
+    client._authenticated = True
+
+    task = {
+        "Status": "Running",
+        "ID": 2,
+    }
+
+    with patch.object(
+        client,
+        "_get",
+        return_value=task,
+    ) as mock_get:
+
+        result = client.get_task(
+            2,
+        )
+
+    assert result["Status"] == "Running"
+
+    assert result["ID"] == 2
+
+    mock_get.assert_called_once_with(
+        "/api/v1/task/2",
+    )
+
+
+def test_get_tasks_returns_list():
+
+    client = DuplicatiClient(
+        base_url="http://duplicati:8200",
+        password="secret",
+    )
+
+    client._authenticated = True
+
+    tasks = [
+        {
+            "Status": "Running",
+            "ID": 2,
+        }
+    ]
+
+    with patch.object(
+        client,
+        "_get",
+        return_value=tasks,
+    ):
+
+        result = client.get_tasks()
+
+    assert isinstance(
+        result,
+        list,
+    )
+
+    assert result[0]["ID"] == 2
+
+
+def test_stop_task_calls_endpoint():
+
+    client = DuplicatiClient(
+        base_url="http://duplicati:8200",
+        password="secret",
+    )
+
+    client._authenticated = True
+
+    with patch.object(
+        client,
+        "_post",
+        return_value=None,
+    ) as mock_post:
+
+        client.stop_task(
+            2,
+        )
+
+    mock_post.assert_called_once_with(
+        "/api/v1/task/2/stop",
+    )
+
+
+def test_abort_task_calls_endpoint():
+
+    client = DuplicatiClient(
+        base_url="http://duplicati:8200",
+        password="secret",
+    )
+
+    client._authenticated = True
+
+    with patch.object(
+        client,
+        "_post",
+        return_value=None,
+    ) as mock_post:
+
+        client.abort_task(
+            2,
+        )
+
+    mock_post.assert_called_once_with(
+        "/api/v1/task/2/abort",
     )

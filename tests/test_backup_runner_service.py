@@ -18,6 +18,9 @@ BackupResult
 
 from app.models.application import Application
 from app.models.application_profile import ApplicationProfile
+from app.models.backup_configuration import (
+    BackupConfiguration,
+)
 from app.models.backup_job import BackupJob
 from app.models.backup_result import BackupResult
 
@@ -64,6 +67,21 @@ def test_backup_runner_executes_null_backend():
         },
     )
 
+    backup_configuration = BackupConfiguration(
+        destination_url="",
+        description="Configuración de prueba",
+        encryption=None,
+        passphrase=None,
+        compression=None,
+        retention_policy=None,
+        schedule=None,
+        filters=[],
+        options={},
+        metadata={
+            "source": "test"
+        },
+    )
+
     registry = BackendRegistry()
 
     registry.register(
@@ -80,6 +98,7 @@ def test_backup_runner_executes_null_backend():
 
     result = runner.run(
         job,
+        backup_configuration,
         "null",
     )
 

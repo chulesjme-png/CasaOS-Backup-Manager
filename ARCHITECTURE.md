@@ -1,181 +1,469 @@
-# ARCHITECTURE
+# CasaOS Backup Manager - Architecture
 
-## Introducción
+Documento de arquitectura técnica del proyecto.
 
-CasaOS Backup Manager está diseñado siguiendo los principios de **Clean Architecture**, con una estructura modular y desacoplada que permite integrar distintos motores de backup sin modificar el núcleo del sistema.
-
-La arquitectura está organizada en capas, donde cada componente tiene una única responsabilidad y las dependencias fluyen siempre en la misma dirección.
+Fecha actualización: 28/07/2026
 
 ---
 
-# Arquitectura general
+# 1. Objetivo del proyecto
+
+CasaOS Backup Manager es un sistema profesional de gestión de backups diseñado para CasaOS.
+
+El objetivo es proporcionar una capa inteligente entre las aplicaciones desplegadas en CasaOS y los diferentes motores de backup.
+
+El sistema NO es un script de copias.
+
+Es una plataforma de gestión que:
+
+* descubre aplicaciones.
+* analiza almacenamiento.
+* genera planes de backup.
+* construye trabajos.
+* delega la ejecución en backends especializados.
+* monitoriza estados.
+* expone información mediante dashboard.
+
+---
+
+# 2. Principios arquitectónicos
+
+El proyecto sigue Clean Architecture.
+
+Principios principales:
+
+* Separación estricta de responsabilidades.
+* Servicios independientes.
+* Modelos internos desacoplados de tecnologías externas.
+* Los conectores externos adaptan contratos.
+* Los backends ejecutan operaciones específicas.
+* El dashboard únicamente visualiza información del sistema.
+
+---
+
+# 3. Arquitectura general
+
+Flujo principal:
 
 ```
 Docker Engine
-        │
-        ▼
-DockerService
-        │
-        ▼
+      |
+      v
 AppDiscoveryService
-        │
-        ▼
+      |
+      v
 ApplicationProfileService
-        │
-        ▼
+      |
+      v
+ApplicationProfile
+      |
+      v
 StorageResolverService
-        │
-        ▼
+      |
+      v
+StorageResource
+      |
+      v
 StorageValidationService
-        │
-        ▼
+      |
+      v
 BackupPlannerService
-        │
-        ▼
+      |
+      v
+BackupPlan
+      |
+      v
 BackupJobBuilderService
-        │
-        ▼
-BackupExecutionService
-        │
-        ▼
-BackupManifestBuilderService
-        │
-        ▼
-BackupRunnerService
-        │
-        ▼
-BackendFactory
-        │
-        ▼
+      |
+      v
+BackupJob
+      |
+      v
 BackupBackend
-   ├── NullBackupBackend
-   └── DuplicatiBackend
-        │
-        ▼
-Connector
-        │
-        ▼
-Motor de Backup
+      |
+      +----------------+
+      |                |
+      v                v
+Duplicati        Restic/Borg/Rsync
+Backend          Backend
 ```
 
 ---
 
-# Capas del sistema
+# 4. Capas del sistema
 
-## Descubrimiento
+## Core
 
-Responsable de detectar las aplicaciones instaladas y obtener la información necesaria para construir un perfil de backup.
+Contiene la lógica principal del sistema.
 
-Componentes principales:
+Responsabilidades:
 
-- DockerService
-- AppDiscoveryService
-- ApplicationProfileService
+* planificación de backups.
+* resolución de recursos.
+* creación de planes.
+* construcción de trabajos.
 
----
+No conoce:
 
-## Storage Intelligence
-
-Analiza y valida todos los recursos de almacenamiento asociados a una aplicación.
-
-Componentes:
-
-- StorageResolverService
-- StorageValidationService
+* Docker.
+* HTTP.
+* APIs externas.
 
 ---
 
-## Planificación
+## Models
 
-Genera un plan de backup independiente del backend que finalmente realizará la copia.
+Modelos internos del dominio.
 
-Componentes:
+Ejemplos:
 
-- BackupPlannerService
-- BackupJobBuilderService
+* Application
+* ApplicationProfile
+* StorageResource
+* BackupPlan
+* BackupJob
+* DuplicatiJob
 
----
+Los modelos representan información del sistema.
 
-## Backup Engine
+No contienen:
 
-Coordina la ejecución completa del proceso de backup.
-
-Componentes:
-
-- BackupExecutionService
-- BackupManifestBuilderService
-- BackupRunnerService
-
----
-
-## Backends
-
-Implementan la integración con un motor de backup concreto.
-
-Actualmente:
-
-- NullBackupBackend
-- DuplicatiBackend
-
-En el futuro:
-
-- ResticBackend
-- BorgBackend
-- RsyncBackend
-- KopiaBackend
+* llamadas externas.
+* lógica de infraestructura.
+* autenticación.
 
 ---
 
-## Connectors
+## Services
 
-Encapsulan toda la comunicación con sistemas externos.
+Servicios de aplicación.
 
-Actualmente:
+Ejemplos:
 
-- DuplicatiClient
+## AppDiscoveryService
 
-Los Connectors son el único punto autorizado para realizar llamadas HTTP o interactuar con APIs externas.
+Descubre aplicaciones existentes en CasaOS mediante Docker.
 
----
+Responsabilidad:
 
-# Principios arquitectónicos
-
-La arquitectura del proyecto sigue las siguientes reglas:
-
-- Clean Architecture.
-- SOLID.
-- Single Responsibility Principle.
-- Dependency Inversion.
-- Bajo acoplamiento.
-- Alta cohesión.
-
-Cada componente debe tener una única responsabilidad claramente definida.
+* obtener contenedores.
+* identificar aplicaciones.
+* crear modelos Application.
 
 ---
 
-# Dirección de las dependencias
+## StorageResolverService
 
-Las dependencias siempre fluyen en una única dirección:
+Analiza recursos de almacenamiento disponibles.
+
+Responsabilidad:
+
+* detectar rutas.
+* resolver volúmenes.
+* identificar recursos candidatos.
+
+---
+
+## StorageValidationService
+
+Valida recursos encontrados.
+
+Comprueba:
+
+* existencia.
+* permisos.
+* lectura.
+* disponibilidad.
+
+---
+
+## BackupPlannerService
+
+Genera planes de backup.
+
+Responsabilidad:
+
+Transformar:
+
+ApplicationProfile + StorageResource
+
+en:
+
+BackupPlan
+
+---
+
+## BackupJobBuilderService
+
+Construye trabajos ejecutables.
+
+Transforma:
+
+BackupPlan
+
+en:
+
+BackupJob
+
+---
+
+# 5. Arquitectura de Backends
+
+Los backends abstraen motores externos de backup.
+
+Contrato principal:
 
 ```
-Routers
-        │
-        ▼
-Services
-        │
-        ▼
-Core
-        │
-        ▼
-Connectors
+BackupBackend
+      |
+      |
+      +----------------+
+      |                |
+      v                v
+DuplicatiBackend   ResticBackend
 ```
 
-Los modelos del dominio son compartidos entre las distintas capas y permanecen independientes de la infraestructura.
+Un backend debe encargarse de:
+
+* traducir trabajos internos.
+* comunicarse con el motor externo.
+* ejecutar operaciones.
+* devolver resultados.
+
+No debe:
+
+* descubrir aplicaciones.
+* decidir qué copiar.
+* gestionar interfaz gráfica.
 
 ---
 
-# Evolución
+# 6. Integración Duplicati
 
-La arquitectura ha sido diseñada para permitir la incorporación de nuevos motores de backup sin modificar el dominio del proyecto.
+Estado:
 
-Los próximos desarrollos comenzarán con la detección automática de capacidades del backend (**Duplicati Capability Detection**), seguida de la implementación de la ejecución real de copias de seguridad.
+VALIDADA
+
+Arquitectura:
+
+```
+BackupBackend
+      |
+      v
+DuplicatiBackend
+      |
+      v
+DuplicatiJobBuilder
+      |
+      v
+DuplicatiPayloadBuilder
+      |
+      v
+DuplicatiClient
+      |
+      v
+Duplicati REST API
+```
+
+---
+
+# 7. DuplicatiClient
+
+Ubicación:
+
+```
+app/connectors/duplicati/
+```
+
+Responsabilidad:
+
+Comunicación HTTP con Duplicati.
+
+Funciones principales:
+
+* autenticación.
+* gestión de sesión.
+* llamadas REST.
+* gestión de errores.
+
+No conoce:
+
+* CasaOS.
+* Docker.
+* Backup Engine.
+* reglas de negocio.
+
+Operaciones validadas:
+
+```
+authenticate()
+
+get_backups()
+
+create_job()
+```
+
+---
+
+# 8. DuplicatiPayloadBuilder
+
+Responsabilidad:
+
+Adaptar modelos internos al formato REST esperado por Duplicati.
+
+Entrada:
+
+```
+DuplicatiJob
+```
+
+Salida:
+
+```
+REST Payload
+```
+
+No realiza:
+
+* HTTP.
+* autenticación.
+* ejecución.
+
+---
+
+# 9. DuplicatiJob
+
+Modelo interno de trabajo Duplicati.
+
+Características:
+
+* independiente de REST.
+* independiente del transporte.
+* representa una definición de backup.
+
+Contiene:
+
+* nombre.
+* fuentes.
+* destino.
+* cifrado.
+* compresión.
+* retención.
+* opciones.
+* metadata.
+
+---
+
+# 10. Estado actual del desarrollo
+
+Versión:
+
+```
+v0.5.0-alpha6
+```
+
+Estado:
+
+Integración inicial real con Duplicati validada.
+
+Completado:
+
+* arquitectura Clean Architecture.
+* dashboard inicial.
+* descubrimiento Docker.
+* Storage Intelligence inicial.
+* Backup Engine inicial.
+* infraestructura de backends.
+* connector Duplicati.
+* autenticación REST.
+* lectura de backups.
+* creación de trabajos remotos.
+
+Pendiente:
+
+* integración completa DuplicatiBackend con Backup Engine.
+* ejecución remota de backups.
+* seguimiento de tareas.
+* monitorización de estados.
+* sincronización de resultados.
+* integración final con dashboard.
+
+---
+
+# 11. Tecnologías utilizadas
+
+Backend:
+
+* Python 3.9
+* FastAPI
+* Jinja2
+* Docker SDK
+
+Infraestructura:
+
+* Docker
+* Docker Compose
+
+Motores externos:
+
+* Duplicati REST API
+
+Testing:
+
+* pytest
+
+---
+
+# 12. Reglas de desarrollo
+
+Mantener:
+
+* Clean Architecture.
+* Responsabilidad única.
+* Servicios desacoplados.
+* Cambios completos de archivos.
+* Validación mediante Docker Compose.
+* Commit Git después de cada sprint funcional.
+
+Comandos estándar:
+
+```
+docker compose down
+
+docker compose build
+
+docker compose up -d
+
+docker compose exec casaos-backup-manager pytest
+```
+
+---
+
+# 13. Próxima fase
+
+La siguiente fase consiste en conectar la integración Duplicati ya validada con el flujo real del Backup Engine.
+
+Objetivo:
+
+```
+BackupPlan
+      |
+      v
+BackupJob
+      |
+      v
+DuplicatiBackend
+      |
+      v
+DuplicatiClient
+      |
+      v
+Backup remoto ejecutado
+```
+
+Después:
+
+* capturar ejecución.
+* consultar progreso.
+* almacenar estado.
+* mostrar resultados en dashboard.
