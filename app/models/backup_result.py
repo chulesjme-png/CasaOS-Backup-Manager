@@ -1,6 +1,12 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+from app.models.backup_execution_reference import (
+    BackupExecutionReference,
+)
 
 
 @dataclass
@@ -31,5 +37,7 @@ class BackupResult:
     warnings: List[str] = field(default_factory=list)
 
     errors: List[str] = field(default_factory=list)
+
+    execution_reference: Optional[BackupExecutionReference] = None
 
     metadata: Dict[str, Any] = field(default_factory=dict)

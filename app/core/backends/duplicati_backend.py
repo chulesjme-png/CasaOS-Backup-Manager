@@ -29,6 +29,9 @@ from app.connectors.duplicati.duplicati_client import (
 from app.connectors.duplicati.duplicati_payload_builder import (
     DuplicatiPayloadBuilder,
 )
+from app.connectors.duplicati.duplicati_response_mapper import (
+    DuplicatiResponseMapper,
+)
 from app.connectors.exceptions import (
     ConnectorError,
 )
@@ -40,6 +43,9 @@ from app.models.backend_capabilities import (
 )
 from app.models.backup_execution_request import (
     BackupExecutionRequest,
+)
+from app.models.backup_execution_reference import (
+    BackupExecutionReference,
 )
 from app.models.backup_operation import (
     BackupOperationType,
@@ -124,6 +130,8 @@ class DuplicatiBackend(BackupBackend):
 
         metadata = {}
 
+        execution_reference: BackupExecutionReference | None = None
+
         success = False
 
         try:
@@ -143,11 +151,12 @@ class DuplicatiBackend(BackupBackend):
 
             response = client.create_job(payload)
 
+            execution_reference = DuplicatiResponseMapper.from_create_job_response(response)
+
             metadata = {
                 "duplicati_job": job.to_payload(),
                 "duplicati_payload": payload,
-                "duplicati_response": response,
-            }
+                            }
 
             success = True
 
@@ -169,6 +178,7 @@ class DuplicatiBackend(BackupBackend):
             started_at=started_at,
             warnings=warnings,
             errors=errors,
+            execution_reference=execution_reference,
             metadata=metadata,
         )
 
@@ -224,6 +234,7 @@ class DuplicatiBackend(BackupBackend):
             started_at=started_at,
             warnings=warnings,
             errors=errors,
+            execution_reference=execution_reference,
             metadata=metadata,
         )
 
@@ -302,6 +313,7 @@ class DuplicatiBackend(BackupBackend):
         warnings,
         errors,
         metadata,
+        execution_reference: BackupExecutionReference | None = None,
     ) -> BackupResult:
 
         return BackupResult(
@@ -313,6 +325,7 @@ class DuplicatiBackend(BackupBackend):
             bytes_processed=0,
             warnings=warnings,
             errors=errors,
+            execution_reference=execution_reference,
             metadata=metadata,
         )
 
