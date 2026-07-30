@@ -22,6 +22,7 @@ app.connectors.duplicati.DuplicatiClient
 """
 
 from datetime import datetime
+from typing import Optional
 
 from app.connectors.duplicati.duplicati_client import (
     DuplicatiClient,
@@ -130,7 +131,7 @@ class DuplicatiBackend(BackupBackend):
 
         metadata = {}
 
-        execution_reference: BackupExecutionReference | None = None
+        execution_reference: Optional[BackupExecutionReference] = None
 
         success = False
 
@@ -203,6 +204,8 @@ class DuplicatiBackend(BackupBackend):
         errors = []
 
         metadata = {}
+
+        execution_reference: Optional[BackupExecutionReference] = None
 
         success = False
 
@@ -313,7 +316,7 @@ class DuplicatiBackend(BackupBackend):
         warnings,
         errors,
         metadata,
-        execution_reference: BackupExecutionReference | None = None,
+        execution_reference: Optional[BackupExecutionReference] = None,
     ) -> BackupResult:
 
         return BackupResult(
