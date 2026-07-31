@@ -157,7 +157,7 @@ class DuplicatiBackend(BackupBackend):
             metadata = {
                 "duplicati_job": job.to_payload(),
                 "duplicati_payload": payload,
-                            }
+            }
 
             success = True
 
@@ -188,8 +188,67 @@ class DuplicatiBackend(BackupBackend):
         request: BackupExecutionRequest,
     ) -> BackupResult:
 
-        return self._get_status(
-            request,
+        started_at = datetime.utcnow()
+
+        warnings = []
+
+        errors = []
+
+        metadata = {}
+
+        execution_reference: Optional[BackupExecutionReference] = request.execution_reference
+
+        success = False
+
+        try:
+
+            backup_id = None
+
+            if execution_reference and execution_reference.execution_id:
+                backup_id = execution_reference.execution_id
+            elif request.backup_configuration and request.backup_configuration.parameters:
+                backup_id = request.backup_configuration.parameters.get("backup_id") or request.backup_configuration.parameters.get("job_id")
+
+            if not backup_id:
+                raise ValueError("No se proporcionó backup_id o execution_reference para ejecutar la copia.")
+
+            client = self._build_client(request)
+
+            response = client.run_backup(int(backup_id))
+
+            if isinstance(response, dict):
+                task_id = response.get("ID") or response.get("TaskId") or response.get("taskId")
+                if task_id:
+                    execution_reference = BackupExecutionReference(
+                        execution_id=str(backup_id),
+                        task_id=str(task_id),
+                        backend=self.name,
+                        raw_reference=response,
+                    )
+                metadata = {"duplicati_run_response": response}
+
+            success = True
+
+        except ConnectorError as exc:
+
+            errors.append(
+                str(exc)
+            )
+
+        except Exception as exc:
+
+            errors.append(
+                str(exc)
+            )
+
+        return self._build_result(
+            request=request,
+            success=success,
+            started_at=started_at,
+            warnings=warnings,
+            errors=errors,
+            execution_reference=execution_reference,
+            metadata=metadata,
         )
 
     def _get_status(
@@ -205,7 +264,7 @@ class DuplicatiBackend(BackupBackend):
 
         metadata = {}
 
-        execution_reference: Optional[BackupExecutionReference] = None
+        execution_reference: Optional[BackupExecutionReference] = request.execution_reference
 
         success = False
 
