@@ -272,19 +272,32 @@ class DuplicatiBackend(BackupBackend):
 
             client = self._build_client(request)
 
-            server_state = client.get_server_state()
-
-            metadata = {
-                "duplicati_server_state": server_state,
-                "duplicati_version": server_state.get(
-                    "Version",
-                    "unknown",
-                ),
-            }
+            # Si disponemos de un task_id específico, consultamos dicha tarea
+            if execution_reference and execution_reference.task_id:
+                task_data = client.get_task(int(execution_reference.task_id))
+                metadata = {
+                    "duplicati_task": task_data,
+                    "task_id": execution_reference.task_id,
+                }
+            else:
+                server_state = client.get_server_state()
+                metadata = {
+                    "duplicati_server_state": server_state,
+                    "duplicati_version": server_state.get(
+                        "Version",
+                        "unknown",
+                    ),
+                }
 
             success = True
 
         except ConnectorError as exc:
+
+            errors.append(
+                str(exc)
+            )
+
+        except Exception as exc:
 
             errors.append(
                 str(exc)
@@ -305,9 +318,61 @@ class DuplicatiBackend(BackupBackend):
         request: BackupExecutionRequest,
     ) -> BackupResult:
 
-        return self._not_implemented(
-            request,
-            "CANCEL",
+        started_at = datetime.utcnow()
+
+        warnings = []
+
+        errors = []
+
+        metadata = {}
+
+        execution_reference: Optional[BackupExecutionReference] = request.execution_reference
+
+        success = False
+
+        try:
+
+            task_id = None
+
+            if execution_reference and execution_reference.task_id:
+                task_id = execution_reference.task_id
+            elif request.backup_configuration and request.backup_configuration.parameters:
+                task_id = request.backup_configuration.parameters.get("task_id")
+
+            if not task_id:
+                raise ValueError("No se proporcionó task_id o execution_reference para cancelar la tarea.")
+
+            client = self._build_client(request)
+
+            client.stop_task(int(task_id))
+
+            metadata = {
+                "cancelled_task_id": str(task_id),
+                "action": "stop_task",
+            }
+
+            success = True
+
+        except ConnectorError as exc:
+
+            errors.append(
+                str(exc)
+            )
+
+        except Exception as exc:
+
+            errors.append(
+                str(exc)
+            )
+
+        return self._build_result(
+            request=request,
+            success=success,
+            started_at=started_at,
+            warnings=warnings,
+            errors=errors,
+            execution_reference=execution_reference,
+            metadata=metadata,
         )
 
     def _restore(
