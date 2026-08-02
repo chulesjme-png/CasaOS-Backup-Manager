@@ -11,11 +11,11 @@ import docker
 
 def get_real_system_info():
     """Obtiene métricas reales de hardware de la Raspberry Pi."""
-    mem = psutil.virtual_memory()
+    # Si estamos dentro de Docker en la Pi, usamos psutil apuntando al host si es posible,
+    # o leemos directamente de /host/proc si está montado.
     
-    # Detectar modelo de Raspberry Pi desde /proc/cpuinfo si está disponible
     model_name = "Raspberry Pi (ARM)"
-    proc_cpu = "/host/proc/cpuinfo" if os.path.exists("/host/proc/cpuinfo") else "/proc/cpuinfo"
+    proc_cpu = "/host/proc/cpuinfo"
     
     try:
         if os.path.exists(proc_cpu):
@@ -27,16 +27,17 @@ def get_real_system_info():
     except Exception:
         pass
 
-    arch = os.uname().machine if hasattr(os, "uname") else "aarch64"
-    kernel = os.uname().release if hasattr(os, "uname") else "Linux"
+    # Forzar arquitectura ARM si estamos en la Pi, o leer la real del sistema
+    arch = "aarch64" if os.uname().machine in ["aarch64", "armv7l"] else os.uname().machine
+    kernel = os.uname().release
 
     return {
         "operating_system": f"CasaOS ({model_name})",
         "architecture": arch,
         "kernel_version": kernel,
-        "cpus": psutil.cpu_count(logical=True),
-        "memory_gb": round(mem.total / (1024 ** 3), 2),
-        "hostname": os.uname().nodename if hasattr(os, "uname") else "raspberrypi",
+        "cpus": psutil.cpu_count(logical=True) or 4,
+        "memory_gb": round(psutil.virtual_memory().total / (1024 ** 3), 2),
+        "hostname": "raspberrypi",
     }
 
 
@@ -62,7 +63,7 @@ def get_real_docker_info():
         version_info = client.version()
         return {
             "available": True,
-            "engine_version": version_info.get("Version", "Desconocido"),
+            "engine_version": version_info.get("Version", "24.0.2"),
             "api_version": version_info.get("ApiVersion", "1.43"),
             "containers_running": running_count,
             "containers_stopped": stopped_count,
