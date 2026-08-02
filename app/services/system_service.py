@@ -10,33 +10,45 @@ import docker
 
 
 def get_real_system_info():
-    """Obtiene métricas reales de hardware de la Raspberry Pi."""
-    # Si estamos dentro de Docker en la Pi, usamos psutil apuntando al host si es posible,
-    # o leemos directamente de /host/proc si está montado.
-    
+    """Obtiene métricas reales de hardware del host (Raspberry Pi)."""
     model_name = "Raspberry Pi (ARM)"
-    proc_cpu = "/host/proc/cpuinfo"
     
-    try:
-        if os.path.exists(proc_cpu):
-            with open(proc_cpu, "r") as f:
-                for line in f:
-                    if "Model" in line or "Hardware" in line:
-                        model_name = line.split(":")[1].strip()
-                        break
-    except Exception:
-        pass
+    # Intentar leer el cpuinfo del host montado en /host/proc
+    proc_cpu_paths = ["/host/proc/cpuinfo", "/proc/cpuinfo"]
+    for proc_cpu in proc_cpu_paths:
+        try:
+            if os.path.exists(proc_cpu):
+                with open(proc_cpu, "r") as f:
+                    for line in f:
+                        if "Model" in line or "Hardware" in line or "model name" in line:
+                            model_name = line.split(":")[1].strip()
+                            break
+                if model_name != "Raspberry Pi (ARM)":
+                    break
+        except Exception:
+            pass
 
-    # Forzar arquitectura ARM si estamos en la Pi, o leer la real del sistema
-    arch = "aarch64" if os.uname().machine in ["aarch64", "armv7l"] else os.uname().machine
-    kernel = os.uname().release
+    # Detectar arquitectura real de la Raspberry Pi
+    try:
+        arch = os.uname().machine
+    except Exception:
+        arch = "aarch64"
+
+    try:
+        kernel = os.uname().release
+    except Exception:
+        kernel = "Linux"
+
+    # Obtener memoria y CPUs reales
+    mem = psutil.virtual_memory()
+    cpus = psutil.cpu_count(logical=True) or 4
 
     return {
         "operating_system": f"CasaOS ({model_name})",
         "architecture": arch,
         "kernel_version": kernel,
-        "cpus": psutil.cpu_count(logical=True) or 4,
-        "memory_gb": round(psutil.virtual_memory().total / (1024 ** 3), 2),
+        "cpus": cpus,
+        "memory_gb": round(mem.total / (1024 ** 3), 2),
         "hostname": "raspberrypi",
     }
 
