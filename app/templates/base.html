@@ -2,21 +2,22 @@
 <html lang="es">
 
 <head>
-
     <meta charset="UTF-8">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CasaOS Backup Manager</title>
-
     <link rel="stylesheet" href="/static/css/style.css">
-
 </head>
 
 <body>
 
-{% block content %}
+    <!-- Contenedor principal donde las demás plantillas inyectarán su HTML -->
+    <main class="main-container">
+        {% block content %}
+        {% endblock %}
+    </main>
 
-{% endblock %}
-
+    <!-- Scripts de la aplicación -->
+    <script src="/static/js/app.js"></script>
 </body>
 
 </html>

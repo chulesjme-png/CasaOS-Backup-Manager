@@ -15,11 +15,15 @@ from app.core.backends.backup_backend import BackupBackend
 
 class BackendRegistry:
     """
-    Registro de backends disponibles.
+    Registro de backends disponibles (Patrón Singleton).
     """
+    _instance = None
 
-    def __init__(self):
-        self._backends: Dict[str, BackupBackend] = {}
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(BackendRegistry, cls).__new__(cls)
+            cls._instance._backends: Dict[str, BackupBackend] = {}
+        return cls._instance
 
     def register(
         self,
@@ -46,3 +50,11 @@ class BackendRegistry:
         Devuelve los nombres de backends registrados.
         """
         return list(self._backends.keys())
+
+    def list_backends(
+        self,
+    ) -> List[str]:
+        """
+        Alias para compatibilidad con el router de backends.
+        """
+        return self.available()

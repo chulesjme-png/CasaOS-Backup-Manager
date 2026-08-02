@@ -14,10 +14,20 @@ services:
       TZ: Europe/Madrid
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: /app
+      HOST_PROC: /host/proc
+      HOST_SYS: /host/sys
 
     volumes:
       - .:/app
-      - /var/run/docker.sock:/var/run/docker.sock
+      # Docker Socket para listar contenedores reales de la Raspberry Pi
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Métricas reales del procesador y RAM del Host (Raspberry Pi)
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      # Acceso al almacenamiento de CasaOS para medir espacio real
+      - /DATA:/DATA:ro
+      - /mnt:/mnt:ro
+      # Persistencia de datos propia de la app
       - ./data:/data
 
     restart: unless-stopped

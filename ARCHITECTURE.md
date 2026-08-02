@@ -2,7 +2,7 @@
 
 Documento de arquitectura técnica del proyecto.
 
-Fecha actualización: 28/07/2026
+Fecha actualización: 02/08/2026
 
 ---
 
@@ -45,7 +45,6 @@ Principios principales:
 
 Flujo principal:
 
-```
 Docker Engine
       |
       v
@@ -86,7 +85,6 @@ BackupBackend
       v                v
 Duplicati        Restic/Borg/Rsync
 Backend          Backend
-```
 
 ---
 
@@ -213,7 +211,6 @@ Los backends abstraen motores externos de backup.
 
 Contrato principal:
 
-```
 BackupBackend
       |
       |
@@ -221,7 +218,6 @@ BackupBackend
       |                |
       v                v
 DuplicatiBackend   ResticBackend
-```
 
 Un backend debe encargarse de:
 
@@ -242,11 +238,10 @@ No debe:
 
 Estado:
 
-VALIDADA
+COMPLETA Y VALIDADA (Conectada al Backup Engine y API)
 
 Arquitectura:
 
-```
 BackupBackend
       |
       v
@@ -263,7 +258,6 @@ DuplicatiClient
       |
       v
 Duplicati REST API
-```
 
 ---
 
@@ -271,9 +265,7 @@ Duplicati REST API
 
 Ubicación:
 
-```
 app/connectors/duplicati/
-```
 
 Responsabilidad:
 
@@ -295,13 +287,11 @@ No conoce:
 
 Operaciones validadas:
 
-```
-authenticate()
-
-get_backups()
-
-create_job()
-```
+* `authenticate()`
+* `get_backups()`
+* `create_job()`
+* `run_backup()`
+* `cancel_task()`
 
 ---
 
@@ -313,157 +303,53 @@ Adaptar modelos internos al formato REST esperado por Duplicati.
 
 Entrada:
 
-```
 DuplicatiJob
-```
 
 Salida:
 
-```
 REST Payload
-```
-
-No realiza:
-
-* HTTP.
-* autenticación.
-* ejecución.
 
 ---
 
-# 9. DuplicatiJob
-
-Modelo interno de trabajo Duplicati.
-
-Características:
-
-* independiente de REST.
-* independiente del transporte.
-* representa una definición de backup.
-
-Contiene:
-
-* nombre.
-* fuentes.
-* destino.
-* cifrado.
-* compresión.
-* retención.
-* opciones.
-* metadata.
-
----
-
-# 10. Estado actual del desarrollo
+# 9. Estado actual del desarrollo
 
 Versión:
 
-```
-v0.5.0-alpha6
-```
+v0.5.0-alpha7
 
 Estado:
 
-Integración inicial real con Duplicati validada.
+Integración completa entre el Backup Engine, la API REST y el backend de Duplicati validada con **57 tests automatizados en verde**.
 
 Completado:
 
 * arquitectura Clean Architecture.
-* dashboard inicial.
-* descubrimiento Docker.
-* Storage Intelligence inicial.
-* Backup Engine inicial.
-* infraestructura de backends.
-* connector Duplicati.
-* autenticación REST.
-* lectura de backups.
-* creación de trabajos remotos.
-
-Pendiente:
-
-* integración completa DuplicatiBackend con Backup Engine.
-* ejecución remota de backups.
-* seguimiento de tareas.
-* monitorización de estados.
-* sincronización de resultados.
-* integración final con dashboard.
+* descubrimiento Docker y Storage Intelligence.
+* Backup Engine completo y conectado.
+* infraestructura de backends con `BackendRegistry`.
+* ejecución (`/executions/run`) y cancelación (`/executions/cancel`) operativas.
 
 ---
 
-# 11. Tecnologías utilizadas
+# 10. Tecnologías utilizadas
 
 Backend:
 
 * Python 3.9
 * FastAPI
-* Jinja2
-* Docker SDK
-
-Infraestructura:
-
-* Docker
-* Docker Compose
-
-Motores externos:
-
-* Duplicati REST API
+* Pydantic
+* SQLite / SQLAlchemy (Persistencia de base de datos)
 
 Testing:
 
-* pytest
+* pytest (57 pruebas unitarias y de integración)
 
 ---
 
-# 12. Reglas de desarrollo
+# 11. Próxima fase
 
-Mantener:
+La siguiente etapa consiste en:
 
-* Clean Architecture.
-* Responsabilidad única.
-* Servicios desacoplados.
-* Cambios completos de archivos.
-* Validación mediante Docker Compose.
-* Commit Git después de cada sprint funcional.
-
-Comandos estándar:
-
-```
-docker compose down
-
-docker compose build
-
-docker compose up -d
-
-docker compose exec casaos-backup-manager pytest
-```
-
----
-
-# 13. Próxima fase
-
-La siguiente fase consiste en conectar la integración Duplicati ya validada con el flujo real del Backup Engine.
-
-Objetivo:
-
-```
-BackupPlan
-      |
-      v
-BackupJob
-      |
-      v
-DuplicatiBackend
-      |
-      v
-DuplicatiClient
-      |
-      v
-Backup remoto ejecutado
-```
-
-Después:
-
-* capturar ejecución.
-* consultar progreso.
-* almacenar estado.
-* mostrar resultados en dashboard.
+* Integración del Frontend (Dashboard visual).
+* Seguimiento visual de ejecuciones e historial.
+* Empaquetado definitivo para la tienda de aplicaciones de CasaOS.

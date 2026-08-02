@@ -5,18 +5,22 @@
 <div class="container">
 
     <header class="header">
-
         <div>
-
-            <h1>{{ app_name }}</h1>
-
+            <!-- Usamos 'title' que viene de dashboard.py -->
+            <h1>{{ title }}</h1>
             <span class="version">
-                v{{ app_version }}
+                v0.5.0-alpha7
             </span>
-
         </div>
-
     </header>
+
+    <!-- NUEVO: Contenedor dinámico para los motores de backup -->
+    <section class="card" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2>Motores de Backup Disponibles</h2>
+        <div id="backends-container">
+            <p>Cargando motores...</p>
+        </div>
+    </section>
 
     {% include "components/system_card.html" %}
 
