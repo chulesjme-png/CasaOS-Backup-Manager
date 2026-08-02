@@ -1,23 +1,38 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.config.settings import (
-    APP_DESCRIPTION,
-    APP_NAME,
-    APP_VERSION,
-)
-
+from app.config.settings import APP_DESCRIPTION, APP_NAME, APP_VERSION
 from app.config.template import templates
-from app.routers.dashboard import router as dashboard_router
-from app.routers.api_health import router as health_router
+from app.database.connection import init_db
 from app.routers.api_backends import router as backends_router
 from app.routers.api_executions import router as executions_router
+from app.routers.api_health import router as health_router
+from app.routers.dashboard import router as dashboard_router
+
+# Importaciones para el registro de backends
+from app.core.backends.backend_registry import BackendRegistry
+from app.core.backends.duplicati_backend import DuplicatiBackend
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Inicializa las tablas de SQLite al arrancar
+    init_db()
+    
+    # Registrar backends por defecto al iniciar la app
+    registry = BackendRegistry()
+    if "duplicati" not in registry.available():
+        registry.register(DuplicatiBackend())
+        
+    yield
 
 
 app = FastAPI(
     title=APP_NAME,
     description=APP_DESCRIPTION,
     version=APP_VERSION,
+    lifespan=lifespan,
 )
 
 app.mount(

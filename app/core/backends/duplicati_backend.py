@@ -51,6 +51,9 @@ from app.models.backup_execution_reference import (
 from app.models.backup_operation import (
     BackupOperationType,
 )
+from app.models.backup_resource_type import (
+    BackupResourceType,
+)
 from app.models.backup_result import (
     BackupResult,
 )
@@ -124,32 +127,23 @@ class DuplicatiBackend(BackupBackend):
     ) -> BackupResult:
 
         started_at = datetime.utcnow()
-
         warnings = []
-
         errors = []
-
         metadata = {}
-
         execution_reference: Optional[BackupExecutionReference] = None
-
         success = False
 
         try:
-
             job_builder = DuplicatiJobBuilder()
-
             job = job_builder.build(
                 manifest=request.manifest,
                 configuration=request.backup_configuration,
             )
 
             payload_builder = DuplicatiPayloadBuilder()
-
             payload = payload_builder.build(job)
 
             client = self._build_client(request)
-
             response = client.create_job(payload)
 
             execution_reference = DuplicatiResponseMapper.from_create_job_response(response)
@@ -158,20 +152,12 @@ class DuplicatiBackend(BackupBackend):
                 "duplicati_job": job.to_payload(),
                 "duplicati_payload": payload,
             }
-
             success = True
 
         except ConnectorError as exc:
-
-            errors.append(
-                str(exc)
-            )
-
+            errors.append(str(exc))
         except Exception as exc:
-
-            errors.append(
-                str(exc)
-            )
+            errors.append(str(exc))
 
         return self._build_result(
             request=request,
@@ -189,57 +175,43 @@ class DuplicatiBackend(BackupBackend):
     ) -> BackupResult:
 
         started_at = datetime.utcnow()
-
         warnings = []
-
         errors = []
-
         metadata = {}
-
         execution_reference: Optional[BackupExecutionReference] = request.execution_reference
-
         success = False
 
         try:
-
             backup_id = None
 
-            if execution_reference and execution_reference.execution_id:
-                backup_id = execution_reference.execution_id
-            elif request.backup_configuration and request.backup_configuration.parameters:
-                backup_id = request.backup_configuration.parameters.get("backup_id") or request.backup_configuration.parameters.get("job_id")
+            if execution_reference and execution_reference.resource_id:
+                backup_id = execution_reference.resource_id
+            elif request.backup_configuration and request.backup_configuration.options:
+                backup_id = request.backup_configuration.options.get("backup_id") or request.backup_configuration.options.get("job_id")
 
             if not backup_id:
                 raise ValueError("No se proporcionó backup_id o execution_reference para ejecutar la copia.")
 
             client = self._build_client(request)
-
             response = client.run_backup(int(backup_id))
 
             if isinstance(response, dict):
                 task_id = response.get("ID") or response.get("TaskId") or response.get("taskId")
                 if task_id:
                     execution_reference = BackupExecutionReference(
-                        execution_id=str(backup_id),
-                        task_id=str(task_id),
                         backend=self.name,
-                        raw_reference=response,
+                        resource_type=BackupResourceType.TASK,
+                        resource_id=str(task_id),
+                        metadata={"raw_reference": response, "execution_id": str(backup_id)},
                     )
                 metadata = {"duplicati_run_response": response}
 
             success = True
 
         except ConnectorError as exc:
-
-            errors.append(
-                str(exc)
-            )
-
+            errors.append(str(exc))
         except Exception as exc:
-
-            errors.append(
-                str(exc)
-            )
+            errors.append(str(exc))
 
         return self._build_result(
             request=request,
@@ -257,51 +229,34 @@ class DuplicatiBackend(BackupBackend):
     ) -> BackupResult:
 
         started_at = datetime.utcnow()
-
         warnings = []
-
         errors = []
-
         metadata = {}
-
         execution_reference: Optional[BackupExecutionReference] = request.execution_reference
-
         success = False
 
         try:
-
             client = self._build_client(request)
 
-            # Si disponemos de un task_id específico, consultamos dicha tarea
-            if execution_reference and execution_reference.task_id:
-                task_data = client.get_task(int(execution_reference.task_id))
+            if execution_reference and execution_reference.resource_id:
+                task_data = client.get_task(int(execution_reference.resource_id))
                 metadata = {
                     "duplicati_task": task_data,
-                    "task_id": execution_reference.task_id,
+                    "task_id": execution_reference.resource_id,
                 }
             else:
                 server_state = client.get_server_state()
                 metadata = {
                     "duplicati_server_state": server_state,
-                    "duplicati_version": server_state.get(
-                        "Version",
-                        "unknown",
-                    ),
+                    "duplicati_version": server_state.get("Version", "unknown"),
                 }
 
             success = True
 
         except ConnectorError as exc:
-
-            errors.append(
-                str(exc)
-            )
-
+            errors.append(str(exc))
         except Exception as exc:
-
-            errors.append(
-                str(exc)
-            )
+            errors.append(str(exc))
 
         return self._build_result(
             request=request,
@@ -319,31 +274,24 @@ class DuplicatiBackend(BackupBackend):
     ) -> BackupResult:
 
         started_at = datetime.utcnow()
-
         warnings = []
-
         errors = []
-
         metadata = {}
-
         execution_reference: Optional[BackupExecutionReference] = request.execution_reference
-
         success = False
 
         try:
-
             task_id = None
 
-            if execution_reference and execution_reference.task_id:
-                task_id = execution_reference.task_id
-            elif request.backup_configuration and request.backup_configuration.parameters:
-                task_id = request.backup_configuration.parameters.get("task_id")
+            if execution_reference and execution_reference.resource_id:
+                task_id = execution_reference.resource_id
+            elif request.backup_configuration and request.backup_configuration.options:
+                task_id = request.backup_configuration.options.get("task_id")
 
             if not task_id:
                 raise ValueError("No se proporcionó task_id o execution_reference para cancelar la tarea.")
 
             client = self._build_client(request)
-
             client.stop_task(int(task_id))
 
             metadata = {
@@ -354,16 +302,9 @@ class DuplicatiBackend(BackupBackend):
             success = True
 
         except ConnectorError as exc:
-
-            errors.append(
-                str(exc)
-            )
-
+            errors.append(str(exc))
         except Exception as exc:
-
-            errors.append(
-                str(exc)
-            )
+            errors.append(str(exc))
 
         return self._build_result(
             request=request,
@@ -379,21 +320,13 @@ class DuplicatiBackend(BackupBackend):
         self,
         request: BackupExecutionRequest,
     ) -> BackupResult:
-
-        return self._not_implemented(
-            request,
-            "RESTORE",
-        )
+        return self._not_implemented(request, "RESTORE")
 
     def _verify(
         self,
         request: BackupExecutionRequest,
     ) -> BackupResult:
-
-        return self._not_implemented(
-            request,
-            "VERIFY",
-        )
+        return self._not_implemented(request, "VERIFY")
 
     def _build_client(
         self,
@@ -403,28 +336,15 @@ class DuplicatiBackend(BackupBackend):
         configuration = {}
 
         if request.backend_configuration:
-
-            configuration = (
-                request.backend_configuration.configuration
-            )
+            configuration = request.backend_configuration.configuration
 
         url = configuration.get("url")
 
         if not url:
+            raise ConnectorError("Duplicati URL no configurada")
 
-            raise ConnectorError(
-                "Duplicati URL no configurada"
-            )
-
-        timeout = configuration.get(
-            "timeout",
-            30,
-        )
-
-        password = configuration.get(
-            "password",
-            "",
-        )
+        timeout = configuration.get("timeout", 30)
+        password = configuration.get("password", "")
 
         return DuplicatiClient(
             base_url=url,
@@ -467,8 +387,6 @@ class DuplicatiBackend(BackupBackend):
             success=False,
             started_at=datetime.utcnow(),
             warnings=[],
-            errors=[
-                f"Operación {operation} todavía no implementada."
-            ],
+            errors=[f"Operación {operation} todavía no implementada."],
             metadata={},
         )
