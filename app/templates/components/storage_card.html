@@ -3,11 +3,15 @@
         <h6 class="fw-bold text-primary small mb-2">💿 Destinos de Almacenamiento</h6>
         <div class="fw-bold fs-6 text-dark mb-2">Almacenamiento CasaOS (/DATA)</div>
         
+        <!-- EXTRACCIÓN SEGURA DE PRIMER ELEMENTO SI ES UNA LISTA -->
+        {% set st_obj = storage[0] if (storage is sequence and storage|length > 0) else storage %}
+        {% set dk_obj = disk[0] if (disk is sequence and disk|length > 0) else disk %}
+
         <!-- CÁLCULO DE VALORES DE RESPALDO (FALLBACK) -->
-        {% set total_gb = storage.total_gb if (storage and storage.total_gb > 0) else (disk.total_gb if (disk and disk.total_gb > 0) else 1876.2) %}
-        {% set used_gb = storage.used_gb if (storage and storage.used_gb > 0) else (disk.used_gb if (disk and disk.used_gb > 0) else 1227.5) %}
-        {% set free_gb = storage.free_gb if (storage and storage.free_gb > 0) else (disk.free_gb if (disk and disk.free_gb > 0) else 553.3) %}
-        {% set usage_pct = storage.percent if (storage and storage.percent > 0) else (disk.percent if (disk and disk.percent > 0) else 65.4) %}
+        {% set total_gb = st_obj.total_gb if (st_obj and st_obj.total_gb is defined and st_obj.total_gb > 0) else (dk_obj.total_gb if (dk_obj and dk_obj.total_gb is defined and dk_obj.total_gb > 0) else 1876.2) %}
+        {% set used_gb = st_obj.used_gb if (st_obj and st_obj.used_gb is defined and st_obj.used_gb > 0) else (dk_obj.used_gb if (dk_obj and dk_obj.used_gb is defined and dk_obj.used_gb > 0) else 1227.5) %}
+        {% set free_gb = st_obj.free_gb if (st_obj and st_obj.free_gb is defined and st_obj.free_gb > 0) else (dk_obj.free_gb if (dk_obj and dk_obj.free_gb is defined and dk_obj.free_gb > 0) else 553.3) %}
+        {% set usage_pct = st_obj.percent if (st_obj and st_obj.percent is defined and st_obj.percent > 0) else (dk_obj.percent if (dk_obj and dk_obj.percent is defined and dk_obj.percent > 0) else 65.4) %}
 
         <div class="small text-muted mb-1"><strong>Transporte:</strong> Local Storage</div>
         <div class="small text-muted mb-1"><strong>Ruta:</strong> /DATA</div>
