@@ -28,7 +28,6 @@ def get_real_system_info():
         except Exception:
             pass
 
-    # Si no contó procesadores en cpuinfo, usamos psutil
     if cpus_count == 0:
         cpus_count = psutil.cpu_count(logical=True) or 4
 
@@ -40,7 +39,6 @@ def get_real_system_info():
             with open(proc_mem, "r") as f:
                 for line in f:
                     if "MemTotal" in line:
-                        # MemTotal está en kB
                         kb_total = int(line.split(":")[1].replace("kB", "").strip())
                         total_ram_gb = round(kb_total / (1024 * 1024), 2)
                         break
@@ -93,7 +91,7 @@ def get_real_docker_info():
             "available": True,
             "engine_version": version_info.get("Version", "24.0.2"),
             "api_version": version_info.get("ApiVersion", "1.43"),
-            "hostname": version_info.get("Components", [{}])[0].get("Details", {}).get("KernelVersion", "raspberrypi"),
+            "hostname": "raspberrypi",
             "containers_running": running_count,
             "containers_stopped": stopped_count,
             "images": len(client.images.list()),
@@ -118,16 +116,18 @@ def get_real_docker_info():
 
 
 def get_real_disk_info(path="/DATA"):
-    """Obtiene uso real del disco mapeado de CasaOS."""
-    # Buscar una ruta válida montada en el contenedor
+    """Obtiene uso real del almacenamiento de CasaOS."""
+    # Probar primero la raíz o puntos de montaje reales
     target_path = "/"
-    for test_path in [path, "/mnt", "/DATA"]:
+    for test_path in [path, "/DATA", "/mnt"]:
         if os.path.exists(test_path):
             try:
-                stat = shutil.disk_usage(test_path)
-                if stat.total > 0:
+                usage = shutil.disk_usage(test_path)
+                if usage.total > 0:
                     target_path = test_path
-                    break
+                    # Si encontramos un punto de montaje con espacio válido, lo usamos
+                    if test_path in ["/DATA", "/mnt"] and usage.total > (10 * 1024 ** 3):
+                        break
             except Exception:
                 continue
 
