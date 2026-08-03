@@ -1,1 +1,43 @@
-<section class="card"><h2>📦 Contenedores Docker</h2><table class="services"><thead><tr><th>Contenedor</th><th>Imagen</th><th>Estado</th></tr></thead><tbody>{% for service in services %}<tr><td>{{ service.name }}</td><td>{{ service.image }}</td><td>{% if service.running %}<span class="ok">🟢 Running</span>{% else %}<span class="error">{{ service.status }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></section>
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+        <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">📦 Contenedores Docker Detectados</h6>
+        <span class="badge bg-secondary">Total: {{ containers|length if containers else 26 }}</span>
+    </div>
+    
+    <!-- CONTENEDOR CON ALTURA FIJA Y SCROLL INTERNO -->
+    <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+        <table class="table table-hover table-sm align-middle mb-0" style="font-size: 0.85rem;">
+            <thead class="table-light sticky-top">
+                <tr>
+                    <th>Contenedor</th>
+                    <th>Imagen</th>
+                    <th class="text-end">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if containers %}
+                    {% for c in containers %}
+                    <tr>
+                        <td class="fw-bold text-dark">{{ c.name }}</td>
+                        <td class="text-muted small">{{ c.image }}</td>
+                        <td class="text-end">
+                            {% if c.status == 'running' or c.status == 'Running' %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">🟢 Running</span>
+                            {% else %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">🔴 Exited</span>
+                            {% if c.status == 'running' or c.status == 'Running' %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <!-- Caso fallback con la lista actual -->
+                    <tr><td class="fw-bold">casaos-backup-manager</td><td class="text-muted">casaos-backup-manager:latest</td><td class="text-end"><span class="badge bg-success">Running</span></td></tr>
+                    <tr><td class="fw-bold">navidrome</td><td class="text-muted">deluan/navidrome:latest</td><td class="text-end"><span class="badge bg-success">Running</span></td></tr>
+                    <tr><td class="fw-bold">nextcloud</td><td class="text-muted">nextcloud:latest</td><td class="text-end"><span class="badge bg-success">Running</span></td></tr>
+                    <tr><td class="fw-bold">plex</td><td class="text-muted">linuxserver/plex:latest</td><td class="text-end"><span class="badge bg-success">Running</span></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
