@@ -13,15 +13,14 @@ def get_real_system_info():
     """Obtiene métricas reales de hardware del host (Raspberry Pi)."""
     model_name = "Raspberry Pi (ARM)"
     
-    # Lectura del procesador desde /host/proc/cpuinfo
+    # 1. Contar CPUs desde /host/proc/cpuinfo
     proc_cpu = "/host/proc/cpuinfo" if os.path.exists("/host/proc/cpuinfo") else "/proc/cpuinfo"
     cpus_count = 0
-    
     if os.path.exists(proc_cpu):
         try:
             with open(proc_cpu, "r") as f:
                 for line in f:
-                    if "processor" in line:
+                    if line.startswith("processor"):
                         cpus_count += 1
                     if "Model" in line or "Hardware" in line or "model name" in line:
                         model_name = line.split(":")[1].strip()
@@ -31,7 +30,7 @@ def get_real_system_info():
     if cpus_count == 0:
         cpus_count = psutil.cpu_count(logical=True) or 4
 
-    # Lectura de memoria real desde /host/proc/meminfo
+    # 2. Leer Memoria RAM real desde /host/proc/meminfo
     total_ram_gb = 0
     proc_mem = "/host/proc/meminfo" if os.path.exists("/host/proc/meminfo") else "/proc/meminfo"
     if os.path.exists(proc_mem):
@@ -48,11 +47,12 @@ def get_real_system_info():
     if total_ram_gb == 0:
         total_ram_gb = round(psutil.virtual_memory().total / (1024 ** 3), 2)
 
-    # Nombre del Kernel real del Host
+    # 3. Leer Kernel real del Host
     kernel = os.uname().release
-    if os.path.exists("/host/proc/sys/kernel/osrelease"):
+    kernel_path = "/host/proc/sys/kernel/osrelease"
+    if os.path.exists(kernel_path):
         try:
-            with open("/host/proc/sys/kernel/osrelease", "r") as f:
+            with open(kernel_path, "r") as f:
                 kernel = f.read().strip()
         except Exception:
             pass
@@ -116,17 +116,16 @@ def get_real_docker_info():
 
 
 def get_real_disk_info(path="/DATA"):
-    """Obtiene uso real del almacenamiento de CasaOS."""
-    # Probar primero la raíz o puntos de montaje reales
+    """Obtiene uso real del disco mapeado de CasaOS."""
     target_path = "/"
-    for test_path in [path, "/DATA", "/mnt"]:
+    # Evaluar rutas probando el uso real para evitar valores en 0.0 GB
+    for test_path in [path, "/mnt", "/DATA", "/"]:
         if os.path.exists(test_path):
             try:
                 usage = shutil.disk_usage(test_path)
                 if usage.total > 0:
                     target_path = test_path
-                    # Si encontramos un punto de montaje con espacio válido, lo usamos
-                    if test_path in ["/DATA", "/mnt"] and usage.total > (10 * 1024 ** 3):
+                    if usage.total > (10 * (1024 ** 3)):  # Mayor a 10 GB
                         break
             except Exception:
                 continue
