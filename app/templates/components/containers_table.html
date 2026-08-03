@@ -16,20 +16,32 @@
             </thead>
             <tbody>
                 {% if containers %}
-                    <!-- ORDENAMOS: Primero los activos (running/up), luego los detenidos -->
-                    {% for c in containers | sort(attribute='status', reverse=True) %}
-                    <tr>
-                        <td class="fw-bold text-dark">{{ c.name }}</td>
-                        <td class="text-muted small">{{ c.image }}</td>
-                        <td class="text-end">
-                            {% set st = (c.status|default('') ~ c.state|default(''))|lower %}
-                            {% if 'running' in st or 'up' in st or c.is_running or c.active %}
+                    <!-- 1. PRIMERO: RENDERIZAR SOLO LOS CONTENEDORES ACTIVOS (RUNNING) -->
+                    {% for c in containers %}
+                        {% set st = (c.status|default('') ~ c.state|default(''))|lower %}
+                        {% if 'running' in st or 'up' in st or c.is_running or c.active %}
+                        <tr>
+                            <td class="fw-bold text-dark">{{ c.name }}</td>
+                            <td class="text-muted small">{{ c.image }}</td>
+                            <td class="text-end">
                                 <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">🟢 Running</span>
-                            {% else %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+
+                    <!-- 2. SEGUNDO: RENDERIZAR LOS CONTENEDORES DETENIDOS (EXITED) -->
+                    {% for c in containers %}
+                        {% set st = (c.status|default('') ~ c.state|default(''))|lower %}
+                        {% if not ('running' in st or 'up' in st or c.is_running or c.active) %}
+                        <tr>
+                            <td class="fw-bold text-dark">{{ c.name }}</td>
+                            <td class="text-muted small">{{ c.image }}</td>
+                            <td class="text-end">
                                 <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">🔴 Exited</span>
-                            {% endif %}
-                        </td>
-                    </tr>
+                            </td>
+                        </tr>
+                        {% endif %}
                     {% endfor %}
                 {% else %}
                     <tr>
