@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   casaos-backup-manager:
     container_name: casaos-backup-manager
@@ -8,7 +6,7 @@ services:
     image: casaos-backup-manager:latest
 
     ports:
-      - "8088:8080"
+      - "8088:8000"
 
     environment:
       TZ: Europe/Madrid

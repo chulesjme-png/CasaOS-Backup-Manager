@@ -106,7 +106,7 @@ Completado.
 Funciones:
 
 * visualización del estado interno.
-* información del sistema.
+* información del sistema y telemetría de hardware en tiempo real (CPU, RAM, kernel, discos).
 * integración con servicios internos.
 
 ---
@@ -234,14 +234,13 @@ Flujo validado de extremo a extremo:
 
 Backend:
 
-* Python 3.9
-* FastAPI
-* Jinja2 / Pydantic
+* Python 3.9 / FastAPI
+* Uvicorn / Jinja2 / Pydantic
 
 Infraestructura:
 
-* Docker
-* Docker Compose
+* Docker / Docker Compose
+* Linux ARM64 / Debian (Optimizado para Raspberry Pi 5)
 
 Integraciones:
 
@@ -280,21 +279,32 @@ CasaOS-Backup-Manager/
 
 ---
 
-# Desarrollo local
+# Desarrollo y Despliegue en Raspberry Pi (CasaOS)
 
-Construcción:
+## Requisitos de montaje en Docker
 
-docker compose build
+Para una correcta telemetría del sistema en la Raspberry Pi 5 y la autodetección de contenedores y almacenamiento de CasaOS, el contenedor debe mapear el puerto interno `8000` de FastAPI al puerto anfitrión `8088`, así como los siguientes volúmenes del host:
 
-Arranque:
+* `/var/run/docker.sock:/var/run/docker.sock:ro`: Acceso a la API de Docker para descubrir contenedores.
+* `/:/host_root:ro`: Lectura del sistema de archivos raíz para inspección de discos.
+* `/proc:/host/proc:ro` y `/sys:/host/sys:ro`: Telemetría del hardware en tiempo real (CPU, RAM, Kernel ARM).
+* `/DATA:/DATA:ro` y `/var/lib/casaos:/var/lib/casaos:ro`: Acceso a los datos persistentes y configuraciones de apps en CasaOS.
 
-docker compose up -d
+## Comandos principales
+
+Construcción y arranque:
+
+docker compose up -d --build
 
 Parada:
 
 docker compose down
 
-Tests (con salida detallada de errores):
+Logs en tiempo real:
+
+docker logs -f casaos-backup-manager
+
+Ejecución de tests unitarios e integración:
 
 docker compose exec casaos-backup-manager pytest -v --tb=short
 
