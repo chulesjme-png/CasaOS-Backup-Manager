@@ -1,14 +1,14 @@
+version: '3.8'
+
 services:
   casaos-backup-manager:
     container_name: casaos-backup-manager
-
     build:
       context: .
-
     image: casaos-backup-manager:latest
 
     ports:
-      - "8088:8000"
+      - "8088:8080"  # Puerto host:puerto contenedor (ajusta 8080 al que use tu app en main.py)
 
     environment:
       TZ: Europe/Madrid
@@ -18,16 +18,17 @@ services:
       HOST_SYS: /host/sys
 
     volumes:
+      # Código montado para cambios rápidos
       - .:/app
-      # Docker Socket para listar contenedores reales de la Raspberry Pi
+      # Docker Socket para telemetría real de contenedores
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Métricas reales del procesador y RAM del Host (Raspberry Pi)
+      # Métricas de hardware y sistema del Host (Raspberry Pi)
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
-      # Acceso al almacenamiento de CasaOS para medir espacio real
+      # Lectura de discos y datos de CasaOS
       - /DATA:/DATA:ro
       - /mnt:/mnt:ro
-      # Persistencia de datos propia de la app
+      # Persistencia de datos del Backup Manager
       - ./data:/data
 
     restart: unless-stopped
