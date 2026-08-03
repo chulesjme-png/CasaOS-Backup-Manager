@@ -4,138 +4,138 @@
 
 <div class="dashboard-cockpit">
 
-    <!-- 1. HEADER CON ACCIONES RÁPIDAS SIEMPRE VISIBLES -->
-    <header class="dashboard-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+    <!-- 1. HEADER CON ACCIONES RÁPIDAS -->
+    <header class="dashboard-header d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
         <div>
-            <h1 class="h3 mb-0 text-gray-800 fw-bold">{{ title }}</h1>
+            <h1 class="h4 mb-0 text-dark fw-bold">{{ title }}</h1>
             <small class="text-muted">Orquestador de Copias de Seguridad para CasaOS</small>
         </div>
-        <!-- BOTONES DE ACCIÓN RÁPIDA EN EL HEADER -->
         <div class="d-flex align-items-center gap-2">
             {% include "components/actions.html" %}
-            <span class="badge bg-primary px-3 py-2 fs-6 ms-2">v0.5.0-alpha7</span>
+            <span class="badge bg-primary px-3 py-2 ms-2">v0.5.0-alpha7</span>
         </div>
     </header>
 
-    <!-- 2. BARRA DE KPIs (4 Tarjetas métricas superiores) -->
-    <div class="row g-3 mb-4">
+    <!-- 2. BARRA DE KPIs -->
+    <div class="row g-2 mb-3">
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm border-start border-4 border-success h-100 py-2">
-                <div class="card-body py-2">
-                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Estado General</div>
-                    <div class="h6 mb-0 font-weight-bold text-gray-800">🟢 Sistema Operativo</div>
+            <div class="card border-0 shadow-sm border-start border-4 border-success py-1">
+                <div class="card-body py-1 px-3">
+                    <div class="text-uppercase text-muted" style="font-size: 0.75rem;">Estado General</div>
+                    <div class="fw-bold text-dark" style="font-size: 0.95rem;">🟢 Sistema Operativo</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm border-start border-4 border-info h-100 py-2">
-                <div class="card-body py-2">
-                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Motores de Backup</div>
-                    <div class="h6 mb-0 font-weight-bold text-gray-800" id="kpi-backends">Duplicati (OK)</div>
+            <div class="card border-0 shadow-sm border-start border-4 border-info py-1">
+                <div class="card-body py-1 px-3">
+                    <div class="text-uppercase text-muted" style="font-size: 0.75rem;">Motores de Backup</div>
+                    <div class="fw-bold text-dark" style="font-size: 0.95rem;" id="kpi-backends">Duplicati (OK)</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm border-start border-4 border-warning h-100 py-2">
-                <div class="card-body py-2">
-                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Aplicaciones CasaOS</div>
-                    <div class="h6 mb-0 font-weight-bold text-gray-800">26 Detectadas</div>
+            <div class="card border-0 shadow-sm border-start border-4 border-warning py-1">
+                <div class="card-body py-1 px-3">
+                    <div class="text-uppercase text-muted" style="font-size: 0.75rem;">Aplicaciones CasaOS</div>
+                    <div class="fw-bold text-dark" style="font-size: 0.95rem;">26 Detectadas</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm border-start border-4 border-primary h-100 py-2">
-                <div class="card-body py-2">
-                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Almacenamiento Host</div>
-                    <div class="h6 mb-0 font-weight-bold text-gray-800">/DATA Protegido</div>
+            <div class="card border-0 shadow-sm border-start border-4 border-primary py-1">
+                <div class="card-body py-1 px-3">
+                    <div class="text-uppercase text-muted" style="font-size: 0.75rem;">Almacenamiento Host</div>
+                    <div class="fw-bold text-dark" style="font-size: 0.95rem;">/DATA Protegido</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 3. CUERPO PRINCIPAL (Layout en 2 Columnas) -->
-    <div class="row g-4">
+    <!-- 3. CUERPO PRINCIPAL (2 Columnas paralelas) -->
+    <div class="row g-3">
 
-        <!-- COLUMNA IZQUIERDA: GESTIÓN DE APLICACIONES Y PLANES (65% Ancho) -->
+        <!-- COLUMNA IZQUIERDA: APLICACIONES Y PLANES (65%) -->
         <div class="col-lg-7">
             
-            <!-- Motores de Backup Disponibles -->
-            <div class="card shadow-sm mb-4 border-0">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">⚡ Motores de Backup Disponibles</h6>
+            <!-- Motores de Backup -->
+            <div class="card shadow-sm mb-3 border-0">
+                <div class="card-header bg-white py-2">
+                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">⚡ Motores Integrados</h6>
                 </div>
-                <div class="card-body">
+                <div class="card-body py-2">
                     <div id="backends-container">
-                        <p class="text-muted mb-0">Cargando motores...</p>
+                        <p class="text-muted mb-0 small">Cargando motores...</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Tabla principal de Aplicaciones CasaOS -->
-            <div class="card shadow-sm mb-4 border-0">
-                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">📦 Aplicaciones y Perfiles Detectados</h6>
+            <!-- Aplicaciones Detectadas -->
+            <div class="card shadow-sm mb-3 border-0">
+                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">📦 Aplicaciones CasaOS</h6>
                 </div>
                 <div class="card-body p-0">
                     {% include "components/applications_table.html" %}
                 </div>
             </div>
 
-            <!-- Planes de Backup Activos -->
-            <div class="card shadow-sm mb-4 border-0">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">🎯 Planes de Backup & Trabajos</h6>
+            <!-- Planes de Backup -->
+            <div class="card shadow-sm mb-3 border-0">
+                <div class="card-header bg-white py-2">
+                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">🎯 Planes de Backup Activos</h6>
                 </div>
-                <div class="card-body">
+                <div class="card-body py-2">
                     {% include "components/backup_plans.html" %}
                 </div>
             </div>
 
-            <!-- Perfiles de Aplicación -->
-            {% include "components/application_profiles.html" %}
-
         </div>
 
-        <!-- COLUMNA DERECHA: HARDWARE, TELEMETRÍA Y DISCOS (35% Ancho) -->
+        <!-- COLUMNA DERECHA: TELEMETRÍA UNIFICADA CON PESTAÑAS (35%) -->
         <div class="col-lg-5">
             
-            <!-- Resumen del Sistema y Hardware -->
-            <div class="card shadow-sm mb-4 border-0">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 font-weight-bold text-secondary">🖥️ Estado de la Raspberry Pi 5</h6>
+            <div class="card shadow-sm border-0 mb-3">
+                <!-- CABECERA CON PESTAÑAS (TABS) -->
+                <div class="card-header bg-white pb-0 border-bottom-0">
+                    <ul class="nav nav-tabs card-header-tabs" id="telemetryTabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active py-2 small fw-bold" id="system-tab" data-bs-toggle="tab" data-bs-target="#system-pane" type="button">🍓 Raspberry Pi 5</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link py-2 small fw-bold" id="docker-tab" data-bs-toggle="tab" data-bs-target="#docker-pane" type="button">🐳 Docker</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link py-2 small fw-bold" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage-pane" type="button">💾 Discos</button>
+                        </li>
+                    </ul>
                 </div>
-                <div class="card-body">
-                    {% include "components/system_card.html" %}
+
+                <!-- CONTENIDO DE LAS PESTAÑAS -->
+                <div class="card-body tab-content" id="telemetryTabsContent">
+                    <!-- Tab 1: Sistema -->
+                    <div class="tab-pane fade show active" id="system-pane" role="tabpanel">
+                        {% include "components/system_card.html" %}
+                    </div>
+                    <!-- Tab 2: Docker -->
+                    <div class="tab-pane fade" id="docker-pane" role="tabpanel">
+                        {% include "components/docker_card.html" %}
+                    </div>
+                    <!-- Tab 3: Almacenamiento -->
+                    <div class="tab-pane fade" id="storage-pane" role="tabpanel">
+                        {% include "components/disk_card.html" %}
+                        <hr class="my-2">
+                        {% include "components/storage_card.html" %}
+                    </div>
                 </div>
             </div>
 
-            <!-- Estado de Docker Engine -->
-            <div class="card shadow-sm mb-4 border-0">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 font-weight-bold text-secondary">🐳 Docker Engine</h6>
+            <!-- Resumen Rápido -->
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-white py-2">
+                    <h6 class="m-0 fw-bold text-secondary" style="font-size: 0.85rem;">📊 Resumen del Estado</h6>
                 </div>
-                <div class="card-body">
-                    {% include "components/docker_card.html" %}
-                </div>
-            </div>
-
-            <!-- Almacenamiento & Storage Intelligence -->
-            <div class="card shadow-sm mb-4 border-0">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 font-weight-bold text-secondary">💾 Almacenamiento & Storage Intelligence</h6>
-                </div>
-                <div class="card-body">
-                    {% include "components/disk_card.html" %}
-                    {% include "components/storage_card.html" %}
-                </div>
-            </div>
-
-            <!-- Resumen General -->
-            <div class="card shadow-sm mb-4 border-0">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 font-weight-bold text-secondary">📊 Resumen General</h6>
-                </div>
-                <div class="card-body">
+                <div class="card-body py-2">
                     {% include "components/summary_card.html" %}
                 </div>
             </div>
@@ -144,14 +144,14 @@
 
     </div>
 
-    <!-- 4. SECCIÓN TÉCNICA (Colapsable) -->
-    <div class="row mt-3">
+    <!-- 4. DETALLES AVANZADOS (Desplegable) -->
+    <div class="row mt-2">
         <div class="col-12">
-            <details class="card shadow-sm border-0 mb-4">
-                <summary class="card-header bg-light py-3 font-weight-bold text-muted" style="cursor: pointer;">
-                    🔍 Ver Contenedores Docker y Fuentes de Almacenamiento Detalladas
+            <details class="card shadow-sm border-0 mb-3">
+                <summary class="card-header bg-light py-2 text-muted fw-bold small" style="cursor: pointer;">
+                    🔍 Inspeccionar Lista Completa de Contenedores ({% include "components/application_profiles.html" %})
                 </summary>
-                <div class="card-body">
+                <div class="card-body py-2">
                     {% include "components/containers_table.html" %}
                     {% include "components/backup_sources_table.html" %}
                 </div>
