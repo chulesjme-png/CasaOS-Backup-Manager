@@ -5,17 +5,47 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CasaOS Backup Manager</title>
+    
+    <!-- CSS de Bootstrap 5 para el Layout en Grilla / Columnas -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Estilos propios de la app -->
     <link rel="stylesheet" href="/static/css/style.css">
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 15px;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .card-header {
+            border-bottom: 1px solid #f0f0f0;
+        }
+        details summary {
+            user-select: none;
+        }
+    </style>
 </head>
 
 <body>
 
-    <!-- Contenedor principal donde las demás plantillas inyectarán su HTML -->
+    <!-- Contenedor principal -->
     <main class="main-container">
         {% block content %}
         {% endblock %}
     </main>
 
+    <!-- JS de Bootstrap 5 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
     <!-- Scripts de la aplicación -->
     <script src="/static/js/app.js"></script>
 </body>
