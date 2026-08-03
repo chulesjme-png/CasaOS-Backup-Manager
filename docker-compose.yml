@@ -8,7 +8,7 @@ services:
     image: casaos-backup-manager:latest
 
     ports:
-      - "8088:8080"  # Puerto host:puerto contenedor (ajusta 8080 al que use tu app en main.py)
+      - "8088:8080"
 
     environment:
       TZ: Europe/Madrid
@@ -25,8 +25,9 @@ services:
       # Métricas de hardware y sistema del Host (Raspberry Pi)
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
-      # Lectura de discos y datos de CasaOS
+      # Lectura de discos, datos y directorio del sistema CasaOS
       - /DATA:/DATA:ro
+      - /var/lib/casaos:/var/lib/casaos:ro
       - /mnt:/mnt:ro
       # Persistencia de datos del Backup Manager
       - ./data:/data

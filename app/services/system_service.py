@@ -116,17 +116,17 @@ def get_real_docker_info():
 
 
 def get_real_disk_info(path="/DATA"):
-    """Obtiene uso real del disco mapeado de CasaOS."""
+    """Obtiene uso real del almacenamiento donde opera CasaOS."""
     target_path = "/"
-    # Evaluar rutas probando el uso real para evitar valores en 0.0 GB
-    for test_path in [path, "/mnt", "/DATA", "/"]:
+    
+    # Evalúa puntos de montaje reales para evitar fallos de lectura de 0.0 GB
+    for test_path in [path, "/var/lib/casaos", "/mnt", "/"]:
         if os.path.exists(test_path):
             try:
                 usage = shutil.disk_usage(test_path)
-                if usage.total > 0:
+                if usage.total > (1024 ** 3):  # Almacenamiento mayor a 1 GB
                     target_path = test_path
-                    if usage.total > (10 * (1024 ** 3)):  # Mayor a 10 GB
-                        break
+                    break
             except Exception:
                 continue
 
