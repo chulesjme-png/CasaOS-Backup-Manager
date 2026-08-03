@@ -1,56 +1,11 @@
 <div class="card shadow-sm border-0 mb-3">
     <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-        <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">📦 Contenedores Docker Detectados</h6>
-        <span class="badge bg-secondary">Total: {{ containers|length if containers else 26 }}</span>
+        <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">📦 Depuración de Contenedores</h6>
+        <span class="badge bg-secondary">Total: {{ containers|length if containers else 0 }}</span>
     </div>
     
-    <!-- CONTENEDOR CON SCROLL INTERNO -->
-    <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
-        <table class="table table-hover table-sm align-middle mb-0" style="font-size: 0.85rem;">
-            <thead class="table-light sticky-top">
-                <tr>
-                    <th>Contenedor</th>
-                    <th>Imagen</th>
-                    <th class="text-end">Estado</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% if containers %}
-                    <!-- 1. PRIMERO: RENDERIZAR SOLO LOS CONTENEDORES ACTIVOS (RUNNING) -->
-                    {% for c in containers %}
-                        {% set st = (c.status|default('') ~ c.state|default(''))|lower %}
-                        {% if 'running' in st or 'up' in st or c.is_running or c.active %}
-                        <tr>
-                            <td class="fw-bold text-dark">{{ c.name }}</td>
-                            <td class="text-muted small">{{ c.image }}</td>
-                            <td class="text-end">
-                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">🟢 Running</span>
-                            </td>
-                        </tr>
-                        {% endif %}
-                    {% endfor %}
-
-                    <!-- 2. SEGUNDO: RENDERIZAR LOS CONTENEDORES DETENIDOS (EXITED) -->
-                    {% for c in containers %}
-                        {% set st = (c.status|default('') ~ c.state|default(''))|lower %}
-                        {% if not ('running' in st or 'up' in st or c.is_running or c.active) %}
-                        <tr>
-                            <td class="fw-bold text-dark">{{ c.name }}</td>
-                            <td class="text-muted small">{{ c.image }}</td>
-                            <td class="text-end">
-                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">🔴 Exited</span>
-                            </td>
-                        </tr>
-                        {% endif %}
-                    {% endfor %}
-                {% else %}
-                    <tr>
-                        <td colspan="3" class="text-center text-muted py-3">
-                            No se encontraron contenedores.
-                        </td>
-                    </tr>
-                {% endif %}
-            </tbody>
-        </table>
+    <div class="table-responsive p-3" style="max-height: 360px; overflow-y: auto;">
+        <p class="small text-muted mb-2"><strong>Dato bruto que recibe Jinja2 en la variable <code>containers</code>:</strong></p>
+        <pre class="bg-dark text-warning p-3 rounded small" style="font-family: monospace;">{{ containers | tojson(indent=2) }}</pre>
     </div>
 </div>
