@@ -2,47 +2,161 @@
 
 {% block content %}
 
-<div class="container">
+<div class="dashboard-cockpit">
 
-    <header class="header">
+    <!-- 1. HEADER & VERSION -->
+    <header class="dashboard-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <!-- Usamos 'title' que viene de dashboard.py -->
-            <h1>{{ title }}</h1>
-            <span class="version">
-                v0.5.0-alpha7
-            </span>
+            <h1 class="h3 mb-0 text-gray-800">{{ title }}</h1>
+            <small class="text-muted">CasaOS Backup Manager Orchestrator</small>
+        </div>
+        <div>
+            <span class="badge bg-primary px-3 py-2 fs-6">v0.5.0-alpha7</span>
         </div>
     </header>
 
-    <!-- NUEVO: Contenedor dinámico para los motores de backup -->
-    <section class="card" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-        <h2>Motores de Backup Disponibles</h2>
-        <div id="backends-container">
-            <p>Cargando motores...</p>
+    <!-- 2. BARRA DE KPIs (4 Tarjetas rápidas en 1 fila) -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-start border-4 border-success h-100 py-2">
+                <div class="card-body py-2">
+                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Estado General</div>
+                    <div class="h6 mb-0 font-weight-bold text-gray-800">🟢 Sistema Operativo</div>
+                </div>
+            </div>
         </div>
-    </section>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-start border-4 border-info h-100 py-2">
+                <div class="card-body py-2">
+                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Motores de Backup</div>
+                    <div class="h6 mb-0 font-weight-bold text-gray-800" id="kpi-backends">Duplicati (OK)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-start border-4 border-warning h-100 py-2">
+                <div class="card-body py-2">
+                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Aplicaciones CasaOS</div>
+                    <div class="h6 mb-0 font-weight-bold text-gray-800">26 Detectadas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-start border-4 border-primary h-100 py-2">
+                <div class="card-body py-2">
+                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Almacenamiento Host</div>
+                    <div class="h6 mb-0 font-weight-bold text-gray-800">/DATA Protegido</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    {% include "components/system_card.html" %}
+    <!-- 3. CUERPO PRINCIPAL (Layout en 2 Columnas) -->
+    <div class="row g-4">
 
-    {% include "components/docker_card.html" %}
+        <!-- COLUMNA IZQUIERDA: GESTIÓN DE APLICACIONES Y PLANES (70% Ancho) -->
+        <div class="col-lg-8">
+            
+            <!-- Motores de Backup Disponibles -->
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">⚡ Motores de Backup Disponibles</h6>
+                </div>
+                <div class="card-body">
+                    <div id="backends-container">
+                        <p class="text-muted mb-0">Cargando motores...</p>
+                    </div>
+                </div>
+            </div>
 
-    {% include "components/disk_card.html" %}
+            <!-- Tabla principal de Aplicaciones CasaOS -->
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">📦 Aplicaciones y Perfiles Detectados</h6>
+                </div>
+                <div class="card-body p-0">
+                    {% include "components/applications_table.html" %}
+                </div>
+            </div>
 
-    {% include "components/storage_card.html" %}
+            <!-- Planes de Backup Activos -->
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">🎯 Planes de Backup & Trabajos</h6>
+                </div>
+                <div class="card-body">
+                    {% include "components/backup_plans.html" %}
+                </div>
+            </div>
 
-    {% include "components/applications_table.html" %}
+            <!-- Perfiles de Aplicación -->
+            {% include "components/application_profiles.html" %}
 
-    {% include "components/application_profiles.html" %}
+        </div>
 
-    {% include "components/backup_plans.html" %}
+        <!-- COLUMNA DERECHA: HARDWARE, TELEMETRÍA Y DISCOS (30% Ancho) -->
+        <div class="col-lg-4">
+            
+            <!-- Resumen del Sistema y Hardware -->
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-secondary">🖥️ Estado de la Raspberry Pi 5</h6>
+                </div>
+                <div class="card-body">
+                    {% include "components/system_card.html" %}
+                </div>
+            </div>
 
-    {% include "components/containers_table.html" %}
+            <!-- Estado de Docker -->
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-secondary">🐳 Docker Engine</h6>
+                </div>
+                <div class="card-body">
+                    {% include "components/docker_card.html" %}
+                </div>
+            </div>
 
-    {% include "components/backup_sources_table.html" %}
+            <!-- Información de Discos y Almacenamiento -->
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-secondary">💾 Almacenamiento & Storage Intelligence</h6>
+                </div>
+                <div class="card-body">
+                    {% include "components/disk_card.html" %}
+                    {% include "components/storage_card.html" %}
+                </div>
+            </div>
 
-    {% include "components/summary_card.html" %}
+            <!-- Resumen y Acciones Rápidas -->
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-secondary">⚙️ Acciones Rápidas</h6>
+                </div>
+                <div class="card-body">
+                    {% include "components/actions.html" %}
+                    {% include "components/summary_card.html" %}
+                </div>
+            </div>
 
-    {% include "components/actions.html" %}
+        </div>
+
+    </div>
+
+    <!-- 4. SECCIÓN DE DETALLES TÉCNICOS (Colapsable al final) -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <details class="card shadow-sm border-0 mb-4">
+                <summary class="card-header bg-light py-3 font-weight-bold text-muted" style="cursor: pointer;">
+                    🔍 Ver Contenedores Docker y Fuentes de Almacenamiento Detalladas
+                </summary>
+                <div class="card-body">
+                    {% include "components/containers_table.html" %}
+                    {% include "components/backup_sources_table.html" %}
+                </div>
+            </details>
+        </div>
+    </div>
 
 </div>
 
