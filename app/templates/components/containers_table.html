@@ -4,7 +4,7 @@
         <span class="badge bg-secondary">Total: {{ containers|length if containers else 26 }}</span>
     </div>
     
-    <!-- TABLA CON SCROLL INTERNO -->
+    <!-- CONTENEDOR CON SCROLL INTERNO -->
     <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
         <table class="table table-hover table-sm align-middle mb-0" style="font-size: 0.85rem;">
             <thead class="table-light sticky-top">
@@ -16,13 +16,14 @@
             </thead>
             <tbody>
                 {% if containers %}
-                    {% for c in containers %}
+                    <!-- ORDENAMOS: Primero los activos (running/up), luego los detenidos -->
+                    {% for c in containers | sort(attribute='status', reverse=True) %}
                     <tr>
                         <td class="fw-bold text-dark">{{ c.name }}</td>
                         <td class="text-muted small">{{ c.image }}</td>
                         <td class="text-end">
-                            {% set status_lower = c.status|lower %}
-                            {% if status_lower == 'running' or 'up' in status_lower %}
+                            {% set st = (c.status|default('') ~ c.state|default(''))|lower %}
+                            {% if 'running' in st or 'up' in st or c.is_running or c.active %}
                                 <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">🟢 Running</span>
                             {% else %}
                                 <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">🔴 Exited</span>
@@ -33,7 +34,7 @@
                 {% else %}
                     <tr>
                         <td colspan="3" class="text-center text-muted py-3">
-                            No se encontraron contenedores activos.
+                            No se encontraron contenedores.
                         </td>
                     </tr>
                 {% endif %}
