@@ -20,12 +20,13 @@ services:
     volumes:
       # Código montado para cambios rápidos
       - .:/app
-      # Docker Socket para telemetría real de contenedores
+      # Socket de Docker para listar todos los contenedores reales
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Métricas de hardware y sistema del Host (Raspberry Pi)
+      # Telemetría de Kernel y Hardware
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
-      # Lectura de discos, datos y directorio del sistema CasaOS
+      # Raíz del sistema e información de datos/apps de CasaOS
+      - /:/host_root:ro
       - /DATA:/DATA:ro
       - /var/lib/casaos:/var/lib/casaos:ro
       - /mnt:/mnt:ro
