@@ -4,18 +4,20 @@
 
 <div class="dashboard-cockpit">
 
-    <!-- 1. HEADER & VERSION -->
-    <header class="dashboard-header d-flex justify-content-between align-items-center mb-4">
+    <!-- 1. HEADER CON ACCIONES RÁPIDAS SIEMPRE VISIBLES -->
+    <header class="dashboard-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
         <div>
-            <h1 class="h3 mb-0 text-gray-800">{{ title }}</h1>
-            <small class="text-muted">CasaOS Backup Manager Orchestrator</small>
+            <h1 class="h3 mb-0 text-gray-800 fw-bold">{{ title }}</h1>
+            <small class="text-muted">Orquestador de Copias de Seguridad para CasaOS</small>
         </div>
-        <div>
-            <span class="badge bg-primary px-3 py-2 fs-6">v0.5.0-alpha7</span>
+        <!-- BOTONES DE ACCIÓN RÁPIDA EN EL HEADER -->
+        <div class="d-flex align-items-center gap-2">
+            {% include "components/actions.html" %}
+            <span class="badge bg-primary px-3 py-2 fs-6 ms-2">v0.5.0-alpha7</span>
         </div>
     </header>
 
-    <!-- 2. BARRA DE KPIs (4 Tarjetas rápidas en 1 fila) -->
+    <!-- 2. BARRA DE KPIs (4 Tarjetas métricas superiores) -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
             <div class="card border-0 shadow-sm border-start border-4 border-success h-100 py-2">
@@ -54,8 +56,8 @@
     <!-- 3. CUERPO PRINCIPAL (Layout en 2 Columnas) -->
     <div class="row g-4">
 
-        <!-- COLUMNA IZQUIERDA: GESTIÓN DE APLICACIONES Y PLANES (70% Ancho) -->
-        <div class="col-lg-8">
+        <!-- COLUMNA IZQUIERDA: GESTIÓN DE APLICACIONES Y PLANES (65% Ancho) -->
+        <div class="col-lg-7">
             
             <!-- Motores de Backup Disponibles -->
             <div class="card shadow-sm mb-4 border-0">
@@ -94,8 +96,8 @@
 
         </div>
 
-        <!-- COLUMNA DERECHA: HARDWARE, TELEMETRÍA Y DISCOS (30% Ancho) -->
-        <div class="col-lg-4">
+        <!-- COLUMNA DERECHA: HARDWARE, TELEMETRÍA Y DISCOS (35% Ancho) -->
+        <div class="col-lg-5">
             
             <!-- Resumen del Sistema y Hardware -->
             <div class="card shadow-sm mb-4 border-0">
@@ -107,7 +109,7 @@
                 </div>
             </div>
 
-            <!-- Estado de Docker -->
+            <!-- Estado de Docker Engine -->
             <div class="card shadow-sm mb-4 border-0">
                 <div class="card-header bg-white py-3">
                     <h6 class="m-0 font-weight-bold text-secondary">🐳 Docker Engine</h6>
@@ -117,7 +119,7 @@
                 </div>
             </div>
 
-            <!-- Información de Discos y Almacenamiento -->
+            <!-- Almacenamiento & Storage Intelligence -->
             <div class="card shadow-sm mb-4 border-0">
                 <div class="card-header bg-white py-3">
                     <h6 class="m-0 font-weight-bold text-secondary">💾 Almacenamiento & Storage Intelligence</h6>
@@ -128,13 +130,12 @@
                 </div>
             </div>
 
-            <!-- Resumen y Acciones Rápidas -->
+            <!-- Resumen General -->
             <div class="card shadow-sm mb-4 border-0">
                 <div class="card-header bg-white py-3">
-                    <h6 class="m-0 font-weight-bold text-secondary">⚙️ Acciones Rápidas</h6>
+                    <h6 class="m-0 font-weight-bold text-secondary">📊 Resumen General</h6>
                 </div>
                 <div class="card-body">
-                    {% include "components/actions.html" %}
                     {% include "components/summary_card.html" %}
                 </div>
             </div>
@@ -143,7 +144,7 @@
 
     </div>
 
-    <!-- 4. SECCIÓN DE DETALLES TÉCNICOS (Colapsable al final) -->
+    <!-- 4. SECCIÓN TÉCNICA (Colapsable) -->
     <div class="row mt-3">
         <div class="col-12">
             <details class="card shadow-sm border-0 mb-4">
