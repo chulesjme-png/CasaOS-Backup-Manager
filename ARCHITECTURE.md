@@ -2,7 +2,7 @@
 
 Documento de arquitectura técnica del proyecto.
 
-Fecha actualización: 02/08/2026
+Fecha actualización: 03/08/2026
 
 ---
 
@@ -311,7 +311,18 @@ REST Payload
 
 ---
 
-# 9. Estado actual del desarrollo
+# 9. Infraestructura y Despliegue Docker (ARM64 / Raspberry Pi 5)
+
+Arquitectura de Red y Telemetría:
+
+* Contenedor FastAPI expuesto en puerto de la app `8000` (mapeado al anfitrión en `8088`).
+* Acceso directo al socket de Docker (`/var/run/docker.sock`) para el `AppDiscoveryService`.
+* Acceso a volúmenes de telemetría de Kernel y procesador (`/proc`, `/sys`) mapeados a `/host/proc` y `/host/sys` para soporte ARM64 nativo en Raspberry Pi 5.
+* Acceso de lectura al almacenamiento `/DATA` y `/var/lib/casaos` para análisis del `StorageResolverService`.
+
+---
+
+# 10. Estado actual del desarrollo
 
 Versión:
 
@@ -319,7 +330,7 @@ v0.5.0-alpha7
 
 Estado:
 
-Integración completa entre el Backup Engine, la API REST y el backend de Duplicati validada con **57 tests automatizados en verde**.
+Integración completa entre el Backup Engine, la API REST y el backend de Duplicati validada en hardware real (Raspberry Pi 5) y con **57 tests automatizados en verde**.
 
 Completado:
 
@@ -328,17 +339,23 @@ Completado:
 * Backup Engine completo y conectado.
 * infraestructura de backends con `BackendRegistry`.
 * ejecución (`/executions/run`) y cancelación (`/executions/cancel`) operativas.
+* telemetría del sistema y hardware en tiempo real.
 
 ---
 
-# 10. Tecnologías utilizadas
+# 11. Tecnologías utilizadas
 
 Backend:
 
 * Python 3.9
-* FastAPI
+* FastAPI / Uvicorn
 * Pydantic
 * SQLite / SQLAlchemy (Persistencia de base de datos)
+
+Despliegue:
+
+* Docker / Docker Compose
+* Debian / Linux ARM64 (Raspberry Pi 5)
 
 Testing:
 
@@ -346,7 +363,7 @@ Testing:
 
 ---
 
-# 11. Próxima fase
+# 12. Próxima fase
 
 La siguiente etapa consiste en:
 

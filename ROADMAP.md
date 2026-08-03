@@ -2,7 +2,7 @@
 
 Hoja de ruta del desarrollo del proyecto.
 
-Fecha actualización: 02/08/2026
+Fecha actualización: 03/08/2026
 
 ---
 
@@ -14,7 +14,7 @@ v0.5.0-alpha7
 
 Estado:
 
-Flujo completo operativo. Motor de planificación conectado con la ejecución real de Duplicati y validado mediante **57 tests unitarios y de integración**.
+Flujo completo operativo. Motor de planificación conectado con la ejecución real de Duplicati y validado mediante **57 tests unitarios y de integración**, desplegado y verificado exitosamente en hardware real (Raspberry Pi 5).
 
 ---
 
@@ -27,7 +27,7 @@ Flujo completo operativo. Motor de planificación conectado con la ejecución re
 * **Fase 4 - Backend Infrastructure:** COMPLETADA
 * **Fase 5 - Duplicati Integration:** COMPLETADA
 * **Fase 6 - Ejecución de Backups (`/executions/run`, `/executions/cancel`):** COMPLETADA
-* **Fase 7 - Monitorización y Base de Datos:** COMPLETADA (Integrado SQLite y modelos de referencia).
+* **Fase 7 - Monitorización y Base de Datos:** COMPLETADA (Integrado SQLite, telemetría ARM64 de Raspberry Pi 5 y modelos de referencia).
 * **Fase 8 - Dashboard avanzado y Frontend:** PENDIENTE
 * **Fase 9 - Multi Backend (Restic, Borg, Rsync):** PENDIENTE
 * **Fase 10 - Release estable y empaquetado CasaOS:** PENDIENTE
