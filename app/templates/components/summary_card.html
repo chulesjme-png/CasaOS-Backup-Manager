@@ -1,1 +1,14 @@
-<section class="card"><h2>📈 Resumen</h2><p><strong>Aplicaciones:</strong> {{ applications|length }}</p><p><strong>Contenedores:</strong> {{ services|length }}</p><p><strong>Rutas persistentes:</strong> {{ backup_sources|length }}</p></section>
+<ul class="list-unstyled mb-0" style="font-size: 0.85rem;">
+    <li class="d-flex justify-content-between align-items-center mb-1">
+        <span class="text-muted">Aplicaciones:</span>
+        <span class="fw-bold">{{ summary.applications or applications|length if applications else 0 }}</span>
+    </li>
+    <li class="d-flex justify-content-between align-items-center mb-1">
+        <span class="text-muted">Contenedores:</span>
+        <span class="fw-bold">{{ summary.containers or docker.containers_running or 0 }}</span>
+    </li>
+    <li class="d-flex justify-content-between align-items-center">
+        <span class="text-muted">Rutas persistentes:</span>
+        <span class="fw-bold text-primary">{{ protectable_data|length if protectable_data else 0 }}</span>
+    </li>
+</ul>
