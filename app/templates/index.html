@@ -185,6 +185,7 @@ async function loadStorageDestinations() {
         const configData = await configRes.json();
         
         const select = document.getElementById('storage-select');
+        if (!select) return;
         select.innerHTML = '';
 
         if (!destData.destinations || destData.destinations.length === 0) {
