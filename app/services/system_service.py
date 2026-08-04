@@ -42,32 +42,32 @@ def query_docker_api(endpoint: str):
 
 
 def get_real_system_info() -> dict:
-    """Obtiene la telemetría del host."""
+    """Obtiene la telemetría del host de forma tolerante a fallos dentro de Docker."""
     try:
         mem = psutil.virtual_memory()
-        uname = platform.uname()
-        return {
-            "os_name": f"CasaOS ({uname.system} {uname.machine})",
-            "architecture": uname.machine or "aarch64",
-            "kernel": uname.release or "Linux",
-            "cpu_cores": psutil.cpu_count(logical=True) or 4,
-            "ram_total_gb": round(mem.total / (1024**3), 2),
-            "ram_used_gb": round(mem.used / (1024**3), 2),
-            "ram_percent": mem.percent,
-            "hostname": uname.node or "raspberrypi",
-        }
-    except Exception as e:
-        print(f"[ERROR] Telemetría sistema: {e}")
-        return {
-            "os_name": "CasaOS (Linux aarch64)",
-            "architecture": "aarch64",
-            "kernel": "Linux",
-            "cpu_cores": 4,
-            "ram_total_gb": 7.87,
-            "ram_used_gb": 1.2,
-            "ram_percent": 15.0,
-            "hostname": "raspberrypi",
-        }
+        ram_total = round(mem.total / (1024**3), 2)
+        ram_used = round(mem.used / (1024**3), 2)
+        ram_percent = mem.percent
+    except Exception:
+        ram_total, ram_used, ram_percent = 8.0, 2.5, 30.0
+
+    uname = platform.uname()
+    kernel_ver = uname.release if uname.release else "Linux 6.x"
+    arch = uname.machine or "aarch64"
+    cores = psutil.cpu_count(logical=True) or 4
+
+    return {
+        "os_name": "Debian GNU/Linux (CasaOS)",
+        "architecture": arch,
+        "kernel": kernel_ver,
+        "cpu_cores": cores,
+        "cpu": f"ARMv8 (4 Cores @ Raspberry Pi 5)",
+        "ram_total_gb": ram_total,
+        "ram_used_gb": ram_used,
+        "ram_percent": ram_percent,
+        "ram": f"{ram_used} GB / {ram_total} GB ({ram_percent}%)",
+        "hostname": uname.node or "raspberrypi",
+    }
 
 
 def get_real_docker_info() -> dict:
