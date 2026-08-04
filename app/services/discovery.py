@@ -19,20 +19,19 @@ class DockerDiscoveryService:
     def __init__(self, socket_path: str = "/var/run/docker.sock"):
         self.socket_path = socket_path
 
-    def _query_docker_api(self, endpoint: str) -> Any:
-        """Consulta la API local de Docker mediante el socket Unix directamente."""
+    def _get_containers_raw(self) -> List[Dict[str, Any]]:
+        """Consulta la API de Docker vía socket Unix sin dependencias externas."""
         if not os.path.exists(self.socket_path):
-            print(f"[ERROR] Socket de Docker no encontrado en {self.socket_path}")
-            return None
-
+            return []
         try:
             pool = UnixHTTPConnectionPool(self.socket_path)
-            response = pool.request('GET', endpoint)
-            if response.status == 200:
-                return json.loads(response.data.decode('utf-8'))
+            # Solicitamos inspección detallada de contenedores con sus volúmenes
+            res = pool.request('GET', '/containers/json?all=true')
+            if res.status == 200:
+                return json.loads(res.data.decode('utf-8'))
         except Exception as e:
-            print(f"[ERROR] Fallo al consultar API de Docker ({endpoint}): {e}")
-        return None
+            print(f"[ERROR] Discovery error: {e}")
+        return []
 
     def is_database_container(self, name: str, image: str) -> Dict[str, Any]:
         """Detecta si un contenedor es una base de datos y define su hook."""
@@ -51,15 +50,11 @@ class DockerDiscoveryService:
         return {"is_db": False, "type": None, "hook": None}
 
     def inspect_protectable_data(self) -> List[Dict[str, Any]]:
-        """Inspecciona todos los contenedores y extrae las rutas montadas."""
-        containers = self._query_docker_api('/containers/json?all=true')
-        if not containers or not isinstance(containers, list):
-            return []
-
+        """Inspecciona los montajes de todos los contenedores activos y detenidos."""
+        raw_containers = self._get_containers_raw()
         protectable_items = []
 
-        for container in containers:
-            # Extraer nombres limpios de contenedor e imagen
+        for container in raw_containers:
             names = container.get('Names', ['/desconocido'])
             c_name = names[0].lstrip('/') if names else 'desconocido'
             c_image = container.get('Image', 'unknown')
