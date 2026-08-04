@@ -1,12 +1,10 @@
 <section class="grid">
-
     <div class="card">
-
         <h2>🖥️ Sistema</h2>
 
         <p>
             <strong>Sistema operativo:</strong>
-            {{ engine.operating_system }}
+            {{ engine.operating_system | default(engine.os) }}
         </p>
 
         <p>
@@ -16,19 +14,17 @@
 
         <p>
             <strong>Kernel:</strong>
-            {{ engine.kernel_version }}
+            {{ engine.kernel_version | default(engine.kernel) }}
         </p>
 
         <p>
             <strong>CPU:</strong>
-            {{ engine.cpus }}
+            {{ engine.cpus | default(engine.cpu) }}
         </p>
 
         <p>
             <strong>RAM:</strong>
-            {{ engine.memory_gb }} GB
+            {{ engine.memory_gb | default(engine.ram) }} GB
         </p>
-
     </div>
-
 </section>
