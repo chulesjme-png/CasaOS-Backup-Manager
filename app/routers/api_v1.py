@@ -2,10 +2,47 @@
 Router API v1 para alimentar los scripts dinámicos del frontend (app.js).
 """
 
+import os
+import json
 from fastapi import APIRouter
 from typing import List, Dict, Any
+from pydantic import BaseModel
+from app.services.system_service import get_available_storage_destinations
 
 router = APIRouter(prefix="/api/v1", tags=["API v1"])
+CONFIG_FILE = "/data/settings.json"
+
+
+class StorageConfigPayload(BaseModel):
+    target_path: str
+
+
+@router.get("/storage/destinations")
+def list_storage_destinations() -> Dict[str, Any]:
+    """Retorna los puntos de montaje escaneados automáticamente en /DATA, /media y /mnt."""
+    return {"destinations": get_available_storage_destinations()}
+
+
+@router.get("/config/target")
+def get_target_config() -> Dict[str, Any]:
+    """Obtiene la configuración actual del destino de copias."""
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"target_path": "/DATA/Backups/CasaOS"}
+
+
+@router.post("/config/target")
+def set_target_config(payload: StorageConfigPayload) -> Dict[str, Any]:
+    """Guarda la ruta del disco seleccionado por el usuario."""
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    data = {"target_path": payload.target_path}
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+    return {"status": "ok", "target_path": payload.target_path}
 
 
 @router.get("/backends")

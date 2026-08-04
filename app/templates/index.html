@@ -16,6 +16,18 @@
         </div>
     </header>
 
+    <!-- SELECTOR DE DESTINO DINÁMICO DE ALMACENAMIENTO -->
+    <div class="card border-0 shadow-sm mb-3 bg-light">
+        <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
+            <label for="storage-select" class="form-label mb-0 fw-bold text-secondary text-nowrap small">
+                📁 Destino Activo de Copias:
+            </label>
+            <select id="storage-select" onchange="updateSelectedStorage(this.value)" class="form-select form-select-sm border-secondary-subtle">
+                <option value="">Detectando unidades conectadas...</option>
+            </select>
+        </div>
+    </div>
+
     <!-- 2. BARRA DE KPIs -->
     <div class="row g-2 mb-3">
         <div class="col-md-3">
@@ -160,5 +172,57 @@
     </div>
 
 </div>
+
+<script>
+async function loadStorageDestinations() {
+    try {
+        const [destRes, configRes] = await Promise.all([
+            fetch('/api/v1/storage/destinations'),
+            fetch('/api/v1/config/target')
+        ]);
+        
+        const destData = await destRes.json();
+        const configData = await configRes.json();
+        
+        const select = document.getElementById('storage-select');
+        select.innerHTML = '';
+
+        if (!destData.destinations || destData.destinations.length === 0) {
+            select.innerHTML = '<option value="/DATA/Backups/CasaOS">Por defecto (/DATA/Backups/CasaOS)</option>';
+            return;
+        }
+
+        destData.destinations.forEach(dest => {
+            const opt = document.createElement('option');
+            opt.value = dest.path;
+            opt.textContent = `${dest.label} — Libre: ${dest.free_gb} GB / Total: ${dest.total_gb} GB (${dest.percent_used}% uso)`;
+            if (dest.path === configData.target_path) {
+                opt.selected = true;
+            }
+            select.appendChild(opt);
+        });
+    } catch (err) {
+        console.error("Error cargando opciones de almacenamiento:", err);
+    }
+}
+
+async function updateSelectedStorage(path) {
+    if (!path) return;
+    try {
+        const response = await fetch('/api/v1/config/target', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_path: path })
+        });
+        if (response.ok) {
+            console.log("Ruta de copia de seguridad actualizada:", path);
+        }
+    } catch (err) {
+        console.error("Error al guardar la ruta de almacenamiento:", err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadStorageDestinations);
+</script>
 
 {% endblock %}
