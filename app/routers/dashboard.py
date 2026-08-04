@@ -11,10 +11,9 @@ import traceback
 from app.services.system_service import (
     get_real_system_info,
     get_real_docker_info,
-    get_real_disk_info
+    get_real_disk_info,
+    get_real_protectable_data
 )
-# Servicio de descubrimiento para la Fase 1
-from app.services.discovery import discovery_service
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -47,7 +46,6 @@ async def render_dashboard(request: Request):
         docker_raw = get_real_docker_info()
         disk_raw = get_real_disk_info("/DATA")
 
-        # Fusionar versión de API y hostname requeridos por las plantillas
         system_raw["api_version"] = docker_raw.get("api_version", "1.43")
         
         engine_data = DynamicData(system_raw)
@@ -57,8 +55,8 @@ async def render_dashboard(request: Request):
         # 2. Servicios / Contenedores reales detectados
         services_list = [DynamicData(s) for s in docker_raw.get("services_list", [])]
 
-        # 3. Descubrimiento de Datos Protegibles (Fase 1: Mapeo de Volúmenes y DBs)
-        protectable_raw = discovery_service.inspect_protectable_data()
+        # 3. Datos protegibles (Rutas y DBs reales)
+        protectable_raw = get_real_protectable_data()
         protectable_list = [DynamicData(item) for item in protectable_raw]
 
         # 4. Aplicaciones activas

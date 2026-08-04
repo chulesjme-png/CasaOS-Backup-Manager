@@ -1,155 +1,77 @@
-"""
-Servicio optimizado para Raspberry Pi / CasaOS.
-Obtiene telemetría real del host leyendo directamente /host/proc y el socket de Docker.
-"""
+def get_real_protectable_data() -> list:
+    """Inspecciona los montajes de los contenedores Docker mediante la API local."""
+    import urllib3
+    import json
+    import os
 
-import os
-import shutil
-import psutil
-import docker
+    socket_path = "/var/run/docker.sock"
+    if not os.path.exists(socket_path):
+        return []
 
+    class UnixHTTPConnectionPool(urllib3.HTTPConnectionPool):
+        def __init__(self, socket_path, timeout=5):
+            super().__init__('localhost', timeout=timeout)
+            self.socket_path = socket_path
 
-def get_real_system_info():
-    """Obtiene métricas reales de hardware del host (Raspberry Pi)."""
-    model_name = "Raspberry Pi (ARM)"
-    
-    # 1. Contar CPUs desde /host/proc/cpuinfo
-    proc_cpu = "/host/proc/cpuinfo" if os.path.exists("/host/proc/cpuinfo") else "/proc/cpuinfo"
-    cpus_count = 0
-    if os.path.exists(proc_cpu):
-        try:
-            with open(proc_cpu, "r") as f:
-                for line in f:
-                    if line.startswith("processor"):
-                        cpus_count += 1
-                    if "Model" in line or "Hardware" in line or "model name" in line:
-                        model_name = line.split(":")[1].strip()
-        except Exception:
-            pass
+        def _new_conn(self):
+            import socket
+            conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            conn.settimeout(self.timeout.connect_timeout)
+            conn.connect(self.socket_path)
+            return conn
 
-    if cpus_count == 0:
-        cpus_count = psutil.cpu_count(logical=True) or 4
-
-    # 2. Leer Memoria RAM real desde /host/proc/meminfo
-    total_ram_gb = 0
-    proc_mem = "/host/proc/meminfo" if os.path.exists("/host/proc/meminfo") else "/proc/meminfo"
-    if os.path.exists(proc_mem):
-        try:
-            with open(proc_mem, "r") as f:
-                for line in f:
-                    if "MemTotal" in line:
-                        kb_total = int(line.split(":")[1].replace("kB", "").strip())
-                        total_ram_gb = round(kb_total / (1024 * 1024), 2)
-                        break
-        except Exception:
-            pass
-
-    if total_ram_gb == 0:
-        total_ram_gb = round(psutil.virtual_memory().total / (1024 ** 3), 2)
-
-    # 3. Leer Kernel real del Host
-    kernel = os.uname().release
-    kernel_path = "/host/proc/sys/kernel/osrelease"
-    if os.path.exists(kernel_path):
-        try:
-            with open(kernel_path, "r") as f:
-                kernel = f.read().strip()
-        except Exception:
-            pass
-
-    return {
-        "operating_system": f"CasaOS ({model_name})",
-        "architecture": os.uname().machine,
-        "kernel_version": kernel,
-        "cpus": cpus_count,
-        "memory_gb": total_ram_gb,
-        "hostname": "raspberrypi",
-    }
-
-
-def get_real_docker_info():
-    """Obtiene información y lista de contenedores reales desde el Docker socket."""
     try:
-        client = docker.DockerClient(base_url="unix://var/run/docker.sock")
-        containers = client.containers.list(all=True)
+        pool = UnixHTTPConnectionPool(socket_path)
+        res = pool.request('GET', '/containers/json?all=true')
+        if res.status != 200:
+            return []
+        
+        containers = json.loads(res.data.decode('utf-8'))
+        protectable_items = []
 
-        running_count = sum(1 for c in containers if c.status == "running")
-        stopped_count = len(containers) - running_count
+        for container in containers:
+            names = container.get('Names', ['/desconocido'])
+            c_name = names[0].lstrip('/') if names else 'desconocido'
+            c_image = container.get('Image', 'unknown')
+            c_status = container.get('State', 'unknown')
 
-        services_list = []
-        for c in containers:
-            image_tag = c.image.tags[0] if c.image.tags else (c.image.id[:12] if c.image.id else "unknown")
-            services_list.append({
-                "name": c.name,
-                "image": image_tag,
-                "running": c.status == "running",
-                "status": "En ejecución" if c.status == "running" else c.status.capitalize()
-            })
+            # Detectar bases de datos
+            name_lower, img_lower = c_name.lower(), c_image.lower()
+            is_db, db_type, hook = False, None, None
+            if "postgres" in img_lower or "postgres" in name_lower:
+                is_db, db_type, hook = True, "postgresql", "pg_dumpall"
+            elif "mariadb" in img_lower or "mysql" in img_lower or "mariadb" in name_lower or "mysql" in name_lower:
+                is_db, db_type, hook = True, "mysql_mariadb", "mysqldump_all"
+            elif "redis" in img_lower or "redis" in name_lower:
+                is_db, db_type, hook = True, "redis", "redis_bgsave"
 
-        version_info = client.version()
-        return {
-            "available": True,
-            "engine_version": version_info.get("Version", "24.0.2"),
-            "api_version": version_info.get("ApiVersion", "1.43"),
-            "hostname": "raspberrypi",
-            "containers_running": running_count,
-            "containers_stopped": stopped_count,
-            "images": len(client.images.list()),
-            "volumes": len(client.volumes.list()),
-            "networks": len(client.networks.list()),
-            "services_list": services_list
-        }
+            mounts = container.get('Mounts', [])
+            for mount in mounts:
+                source = mount.get('Source', '')
+                destination = mount.get('Destination', '')
+                mount_type = mount.get('Type', 'bind')
+                rw = mount.get('RW', True)
+
+                if not source or source == '/var/run/docker.sock' or source.startswith('/proc') or source.startswith('/sys'):
+                    continue
+
+                is_casaos_data = source.startswith('/DATA') or '/AppData/' in source
+
+                protectable_items.append({
+                    "container_name": c_name,
+                    "image": c_image,
+                    "container_status": c_status,
+                    "mount_type": mount_type,
+                    "host_path": source,
+                    "container_path": destination,
+                    "read_only": not rw,
+                    "is_casaos_data": is_casaos_data,
+                    "is_db": is_db,
+                    "db_type": db_type,
+                    "recommended_hook": hook
+                })
+
+        return protectable_items
     except Exception as e:
-        return {
-            "available": False,
-            "error": f"Error conectando a Docker Socket: {str(e)}",
-            "engine_version": "N/A",
-            "api_version": "N/A",
-            "hostname": "raspberrypi",
-            "containers_running": 0,
-            "containers_stopped": 0,
-            "images": 0,
-            "volumes": 0,
-            "networks": 0,
-            "services_list": []
-        }
-
-
-def get_real_disk_info(path="/DATA"):
-    """Obtiene uso real del almacenamiento explorando los puntos de montaje del host."""
-    target_path = None
-    
-    # Lista de prioridades para hallar el disco donde residen los datos de CasaOS
-    candidate_paths = [
-        "/host_root/DATA",
-        "/host_root/var/lib/casaos",
-        "/host_root",
-        "/var/lib/casaos",
-        path,
-        "/mnt",
-        "/"
-    ]
-    
-    for test_path in candidate_paths:
-        if os.path.exists(test_path):
-            try:
-                usage = shutil.disk_usage(test_path)
-                # Seleccionar la primera ruta válida que reporte almacenamiento real (> 1 GB)
-                if usage.total > (1024 ** 3):
-                    target_path = test_path
-                    break
-            except Exception:
-                continue
-
-    if not target_path:
-        target_path = "/"
-
-    total, used, free = shutil.disk_usage(target_path)
-    percent = round((used / total) * 100, 1) if total > 0 else 0
-    
-    return {
-        "total_gb": round(total / (1024 ** 3), 1),
-        "used_gb": round(used / (1024 ** 3), 1),
-        "free_gb": round(free / (1024 ** 3), 1),
-        "percent": percent
-    }
+        print(f"[ERROR] Error al inspeccionar datos protegibles: {e}")
+        return []
