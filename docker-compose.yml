@@ -14,8 +14,6 @@ services:
       PYTHONPATH: /app
       HOST_PROC: /host/proc
       HOST_SYS: /host/sys
-      # Configura la ruta de guardado en el disco externo
-      BACKUP_TARGET_DIR: /media/pichules/08684ab9-10b8-46bc-a6f2-a19f3adfc6fa/Backups/CasaOS
 
     volumes:
       - .:/app
@@ -23,10 +21,13 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/host_root:ro
+      # Lectura de orígenes de datos de CasaOS
       - /DATA:/DATA:ro
-      - /media/pichules:/media/pichules:rw  # <-- Da acceso de escritura al disco externo
       - /var/lib/casaos:/var/lib/casaos:ro
-      - /mnt:/mnt:ro
+      # Acceso completo de lectura/escritura a todos los discos externos
+      - /media:/media:rw
+      - /mnt:/mnt:rw
+      # Persistencia de configuración interna del gestor
       - ./data:/data
 
     restart: unless-stopped

@@ -61,7 +61,7 @@ def get_real_system_info() -> dict:
         "architecture": arch,
         "kernel": kernel_ver,
         "cpu_cores": cores,
-        "cpu": f"ARMv8 (4 Cores @ Raspberry Pi 5)",
+        "cpu": "ARMv8 (4 Cores @ Raspberry Pi 5)",
         "ram_total_gb": ram_total,
         "ram_used_gb": ram_used,
         "ram_percent": ram_percent,
@@ -141,6 +141,57 @@ def get_real_disk_info(path="/DATA") -> dict:
             "free_gb": 0.0,
             "percent": 0.0
         }
+
+
+def get_available_storage_destinations() -> list:
+    """Escanea y retorna todos los puntos de montaje utilizables para backups."""
+    destinations = []
+    search_paths = ["/DATA", "/media", "/mnt"]
+    seen_mounts = set()
+
+    for base_path in search_paths:
+        if not os.path.exists(base_path):
+            continue
+
+        if base_path == "/DATA":
+            try:
+                usage = psutil.disk_usage("/DATA")
+                destinations.append({
+                    "id": "casaos_local",
+                    "label": "Almacenamiento Local CasaOS (/DATA)",
+                    "path": "/DATA/Backups",
+                    "total_gb": round(usage.total / (1024**3), 2),
+                    "free_gb": round(usage.free / (1024**3), 2),
+                    "percent_used": usage.percent
+                })
+                seen_mounts.add("/DATA")
+            except Exception:
+                pass
+            continue
+
+        for root, dirs, files in os.walk(base_path):
+            depth = root.count(os.path.sep) - base_path.count(os.path.sep)
+            if depth > 2:
+                continue
+
+            try:
+                if os.path.ismount(root) and root not in seen_mounts:
+                    usage = psutil.disk_usage(root)
+                    if usage.total > (1024**3):  # Mayor a 1 GB
+                        folder_name = os.path.basename(root)
+                        destinations.append({
+                            "id": f"ext_{folder_name}",
+                            "label": f"Disco Externo: {folder_name} ({root})",
+                            "path": os.path.join(root, "Backups/CasaOS"),
+                            "total_gb": round(usage.total / (1024**3), 2),
+                            "free_gb": round(usage.free / (1024**3), 2),
+                            "percent_used": usage.percent
+                        })
+                        seen_mounts.add(root)
+            except Exception:
+                continue
+
+    return destinations
 
 
 def get_real_protectable_data() -> list:
