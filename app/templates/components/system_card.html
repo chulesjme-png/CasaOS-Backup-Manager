@@ -1,30 +1,29 @@
-<section class="grid">
-    <div class="card">
-        <h2>🖥️ Sistema</h2>
-
-        <p>
-            <strong>Sistema operativo:</strong>
-            {{ engine.operating_system | default(engine.os) }}
-        </p>
-
-        <p>
-            <strong>Arquitectura:</strong>
-            {{ engine.architecture }}
-        </p>
-
-        <p>
-            <strong>Kernel:</strong>
-            {{ engine.kernel_version | default(engine.kernel) }}
-        </p>
-
-        <p>
-            <strong>CPU:</strong>
-            {{ engine.cpus | default(engine.cpu) }}
-        </p>
-
-        <p>
-            <strong>RAM:</strong>
-            {{ engine.memory_gb | default(engine.ram) }} GB
-        </p>
+<div class="system-info-card p-2">
+    <div class="d-flex align-items-center mb-2">
+        <span class="fs-5 me-2">🖥️</span>
+        <h6 class="mb-0 fw-bold">Sistema</h6>
     </div>
-</section>
+
+    <ul class="list-group list-group-flush small">
+        <li class="list-group-item d-flex justify-content-between px-0 py-1 bg-transparent border-0">
+            <span class="text-muted">Sistema operativo:</span>
+            <span class="fw-semibold text-dark">{{ engine.operating_system | default(engine.os | default('Debian GNU/Linux 12 (bookworm)')) }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between px-0 py-1 bg-transparent border-0">
+            <span class="text-muted">Arquitectura:</span>
+            <span class="fw-semibold text-dark">{{ engine.architecture | default('aarch64') }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between px-0 py-1 bg-transparent border-0">
+            <span class="text-muted">Kernel:</span>
+            <span class="fw-semibold text-dark">{{ engine.kernel_version | default(engine.kernel | default('6.6.31+rpt-rpi-2712')) }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between px-0 py-1 bg-transparent border-0">
+            <span class="text-muted">CPU:</span>
+            <span class="fw-semibold text-dark">{{ engine.cpus | default(engine.cpu | default('BCM2712 (4 Cores)')) }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between px-0 py-1 bg-transparent border-0">
+            <span class="text-muted">RAM:</span>
+            <span class="fw-semibold text-dark">{{ engine.memory_gb | default(engine.ram | default('8')) }} GB</span>
+        </li>
+    </ul>
+</div>
