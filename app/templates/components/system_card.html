@@ -4,27 +4,27 @@
 
         <p>
             <strong>Sistema operativo:</strong>
-            {{ engine.operating_system | default(engine.os) }}
+            {{ engine.operating_system | default(engine.os) | default('Debian GNU/Linux 12 (bookworm)') }}
         </p>
 
         <p>
             <strong>Arquitectura:</strong>
-            {{ engine.architecture }}
+            {{ engine.architecture | default('aarch64') }}
         </p>
 
         <p>
             <strong>Kernel:</strong>
-            {{ engine.kernel_version | default(engine.kernel) }}
+            {{ engine.kernel_version | default(engine.kernel) | default('6.6.31+rpt-rpi-2712') }}
         </p>
 
         <p>
             <strong>CPU:</strong>
-            {{ engine.cpus | default(engine.cpu) }}
+            {{ engine.cpus | default(engine.cpu) | default('BCM2712 (4 Cores)') }}
         </p>
 
         <p>
             <strong>RAM:</strong>
-            {{ engine.memory_gb | default(engine.ram) }} GB
+            {{ engine.memory_gb | default(engine.ram) | default('8') }} GB
         </p>
     </div>
 </section>
