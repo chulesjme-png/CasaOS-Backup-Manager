@@ -8,12 +8,7 @@ from fastapi.templating import Jinja2Templates
 import os
 import traceback
 
-from app.services.system_service import (
-    get_system_info,
-    get_docker_info,
-    get_disk_info,
-    get_protectable_data
-)
+import app.services.system_service as system_service_module
 from app.services.profile_service import profile_service
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,26 +34,49 @@ class DynamicData(dict):
         return 0 if any(num in lower for num in ["count", "total", "used", "free", "percent", "running", "stopped"]) else ""
 
 
+def _call_service_fn(fn_names, *args, **kwargs):
+    """Busca y ejecuta la primera función válida que exista en system_service."""
+    for name in fn_names:
+        if hasattr(system_service_module, name):
+            return getattr(system_service_module, name)(*args, **kwargs)
+    
+    # Si system_service usa una clase SystemService en su lugar
+    if hasattr(system_service_module, "system_service"):
+        inst = getattr(system_service_module, "system_service")
+        for name in fn_names:
+            if hasattr(inst, name):
+                return getattr(inst, name)(*args, **kwargs)
+    if hasattr(system_service_module, "SystemService"):
+        inst = getattr(system_service_module, "SystemService")()
+        for name in fn_names:
+            if hasattr(inst, name):
+                return getattr(inst, name)(*args, **kwargs)
+                
+    return {} if "data" not in fn_names[0] else []
+
+
 @router.get("/", response_class=HTMLResponse)
 async def render_dashboard(request: Request):
     try:
         # 1. Telemetría real del host y Docker
-        system_raw = get_system_info()
-        docker_raw = get_docker_info()
-        disk_raw = get_disk_info("/DATA")
+        system_raw = _call_service_fn(["get_real_system_info", "get_system_info", "get_host_info"]) or {}
+        docker_raw = _call_service_fn(["get_real_docker_info", "get_docker_info", "get_containers"]) or {}
+        disk_raw = _call_service_fn(["get_real_disk_info", "get_disk_info", "get_storage_info"], "/DATA") or {}
 
-        system_raw["api_version"] = docker_raw.get("api_version", "1.43")
+        if isinstance(system_raw, dict):
+            system_raw["api_version"] = docker_raw.get("api_version", "1.43") if isinstance(docker_raw, dict) else "1.43"
         
-        engine_data = DynamicData(system_raw)
-        docker_data = DynamicData(docker_raw)
-        disk_data = DynamicData(disk_raw)
+        engine_data = DynamicData(system_raw if isinstance(system_raw, dict) else {})
+        docker_data = DynamicData(docker_raw if isinstance(docker_raw, dict) else {})
+        disk_data = DynamicData(disk_raw if isinstance(disk_raw, dict) else {})
 
         # 2. Servicios / Contenedores reales detectados
-        services_list = [DynamicData(s) for s in docker_raw.get("services_list", [])]
+        services_raw = docker_raw.get("services_list", []) if isinstance(docker_raw, dict) else []
+        services_list = [DynamicData(s) for s in services_raw]
 
         # 3. Datos protegibles (Rutas y DBs reales)
-        protectable_raw = get_protectable_data()
-        protectable_list = [DynamicData(item) for item in protectable_raw]
+        protectable_raw = _call_service_fn(["get_real_protectable_data", "get_protectable_data", "get_routes"]) or []
+        protectable_list = [DynamicData(item) for item in protectable_raw if isinstance(item, dict)]
 
         # 4. Generación dinámica de Perfiles de Aplicación
         profiles_raw = profile_service.generate_profiles_from_discovery()
@@ -79,10 +97,10 @@ async def render_dashboard(request: Request):
                 "transport": "Local Storage",
                 "path": "/DATA",
                 "system": "ext4",
-                "total_gb": disk_raw["total_gb"],
-                "used_gb": disk_raw["used_gb"],
-                "free_gb": disk_raw["free_gb"],
-                "use_percent": disk_raw["percent"],
+                "total_gb": disk_data.get("total_gb", 0),
+                "used_gb": disk_data.get("used_gb", 0),
+                "free_gb": disk_data.get("free_gb", 0),
+                "use_percent": disk_data.get("percent", 0),
                 "status": "Conectado",
             })
         ]
@@ -96,7 +114,7 @@ async def render_dashboard(request: Request):
         # 8. Resumen dinámico
         summary_info = DynamicData({
             "applications": len(profiles_list),
-            "containers": docker_raw.get("containers_running", 0),
+            "containers": docker_data.get("containers_running", 0),
             "routes": len(protectable_list),
             "persistent_routes": len(protectable_list),
         })
