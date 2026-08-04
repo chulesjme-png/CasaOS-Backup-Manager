@@ -1,74 +1,37 @@
-<section class="card">
-
-    <div class="card-header">
-        <h2>Application Profiles</h2>
-        <span class="badge">{{ application_profiles|length }}</span>
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+        <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">🎯 Perfiles de Aplicación Generados</h6>
+        <span class="badge bg-primary">{{ profiles|length if profiles else 0 }} Perfiles</span>
     </div>
-
-    <div class="card-body">
-
-        {% if application_profiles %}
-
-        <table class="table">
-
-            <thead>
-                <tr>
-                    <th>Application</th>
-                    <th>Profile</th>
-                    <th>Storage</th>
-                    <th>Resources</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-
-            <tbody>
-
-                {% for profile in application_profiles %}
-
-                <tr>
-
-                    <td>{{ profile.application_name }}</td>
-
-                    <td>{{ profile.profile }}</td>
-
-                    <td>{{ profile.storage_type }}</td>
-
-                    <td>{{ profile.resources|length }}</td>
-
-                    <td>
-
-                        {% if profile.backup_enabled %}
-                        <span class="badge badge-success">
-                            Enabled
-                        </span>
+    <div class="card-body p-0">
+        {% if profiles and profiles|length > 0 %}
+            <div class="list-group list-group-flush">
+                {% for profile in profiles %}
+                <div class="list-group-item py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold text-dark">{{ profile.app_name }}</span>
+                        <div>
+                            {% if profile.has_db %}
+                                <span class="badge bg-warning text-dark me-1">🗄️ Hook DB</span>
+                            {% endif %}
+                            <span class="badge bg-light text-dark border">{{ profile.containers_count }} contenedor(es)</span>
+                        </div>
+                    </div>
+                    <div class="small text-muted mb-1">
+                        <strong>Rutas:</strong> 
+                        {% if profile.paths %}
+                            <code>{{ profile.paths | join(', ') }}</code>
                         {% else %}
-                        <span class="badge badge-secondary">
-                            Disabled
-                        </span>
+                            <span class="fst-italic">Sin rutas /DATA específicas</span>
                         {% endif %}
-
-                    </td>
-
-                </tr>
-
+                    </div>
+                </div>
                 {% endfor %}
-
-            </tbody>
-
-        </table>
-
+            </div>
         {% else %}
-
-        <div class="empty-state">
-
-            <p>
-                No application profiles have been generated yet.
-            </p>
-
-        </div>
-
+            <div class="p-3 text-center text-muted small">
+                No se han generado perfiles de aplicación todavía.
+            </div>
         {% endif %}
-
     </div>
-
-</section>
+</div>
