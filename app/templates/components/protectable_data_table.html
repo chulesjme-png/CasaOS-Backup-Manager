@@ -15,31 +15,31 @@
                 </tr>
             </thead>
             <tbody>
-                {% if protectable_data %}
+                {% if protectable_data and protectable_data|length > 0 %}
                     {% for item in protectable_data %}
                     <tr>
                         <td class="fw-bold text-dark">
-                            {{ item.container_name }}
-                            {% if item.is_db %}
+                            {{ item.container_name or item['container_name'] }}
+                            {% if item.is_db or item['is_db'] %}
                                 <span class="badge bg-warning text-dark ms-1">🗄️ DB</span>
                             {% endif %}
                         </td>
                         <td class="text-monospace text-break small">
-                            <code>{{ item.host_path }}</code>
+                            <code>{{ item.host_path or item['host_path'] }}</code>
                         </td>
-                        <td class="text-muted small">{{ item.container_path }}</td>
+                        <td class="text-muted small">{{ item.container_path or item['container_path'] }}</td>
                         <td>
-                            {% if item.is_db %}
+                            {% if item.is_db or item['is_db'] %}
                                 <span class="badge bg-info-subtle text-info border border-info-subtle">
-                                    {{ item.recommended_hook }}
+                                    {{ item.recommended_hook or item['recommended_hook'] }}
                                 </span>
-                            {% elif item.is_casaos_data %}
+                            {% elif item.is_casaos_data or item['is_casaos_data'] %}
                                 <span class="badge bg-success-subtle text-success border border-success-subtle">
                                     CasaOS AppData
                                 </span>
                             {% else %}
                                 <span class="badge bg-light text-dark border">
-                                    {{ item.mount_type }}
+                                    {{ item.mount_type or item['mount_type'] }}
                                 </span>
                             {% endif %}
                         </td>
