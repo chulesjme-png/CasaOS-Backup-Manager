@@ -1,0 +1,58 @@
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+        <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">🛡️ Datos Protegibles Detectados</h6>
+        <span class="badge bg-secondary">Rutas: {{ protectable_data|length if protectable_data else 0 }}</span>
+    </div>
+    
+    <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+        <table class="table table-hover table-sm align-middle mb-0" style="font-size: 0.85rem;">
+            <thead class="table-light sticky-top">
+                <tr>
+                    <th>Contenedor</th>
+                    <th>Ruta en Host (Raspberry Pi)</th>
+                    <th>Ruta Interna</th>
+                    <th>Tipo / Hook</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if protectable_data %}
+                    {% for item in protectable_data %}
+                    <tr>
+                        <td class="fw-bold text-dark">
+                            {{ item.container_name }}
+                            {% if item.is_db %}
+                                <span class="badge bg-warning text-dark ms-1">🗄️ DB</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-monospace text-break small">
+                            <code>{{ item.host_path }}</code>
+                        </td>
+                        <td class="text-muted small">{{ item.container_path }}</td>
+                        <td>
+                            {% if item.is_db %}
+                                <span class="badge bg-info-subtle text-info border border-info-subtle">
+                                    {{ item.recommended_hook }}
+                                </span>
+                            {% elif item.is_casaos_data %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                    CasaOS AppData
+                                </span>
+                            {% else %}
+                                <span class="badge bg-light text-dark border">
+                                    {{ item.mount_type }}
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted py-3">
+                            No hay datos de rutas protegibles escaneadas.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>

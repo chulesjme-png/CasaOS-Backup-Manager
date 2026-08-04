@@ -13,6 +13,8 @@ from app.services.system_service import (
     get_real_docker_info,
     get_real_disk_info
 )
+# Servicio de descubrimiento para la Fase 1
+from app.services.discovery import discovery_service
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -55,12 +57,16 @@ async def render_dashboard(request: Request):
         # 2. Servicios / Contenedores reales detectados
         services_list = [DynamicData(s) for s in docker_raw.get("services_list", [])]
 
-        # 3. Aplicaciones activas
+        # 3. Descubrimiento de Datos Protegibles (Fase 1: Mapeo de Volúmenes y DBs)
+        protectable_raw = discovery_service.inspect_protectable_data()
+        protectable_list = [DynamicData(item) for item in protectable_raw]
+
+        # 4. Aplicaciones activas
         apps_list = [
             DynamicData({"name": "CasaOS Apps", "containers": len(services_list), "status": "En ejecución", "running": True})
         ]
 
-        # 4. Almacenamiento CasaOS
+        # 5. Almacenamiento CasaOS
         destinations_list = [
             DynamicData({
                 "id": "dest_1",
@@ -78,18 +84,18 @@ async def render_dashboard(request: Request):
             })
         ]
 
-        # 5. Motores de Backup integrados
+        # 6. Motores de Backup integrados
         backends_list = [
             DynamicData({"id": "duplicati", "name": "Duplicati Engine", "status": "Activo", "available": True}),
             DynamicData({"id": "restic", "name": "Restic Engine", "status": "Listo", "available": True}),
         ]
 
-        # 6. Resumen dinámico
+        # 7. Resumen dinámico
         summary_info = DynamicData({
             "applications": len(apps_list),
             "containers": docker_raw.get("containers_running", 0),
-            "routes": len(destinations_list),
-            "persistent_routes": len(destinations_list),
+            "routes": len(protectable_list),
+            "persistent_routes": len(protectable_list),
         })
 
         return templates.TemplateResponse(
@@ -107,6 +113,7 @@ async def render_dashboard(request: Request):
                 "applications": apps_list,
                 "services": services_list,
                 "containers": services_list,
+                "protectable_data": protectable_list,
                 "backends": backends_list,
                 "summary": summary_info,
                 "summary_info": summary_info,
