@@ -9,10 +9,10 @@ import os
 import traceback
 
 from app.services.system_service import (
-    get_real_system_info,
-    get_real_docker_info,
-    get_real_disk_info,
-    get_real_protectable_data
+    get_system_info,
+    get_docker_info,
+    get_disk_info,
+    get_protectable_data
 )
 from app.services.profile_service import profile_service
 
@@ -43,9 +43,9 @@ class DynamicData(dict):
 async def render_dashboard(request: Request):
     try:
         # 1. Telemetría real del host y Docker
-        system_raw = get_real_system_info()
-        docker_raw = get_real_docker_info()
-        disk_raw = get_real_disk_info("/DATA")
+        system_raw = get_system_info()
+        docker_raw = get_docker_info()
+        disk_raw = get_disk_info("/DATA")
 
         system_raw["api_version"] = docker_raw.get("api_version", "1.43")
         
@@ -57,7 +57,7 @@ async def render_dashboard(request: Request):
         services_list = [DynamicData(s) for s in docker_raw.get("services_list", [])]
 
         # 3. Datos protegibles (Rutas y DBs reales)
-        protectable_raw = get_real_protectable_data()
+        protectable_raw = get_protectable_data()
         protectable_list = [DynamicData(item) for item in protectable_raw]
 
         # 4. Generación dinámica de Perfiles de Aplicación
