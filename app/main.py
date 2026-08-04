@@ -12,6 +12,7 @@ from app.routers.api_v1 import router as api_v1_router
 from app.routers.api_backends import router as backends_router
 from app.routers.api_executions import router as executions_router
 from app.routers.api_health import router as health_router
+from app.routers.backups import router as backups_router  # <-- Nuevo router de backups
 
 # Importaciones para el registro de backends
 from app.core.backends.backend_registry import BackendRegistry
@@ -55,7 +56,8 @@ app.include_router(dashboard_router)
 # 2. REST API v1 Router (Endpoints unificados para frontend app.js)
 app.include_router(api_v1_router)
 
-# 3. REST API Routers adicionales (Salud, Backends, Ejecuciones)
+# 3. REST API Routers adicionales (Salud, Backends, Ejecuciones, Backups)
 app.include_router(health_router)
 app.include_router(backends_router)
 app.include_router(executions_router)
+app.include_router(backups_router)  # <-- Registro del router de backups

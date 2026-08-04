@@ -9,12 +9,16 @@
                 {% for profile in profiles %}
                 <div class="list-group-item py-2 px-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="fw-bold text-dark">{{ profile.app_name }}</span>
                         <div>
+                            <span class="fw-bold text-dark">{{ profile.app_name }}</span>
                             {% if profile.has_db %}
-                                <span class="badge bg-warning text-dark me-1">🗄️ Hook DB</span>
+                                <span class="badge bg-warning text-dark ms-2">🗄️ Hook DB</span>
                             {% endif %}
-                            <span class="badge bg-light text-dark border">{{ profile.containers_count }} contenedor(es)</span>
+                        </div>
+                        <div>
+                            <button onclick="runBackup('{{ profile.app_id }}')" class="btn btn-sm btn-outline-primary py-0 px-2">
+                                ⚡ Copiar Ahora
+                            </button>
                         </div>
                     </div>
                     <div class="small text-muted mb-1">
@@ -35,3 +39,20 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+async function runBackup(appId) {
+    if(!confirm(`¿Deseas iniciar la copia de seguridad para ${appId}?`)) return;
+    try {
+        const response = await fetch(`/api/backups/run/${appId}`, { method: 'POST' });
+        const result = await response.json();
+        if(response.ok) {
+            alert(` Backup completado con éxito: ${result.backup_file} (${result.size_mb} MB)`);
+        } else {
+            alert(` Error en backup: ${result.detail || 'Error desconocido'}`);
+        }
+    } catch (e) {
+        alert(` Error de red o servidor: ${e.message}`);
+    }
+}
+</script>
