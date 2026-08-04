@@ -10,7 +10,10 @@ BACKUP_DESTINATION = "/DATA/Backups/CasaOS"
 class BackupService:
     def __init__(self, target_dir: str = BACKUP_DESTINATION):
         self.target_dir = target_dir
-        os.makedirs(self.target_dir, exist_ok=True)
+        try:
+            os.makedirs(self.target_dir, exist_ok=True)
+        except OSError as e:
+            print(f"[WARNING] No se pudo crear el directorio de backups '{self.target_dir}': {e}")
 
     def execute_app_backup(self, app_id: str) -> Dict[str, Any]:
         """Ejecuta la copia de seguridad de un perfil de aplicación específico."""
