@@ -25,7 +25,7 @@ services:
       - /sys:/host/sys:ro
       # Raíz del sistema e información de datos/apps de CasaOS
       - /:/host_root:ro
-      - /DATA:/DATA:ro
+      - /DATA:/DATA:rw
       - /var/lib/casaos:/var/lib/casaos:ro
       - /mnt:/mnt:ro
       # Persistencia de datos del Backup Manager
