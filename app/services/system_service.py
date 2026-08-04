@@ -5,6 +5,7 @@ import http.client
 import platform
 import psutil
 
+
 class UnixHTTPConnection(http.client.HTTPConnection):
     """Conexión HTTP nativa sobre un socket Unix."""
     def __init__(self, socket_path, timeout=5):
@@ -13,12 +14,16 @@ class UnixHTTPConnection(http.client.HTTPConnection):
 
     def connect(self):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.settimeout(self.timeout)
+        if self.timeout is not None:
+            try:
+                self.sock.settimeout(self.timeout)
+            except (AttributeError, ValueError, OSError):
+                pass
         self.sock.connect(self.socket_path)
 
 
 def query_docker_api(endpoint: str):
-    """Consulta la API de Docker vía socket Unix sin librerías externas."""
+    """Consulta la API de Docker vía socket Unix de forma segura."""
     socket_path = "/var/run/docker.sock"
     if not os.path.exists(socket_path):
         return None
@@ -56,7 +61,7 @@ def get_real_system_info() -> dict:
         return {
             "os_name": "CasaOS (Linux aarch64)",
             "architecture": "aarch64",
-            "kernel": "6.12.93+rpt-rpi-2712",
+            "kernel": "Linux",
             "cpu_cores": 4,
             "ram_total_gb": 7.87,
             "ram_used_gb": 1.2,
@@ -152,7 +157,6 @@ def get_real_protectable_data() -> list:
         c_image = container.get('Image', 'unknown')
         c_status = container.get('State', 'unknown')
 
-        # Detección de bases de datos
         name_lower, img_lower = c_name.lower(), c_image.lower()
         is_db, db_type, hook = False, None, None
         if "postgres" in img_lower or "postgres" in name_lower:
