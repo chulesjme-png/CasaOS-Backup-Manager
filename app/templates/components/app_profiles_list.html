@@ -1,11 +1,63 @@
-async function triggerAppBackup(appName, appPath) {
-    const btn = event.currentTarget;
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+        <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">🎯 Perfiles de Aplicación Generados</h6>
+        <span class="badge bg-primary">{{ profiles|length if profiles else 0 }} Perfiles</span>
+    </div>
+    <div class="card-body p-0">
+        {% if profiles and profiles|length > 0 %}
+            <div class="list-group list-group-flush">
+                {% for profile in profiles %}
+                <div class="list-group-item py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div>
+                            <span class="fw-bold text-dark">{{ profile.app_name }}</span>
+                            {% if profile.has_db %}
+                                <span class="badge bg-warning text-dark ms-2">🗄️ Hook DB</span>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <button onclick="triggerAppBackup(event, '{{ profile.app_name }}', {{ profile.paths | tojson if profile.paths else '[]' }})" class="btn btn-sm btn-outline-primary py-0 px-2">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+                    </div>
+                    <div class="small text-muted mb-1">
+                        <strong>Rutas:</strong> 
+                        {% if profile.paths %}
+                            <code>{{ profile.paths | join(', ') }}</code>
+                        {% else %}
+                            <span class="fst-italic">Sin rutas /DATA específicas</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="p-3 text-center text-muted small">
+                No se han generado perfiles de aplicación todavía.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+async function triggerAppBackup(evt, appName, appPaths) {
+    const btn = evt.currentTarget;
     const originalText = btn.innerHTML;
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
 
     const selectedTarget = document.getElementById('storage-select')?.value || '/DATA/Backups/CasaOS';
+
+    let sourcesArray = [];
+    if (Array.isArray(appPaths) && appPaths.length > 0) {
+        sourcesArray = appPaths;
+    } else if (typeof appPaths === 'string' && appPaths.trim() !== '') {
+        sourcesArray = [appPaths];
+    } else {
+        sourcesArray = [`/DATA/AppData/${appName.toLowerCase()}`];
+    }
 
     try {
         const response = await fetch('/api/v1/executions/run', {
@@ -15,7 +67,7 @@ async function triggerAppBackup(appName, appPath) {
                 backend_name: 'duplicati',
                 application: appName.toLowerCase(),
                 destination_url: selectedTarget,
-                sources: appPath ? [appPath] : [`/DATA/AppData/${appName.toLowerCase()}`],
+                sources: sourcesArray,
                 excluded_sources: []
             })
         });
@@ -34,3 +86,4 @@ async function triggerAppBackup(appName, appPath) {
         btn.innerHTML = originalText;
     }
 }
+</script>
