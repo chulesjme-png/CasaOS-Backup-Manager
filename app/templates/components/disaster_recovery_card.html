@@ -50,7 +50,12 @@ async function triggerFullSystemBackup() {
             body: JSON.stringify({
                 backend_name: 'duplicati',
                 application: 'casaos',
-                destination_url: selectedTarget
+                destination_url: selectedTarget,
+                sources: [
+                    '/DATA/AppData',
+                    '/var/lib/casaos'
+                ],
+                excluded_sources: []
             })
         });
 
@@ -61,14 +66,19 @@ async function triggerFullSystemBackup() {
             alert('✅ Copia del sistema completo enviada con éxito a Duplicati.');
         } else {
             const errorData = await response.json().catch(() => ({}));
-            console.error('Error server:', response.status, errorData);
-            throw new Error(`Servidor devolvió estado ${response.status}`);
+            console.error('Error server 500 details:', errorData);
+            
+            let msg = `Servidor devolvió estado ${response.status}`;
+            if (errorData.detail && errorData.detail.errors) {
+                msg += `: ${JSON.stringify(errorData.detail.errors)}`;
+            }
+            throw new Error(msg);
         }
     } catch (err) {
         console.error(err);
         badge.className = 'badge bg-danger-subtle text-danger border border-danger-subtle';
         badge.textContent = 'Error al ejecutar';
-        alert(`❌ Error al conectar con la API: ${err.message}`);
+        alert(`❌ Error al conectar con la API:\n${err.message}`);
     } finally {
         btn.disabled = false;
         btn.innerHTML = '💾 Copiar Sistema Completo';
