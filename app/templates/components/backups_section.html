@@ -1,0 +1,81 @@
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="card-title fw-bold text-primary mb-1">
+                    <span class="me-2">🛡️</span>Copias de Seguridad (Disaster Recovery)
+                </h5>
+                <p class="text-muted small mb-0">Gestiona copias incrementales del sistema completo o de aplicaciones individuales.</p>
+            </div>
+            <div>
+                <button class="btn btn-primary fw-semibold" id="btn-full-backup">
+                    <span class="me-1">💾</span> Copia del Sistema Completo
+                </button>
+            </div>
+        </div>
+
+        <!-- Banner de estado rápido -->
+        <div class="alert alert-info border-0 bg-light d-flex align-items-center p-2 mb-4" role="alert">
+            <span class="fs-4 me-2">💡</span>
+            <div class="small">
+                <strong>Sombra e Incrementalidad:</strong> Las copias utilizan el motor Duplicati. Solo se transferirán los cambios respecto a la última copia realizada, optimizando tiempo y espacio.
+            </div>
+        </div>
+
+        <!-- Lista de Aplicaciones Detectadas -->
+        <h6 class="fw-bold mb-3 text-secondary">Aplicaciones de CasaOS Detectadas</h6>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle small">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col" style="width: 40px;">
+                            <input class="form-check-input" type="checkbox" id="select-all-apps" checked>
+                        </th>
+                        <th scope="col">Aplicación</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Ruta de Datos (AppData)</th>
+                        <th scope="col" class="text-end">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if apps %}
+                        {% for app in apps %}
+                        <tr>
+                            <td>
+                                <input class="form-check-input app-checkbox" type="checkbox" value="{{ app.id | default(app.name) }}" checked>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <span class="me-2 fs-6">📦</span>
+                                    <strong>{{ app.name }}</strong>
+                                </div>
+                            </td>
+                            <td>
+                                {% if app.status == 'running' or app.state == 'running' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">En ejecución</span>
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill">Detenido</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted font-monospace small">
+                                {{ app.data_path | default('/DATA/AppData/' ~ app.name) }}
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary py-0 px-2" title="Crear copia individual">
+                                    Respaldar App
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-3">
+                                No se encontraron aplicaciones de CasaOS configuradas.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
