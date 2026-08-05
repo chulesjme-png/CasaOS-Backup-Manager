@@ -67,35 +67,13 @@
     <!-- 3. CUERPO PRINCIPAL (2 Columnas paralelas) -->
     <div class="row g-3">
 
-        <!-- COLUMNA IZQUIERDA: APLICACIONES Y PLANES (65%) -->
+        <!-- COLUMNA IZQUIERDA: DISASTER RECOVERY Y PLANES (60%) -->
         <div class="col-lg-7">
             
             <!-- TARJETA DESTACADA: DISASTER RECOVERY & COPIA COMPLETA -->
             {% include "components/disaster_recovery_card.html" %}
 
-            <!-- Motores de Backup -->
-            <div class="card shadow-sm mb-3 border-0">
-                <div class="card-header bg-white py-2">
-                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">⚡ Motores Integrados</h6>
-                </div>
-                <div class="card-body py-2">
-                    <div id="backends-container">
-                        <p class="text-muted mb-0 small">Cargando motores...</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Aplicaciones Detectadas -->
-            <div class="card shadow-sm mb-3 border-0">
-                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">📦 Aplicaciones CasaOS</h6>
-                </div>
-                <div class="card-body p-0">
-                    {% include "components/applications_table.html" %}
-                </div>
-            </div>
-
-            <!-- Planes de Backup -->
+            <!-- Planes de Backup (Subidos a primer plano) -->
             <div class="card shadow-sm mb-3 border-0">
                 <div class="card-header bg-white py-2">
                     <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">🎯 Planes de Backup Activos</h6>
@@ -107,11 +85,11 @@
 
         </div>
 
-        <!-- COLUMNA DERECHA: TELEMETRÍA UNIFICADA CON PESTAÑAS (35%) -->
+        <!-- COLUMNA DERECHA: TELEMETRÍA, MOTORES Y DETECCIÓN (40%) -->
         <div class="col-lg-5">
             
+            <!-- Telemetría en Pestañas -->
             <div class="card shadow-sm border-0 mb-3">
-                <!-- CABECERA CON PESTAÑAS (TABS) -->
                 <div class="card-header bg-white pb-0 border-bottom-0">
                     <ul class="nav nav-tabs card-header-tabs" id="telemetryTabs" role="tablist">
                         <li class="nav-item">
@@ -126,17 +104,13 @@
                     </ul>
                 </div>
 
-                <!-- CONTENIDO DE LAS PESTAÑAS -->
                 <div class="card-body tab-content" id="telemetryTabsContent">
-                    <!-- Tab 1: Sistema -->
                     <div class="tab-pane fade show active" id="system-pane" role="tabpanel">
                         {% include "components/system_card.html" %}
                     </div>
-                    <!-- Tab 2: Docker -->
                     <div class="tab-pane fade" id="docker-pane" role="tabpanel">
                         {% include "components/docker_card.html" %}
                     </div>
-                    <!-- Tab 3: Almacenamiento -->
                     <div class="tab-pane fade" id="storage-pane" role="tabpanel">
                         {% include "components/disk_card.html" %}
                         <hr class="my-2">
@@ -145,13 +119,35 @@
                 </div>
             </div>
 
-            <!-- Resumen Rápido -->
+            <!-- Resumen Rápido del Estado -->
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header bg-white py-2">
                     <h6 class="m-0 fw-bold text-secondary" style="font-size: 0.85rem;">📊 Resumen del Estado</h6>
                 </div>
                 <div class="card-body py-2">
                     {% include "components/summary_card.html" %}
+                </div>
+            </div>
+
+            <!-- Motores de Backup (Reubicado en columna derecha) -->
+            <div class="card shadow-sm mb-3 border-0">
+                <div class="card-header bg-white py-2">
+                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">⚡ Motores Integrados</h6>
+                </div>
+                <div class="card-body py-2">
+                    <div id="backends-container">
+                        <p class="text-muted mb-0 small">Cargando motores...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aplicaciones Detectadas (Reubicado en columna derecha) -->
+            <div class="card shadow-sm mb-3 border-0">
+                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">📦 Aplicaciones CasaOS</h6>
+                </div>
+                <div class="card-body p-0">
+                    {% include "components/applications_table.html" %}
                 </div>
             </div>
 
