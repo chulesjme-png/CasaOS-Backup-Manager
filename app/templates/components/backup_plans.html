@@ -16,7 +16,12 @@
                             {% endif %}
                         </div>
                         <div>
-                            <button onclick="runAppBackup(event, '{{ profile.app_id }}', '{{ profile.app_name }}', {{ profile.paths | tojson if profile.paths else '[]' }})" class="btn btn-sm btn-outline-primary py-0 px-2">
+                            <button 
+                                type="button" 
+                                class="btn btn-sm btn-outline-primary py-0 px-2 btn-run-backup" 
+                                data-app-id="{{ profile.app_id }}" 
+                                data-app-name="{{ profile.app_name }}" 
+                                data-paths='{{ profile.paths | tojson if profile.paths else "[]" }}'>
                                 ⚡ Copiar Ahora
                             </button>
                         </div>
@@ -41,49 +46,54 @@
 </div>
 
 <script>
-async function runAppBackup(evt, appId, appName, appPaths) {
-    const btn = evt.currentTarget;
-    const originalText = btn.innerHTML;
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.btn-run-backup').forEach(button => {
+        button.addEventListener('click', async (evt) => {
+            const btn = evt.currentTarget;
+            const appId = btn.getAttribute('data-app-id');
+            const appName = btn.getAttribute('data-app-name');
+            let paths = [];
 
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+            try {
+                paths = JSON.parse(btn.getAttribute('data-paths') || '[]');
+            } catch(e) {
+                paths = [];
+            }
 
-    const selectedTarget = document.getElementById('storage-select')?.value || '/DATA/Backups/CasaOS';
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
 
-    let sourcesArray = [];
-    if (Array.isArray(appPaths) && appPaths.length > 0) {
-        sourcesArray = appPaths;
-    } else if (typeof appPaths === 'string' && appPaths.trim() !== '') {
-        sourcesArray = [appPaths];
-    } else {
-        sourcesArray = [`/DATA/AppData/${appId}`];
-    }
+            const selectedTarget = document.getElementById('storage-select')?.value || '/DATA/Backups/CasaOS';
+            const sourcesArray = paths.length > 0 ? paths : [`/DATA/AppData/${appId}`];
 
-    try {
-        const response = await fetch('/api/v1/executions/run', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                backend_name: 'duplicati',
-                application: appId,
-                destination_url: selectedTarget,
-                sources: sourcesArray,
-                excluded_sources: []
-            })
+            try {
+                const response = await fetch('/api/v1/executions/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        backend_name: 'duplicati',
+                        application: appId,
+                        destination_url: selectedTarget,
+                        sources: sourcesArray,
+                        excluded_sources: []
+                    })
+                });
+
+                if (response.ok) {
+                    alert(`✅ Copia de seguridad iniciada para ${appName}`);
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail?.errors?.join(', ') || `Error ${response.status}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert(`❌ Error al iniciar la copia de ${appName}: ${err.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
         });
-
-        if (response.ok) {
-            alert(`✅ Copia de seguridad iniciada para ${appName}`);
-        } else {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail?.errors?.join(', ') || `Error ${response.status}`);
-        }
-    } catch (err) {
-        console.error(err);
-        alert(`❌ Error al iniciar la copia de ${appName}: ${err.message}`);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-    }
-}
-</script> 
+    });
+});
+</script>
