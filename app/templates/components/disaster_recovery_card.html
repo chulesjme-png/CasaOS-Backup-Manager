@@ -9,7 +9,7 @@
                     Resguarda la configuración de CasaOS, datos de las apps (`/DATA/AppData`) y bases de datos.
                 </small>
             </div>
-            <button class="btn btn-primary btn-sm fw-bold px-3 py-1" id="btn-full-system-backup">
+            <button class="btn btn-primary btn-sm fw-bold px-3 py-1" id="btn-full-system-backup" onclick="triggerFullSystemBackup()">
                 💾 Copiar Sistema Completo
             </button>
         </div>
@@ -21,8 +21,54 @@
             </div>
             <div class="d-flex align-items-center gap-1 small text-secondary">
                 <span>🔒 Estado:</span>
-                <span class="badge bg-success-subtle text-success border border-success-subtle">Listo para resguardo</span>
+                <span id="system-backup-status-badge" class="badge bg-success-subtle text-success border border-success-subtle">
+                    Listo para resguardo
+                </span>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+async function triggerFullSystemBackup() {
+    const btn = document.getElementById('btn-full-system-backup');
+    const badge = document.getElementById('system-backup-status-badge');
+    
+    if (!btn || !badge) return;
+
+    // Cambiar estado visual del botón
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Iniciando...';
+    badge.className = 'badge bg-warning-subtle text-warning border border-warning-subtle';
+    badge.textContent = 'En ejecución...';
+
+    try {
+        const response = await fetch('/api/v1/executions/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                backend_id: 'duplicati',
+                plan_type: 'full_system',
+                target_path: document.getElementById('storage-select')?.value || '/DATA/Backups/CasaOS'
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            badge.className = 'badge bg-info-subtle text-info border border-info-subtle';
+            badge.textContent = 'Copia iniciada con éxito';
+            alert('✅ Copia de seguridad del sistema completo iniciada correctamente en Duplicati.');
+        } else {
+            throw new Error('Error en el servidor al lanzar la copia');
+        }
+    } catch (err) {
+        console.error(err);
+        badge.className = 'badge bg-danger-subtle text-danger border border-danger-subtle';
+        badge.textContent = 'Error al ejecutar';
+        alert('❌ No se pudo iniciar la copia de seguridad. Revisa la conexión con Duplicati.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '💾 Copiar Sistema Completo';
+    }
+}
+</script>
