@@ -97,17 +97,19 @@ Operaciones verificadas y testeadas:
 
 # Características implementadas
 
-## Dashboard inicial
+## Dashboard inicial y Telemetría de Hardware
 
 Estado:
 
-Completado.
+Completado y optimizado.
 
 Funciones:
 
-* visualización del estado interno.
-* información del sistema y telemetría de hardware en tiempo real (CPU, RAM, kernel, discos).
-* integración con servicios internos.
+* visualización del estado interno y resumen de aplicaciones/contenedores.
+* **Telemetría en tiempo real para Raspberry Pi 5:** Extracción directa de métricas de CPU, arquitectura (`aarch64`), kernel y almacenamiento.
+* **Métricas de Memoria RAM:** Formato estructurado `Usado / Total (%)` evitando redundancias de unidades.
+* **Resiliencia en Plantillas (Jinja2):** Integración de filtros `default(..., true)` para garantizar que ninguna métrica de hardware quede en blanco ante respuestas dinámicas o vacías.
+* integración con servicios internos y componentes de interfaz modularizados.
 
 ---
 
@@ -240,7 +242,7 @@ Backend:
 Infraestructura:
 
 * Docker / Docker Compose
-* Linux ARM64 / Debian (Optimizado para Raspberry Pi 5)
+* Linux ARM64 / Debian (Optimizado para Raspberry Pi 5 / BCM2712)
 
 Integraciones:
 
@@ -267,6 +269,10 @@ CasaOS-Backup-Manager/
 │   ├── schemas/
 │   ├── services/
 │   └── templates/
+│       └── components/
+│           ├── system_card.html
+│           ├── docker_card.html
+│           └── disk_card.html
 │
 ├── docs/
 ├── scripts/
