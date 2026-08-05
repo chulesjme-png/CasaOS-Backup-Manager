@@ -16,7 +16,7 @@
                             {% endif %}
                         </div>
                         <div>
-                            <button onclick="runBackup('{{ profile.app_id }}')" class="btn btn-sm btn-outline-primary py-0 px-2">
+                            <button onclick="runAppBackup('{{ profile.app_id }}', '{{ profile.app_name }}', {{ profile.paths | tojson if profile.paths else '[]' }})" class="btn btn-sm btn-outline-primary py-0 px-2">
                                 ⚡ Copiar Ahora
                             </button>
                         </div>
@@ -41,18 +41,34 @@
 </div>
 
 <script>
-async function runBackup(appId) {
-    if(!confirm(`¿Deseas iniciar la copia de seguridad para ${appId}?`)) return;
+async function runAppBackup(appId, appName, paths) {
+    if (!confirm(`¿Deseas iniciar la copia de seguridad para ${appName}?`)) return;
+    
+    const selectedTarget = document.getElementById('storage-select')?.value || '/DATA/Backups/CasaOS';
+
     try {
-        const response = await fetch(`/api/backups/run/${appId}`, { method: 'POST' });
+        const response = await fetch('/api/v1/executions/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                backend_name: 'duplicati',
+                application: appId,
+                destination_url: selectedTarget,
+                sources: paths.length > 0 ? paths : [`/DATA/AppData/${appId}`],
+                excluded_sources: []
+            })
+        });
+
         const result = await response.json();
-        if(response.ok) {
-            alert(` Backup completado con éxito: ${result.backup_file} (${result.size_mb} MB)`);
+
+        if (response.ok && result.success) {
+            alert(`✅ Copia de seguridad iniciada con éxito para ${appName}`);
         } else {
-            alert(` Error en backup: ${result.detail || 'Error desconocido'}`);
+            const errorMsg = result.detail?.errors?.join(', ') || 'Error al procesar la solicitud';
+            alert(`❌ Error en backup de ${appName}: ${errorMsg}`);
         }
     } catch (e) {
-        alert(` Error de red o servidor: ${e.message}`);
+        alert(`❌ Error de red o servidor: ${e.message}`);
     }
 }
 </script>

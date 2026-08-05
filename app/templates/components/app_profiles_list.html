@@ -1,0 +1,36 @@
+async function triggerAppBackup(appName, appPath) {
+    const btn = event.currentTarget;
+    const originalText = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+
+    const selectedTarget = document.getElementById('storage-select')?.value || '/DATA/Backups/CasaOS';
+
+    try {
+        const response = await fetch('/api/v1/executions/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                backend_name: 'duplicati',
+                application: appName.toLowerCase(),
+                destination_url: selectedTarget,
+                sources: appPath ? [appPath] : [`/DATA/AppData/${appName.toLowerCase()}`],
+                excluded_sources: []
+            })
+        });
+
+        if (response.ok) {
+            alert(`✅ Copia de seguridad iniciada para ${appName}`);
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail?.errors?.join(', ') || `Error ${response.status}`);
+        }
+    } catch (err) {
+        console.error(err);
+        alert(`❌ Error al iniciar la copia de ${appName}: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
