@@ -49,8 +49,8 @@ async function triggerFullSystemBackup() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 backend_name: 'duplicati',
-                backup_id: 'full_system_backup',
-                target_path: selectedTarget
+                application: 'casaos',
+                destination_url: selectedTarget
             })
         });
 
