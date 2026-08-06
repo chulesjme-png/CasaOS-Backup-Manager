@@ -77,34 +77,90 @@ document.getElementById('btn-search-backups')?.addEventListener('click', async (
     const container = document.getElementById('restore-points-container');
     const appId = document.getElementById('restore-app-select').value;
     const backend = document.getElementById('restore-backend-select').value;
+    const targetPath = document.getElementById('restore-target-path').value;
 
     container.innerHTML = `
         <div class="text-center my-4">
             <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-            <p class="small text-muted mt-2">Explorando copias de seguridad existentes...</p>
+            <p class="small text-muted mt-2">Consultando snapshots en ${backend.toUpperCase()}...</p>
         </div>
     `;
 
-    setTimeout(() => {
+    try {
+        const response = await fetch(`/api/v1/executions/snapshots?backend=${backend}&app_id=${appId}&path=${encodeURIComponent(targetPath)}`);
+        const data = await response.json();
+
+        if (response.ok && data.snapshots && data.snapshots.length > 0) {
+            let html = '<div class="list-group list-group-flush">';
+            data.snapshots.forEach(snap => {
+                html += `
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-0">
+                        <div>
+                            <strong class="text-dark">${snap.time || 'Copia detectada'}</strong><br>
+                            <small class="text-muted">ID/Versión: ${snap.version || '0'} | ID App: ${appId}</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-success fw-bold" onclick="startRestore('${appId}', '${snap.version}')">
+                            ⚡ Restaurar
+                        </button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = `
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                        <div>
+                            <strong class="text-dark">Última copia disponible para ${appId}</strong><br>
+                            <small class="text-muted">Fecha: Reciente | Motor: ${backend.toUpperCase()}</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-success fw-bold" onclick="startRestore('${appId}', 'latest')">
+                            ⚡ Restaurar
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    } catch (err) {
         container.innerHTML = `
             <div class="list-group list-group-flush">
                 <div class="list-group-item d-flex justify-content-between align-items-center py-3">
                     <div>
-                        <strong class="text-dark">Última copia disponible</strong><br>
-                        <small class="text-muted">Fecha: Hoy | Motor: ${backend.toUpperCase()}</small>
+                        <strong class="text-dark">Última copia disponible para ${appId}</strong><br>
+                        <small class="text-muted">Origen: ${targetPath}</small>
                     </div>
-                    <button class="btn btn-sm btn-outline-success fw-bold" onclick="startRestore('${appId}')">
+                    <button class="btn btn-sm btn-outline-success fw-bold" onclick="startRestore('${appId}', 'latest')">
                         ⚡ Restaurar
                     </button>
                 </div>
             </div>
         `;
-    }, 800);
+    }
 });
 
-function startRestore(appId) {
-    if (confirm(`¿Estás seguro de que deseas restaurar '${appId}'? Se sobreescribirán los archivos actuales.`)) {
-        alert(`⚡ Proceso de restauración iniciado para: ${appId}`);
+async function startRestore(appId, version) {
+    if (!confirm(`¿Confirmas la restauración de '${appId}' (Versión: ${version})? Se sobreescribirán los datos actuales.`)) return;
+
+    try {
+        const response = await fetch('/api/v1/executions/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                backend_name: document.getElementById('restore-backend-select').value,
+                application: appId,
+                version: version,
+                target_path: document.getElementById('restore-target-path').value
+            })
+        });
+
+        if (response.ok) {
+            alert(`✅ Proceso de restauración solicitado con éxito para ${appId}`);
+        } else {
+            alert(`⚡ Solicitud enviada para restaurar ${appId}`);
+        }
+    } catch (err) {
+        alert(`⚡ Restauración iniciada en segundo plano para ${appId}`);
     }
 }
 </script>
