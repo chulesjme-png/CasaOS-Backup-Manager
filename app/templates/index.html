@@ -22,17 +22,17 @@
     <div class="card shadow-sm border-0 mb-3">
         <div class="card-body py-2 px-3">
             <div class="row align-items-center g-2">
-                <!-- Selector de Destino con los 5 discos -->
+                <!-- Selector de Destino con los 5 discos reales -->
                 <div class="col-12">
                     <div class="d-flex align-items-center">
                         <span class="me-2 fs-6">💾</span>
                         <strong class="small text-secondary me-2 text-nowrap">Destino Activo:</strong>
                         <select id="backup-destination-select" class="form-select form-select-sm font-monospace text-dark border bg-light shadow-sm" onchange="handleDestinationChange(this.value)">
-                            <option value="data-internal" selected>NVMe / Almacenamiento Principal (/DATA) — Libre: 1.2 TB / Total: 1.83 TB</option>
-                            <option value="usb-3.0">USB 3.0 Genérico — Libre / Usado: 1.5 TB / 1.82 TB</option>
-                            <option value="huh728080">HUH728080ALE601 — Libre / Usado: 6.86 TB / 7.28 TB</option>
-                            <option value="wdc-wd80edaz">WDC WD80EDAZ-11CEWB0 — Libre / Usado: 3.12 TB / 7.28 TB</option>
-                            <option value="my-book">My Book 1144 — Libre / Usado: 1.06 TB / 2.73 TB</option>
+                            <option value="almacenamiento" selected>Almacenamiento (Principal) — Usado: 1.2 TB / Total: 1.83 TB</option>
+                            <option value="usb30">USB3.0 — Usado: 1.5 TB / Total: 1.82 TB</option>
+                            <option value="huh728080">HUH728080ALE601 — Usado: 6.86 TB / Total: 7.28 TB</option>
+                            <option value="wdc-wd80edaz">WDC WD80EDAZ-11CEWB0 — Usado: 3.12 TB / Total: 7.28 TB</option>
+                            <option value="my-book">My Book 1144 — Usado: 1.06 TB / Total: 2.73 TB</option>
                         </select>
                     </div>
                 </div>
@@ -137,9 +137,10 @@
             </div>
         </div>
 
-        <!-- COLUMNA DERECHA: PESTAÑAS (Raspberry Pi 5 / Docker / Discos) -->
+        <!-- COLUMNA DERECHA: PESTAÑAS Y BLOQUES RECUPERADOS -->
         <div class="col-lg-4">
             
+            <!-- Pestañas Sistema / Docker / Discos -->
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header bg-white py-2 px-3 d-flex gap-3">
                     <button class="btn p-0 fw-bold text-primary border-bottom border-primary pb-1 shadow-none bg-transparent small" onclick="switchTab('system')" id="tab-btn-system">🍓 Sistema</button>
@@ -166,16 +167,30 @@
                         </ul>
                     </div>
 
-                    <!-- CONTENIDO PESTAÑA DISCOS -->
+                    <!-- CONTENIDO PESTAÑA DISCOS (5 Discos Reales) -->
                     <div id="tab-content-disks" style="display: none;">
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Principal (/DATA):</span><strong class="text-dark">1.2 TB / 1.83 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">USB 3.0:</span><strong class="text-dark">1.5 TB / 1.82 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Almacenamiento:</span><strong class="text-dark">1.2 TB / 1.83 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">USB3.0:</span><strong class="text-dark">1.5 TB / 1.82 TB</strong></li>
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">HUH728080ALE601:</span><strong class="text-dark">6.86 TB / 7.28 TB</strong></li>
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">WDC WD80EDAZ:</span><strong class="text-dark">3.12 TB / 7.28 TB</strong></li>
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">My Book 1144:</span><strong class="text-dark">1.06 TB / 2.73 TB</strong></li>
                         </ul>
                     </div>
+                </div>
+            </div>
+
+            <!-- RESUMEN DEL ESTADO -->
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-white py-2 px-3">
+                    <h6 class="m-0 fw-bold text-dark small">📊 Resumen del Estado</h6>
+                </div>
+                <div class="card-body small py-2 px-3">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Aplicaciones:</span><strong class="text-dark">22</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">16</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Rutas persistentes:</span><strong class="text-primary">55</strong></li>
+                    </ul>
                 </div>
             </div>
 
@@ -186,8 +201,21 @@
                 </div>
                 <div class="card-body py-2 px-3 small">
                     <div class="d-flex justify-content-between">
-                        <span>Duplicati Engine: <strong class="text-success">Activo</strong></span>
-                        <span>Restic Engine: <strong class="text-dark">Listo</strong></span>
+                        <span>Duplicati: <strong class="text-success">Activo</strong></span>
+                        <span>Restic: <strong class="text-dark">Listo</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- APLICACIONES CASAOS -->
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-2 px-3">
+                    <h6 class="m-0 fw-bold text-dark small">📦 Aplicaciones CasaOS</h6>
+                </div>
+                <div class="card-body py-2 px-3 small">
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">CasaOS Apps:</span>
+                        <span class="badge bg-danger text-white">🔴 26 En ejecución</span>
                     </div>
                 </div>
             </div>
