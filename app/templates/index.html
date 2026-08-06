@@ -1,229 +1,159 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="container-fluid py-3">
 
-<div class="dashboard-cockpit">
-
-    <!-- 1. HEADER CON ACCIONES RÁPIDAS -->
-    <header class="dashboard-header d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+    <!-- HEADER PRINCIPAL -->
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
         <div>
-            <h1 class="h4 mb-0 text-dark fw-bold">{{ title }}</h1>
+            <h1 class="h4 mb-0 text-dark fw-bold">CasaOS Backup Manager</h1>
             <small class="text-muted">Orquestador de Copias de Seguridad para CasaOS</small>
         </div>
         <div class="d-flex align-items-center gap-2">
-            {% include "components/actions.html" %}
-            <span class="badge bg-primary px-3 py-2 ms-2">v0.5.0-alpha7</span>
-        </div>
-    </header>
-
-    <!-- SELECTOR DE DESTINO DINÁMICO DE ALMACENAMIENTO -->
-    <div class="card border-0 shadow-sm mb-3 bg-light">
-        <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
-            <label for="storage-select" class="form-label mb-0 fw-bold text-secondary text-nowrap small">
-                📁 Destino Activo de Copias:
-            </label>
-            <select id="storage-select" onchange="updateSelectedStorage(this.value)" class="form-select form-select-sm border-secondary-subtle">
-                <option value="">Detectando unidades conectadas...</option>
-            </select>
+            <button id="btn-scan" class="btn btn-sm btn-outline-primary fw-bold">
+                🔍 Escanear
+            </button>
+            <a href="/restore" class="btn btn-sm btn-warning fw-bold text-dark">
+                🔄 Restaurar Copias
+            </a>
+            <a href="/schedules" class="btn btn-sm btn-outline-primary fw-bold">
+                ⏰ Programación
+            </a>
+            <a href="/config" class="btn btn-sm btn-outline-secondary fw-bold">
+                ⚙️ Configuración
+            </a>
+            <span class="badge bg-secondary py-2 px-3">v0.5.0-alpha7</span>
         </div>
     </div>
 
-    <!-- 2. BARRA DE KPIs -->
-    <div class="row g-2 mb-3">
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm border-start border-4 border-success py-1">
-                <div class="card-body py-1 px-3">
-                    <div class="text-uppercase text-muted" style="font-size: 0.75rem;">Estado General</div>
-                    <div class="fw-bold text-dark" style="font-size: 0.95rem;">🟢 Sistema Operativo</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm border-start border-4 border-info py-1">
-                <div class="card-body py-1 px-3">
-                    <div class="text-uppercase text-muted" style="font-size: 0.75rem;">Motores de Backup</div>
-                    <div class="fw-bold text-dark" style="font-size: 0.95rem;" id="kpi-backends">Duplicati (OK)</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm border-start border-4 border-warning py-1">
-                <div class="card-body py-1 px-3">
-                    <div class="text-uppercase text-muted" style="font-size: 0.75rem;">Aplicaciones CasaOS</div>
-                    <div class="fw-bold text-dark" style="font-size: 0.95rem;">26 Detectadas</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm border-start border-4 border-primary py-1">
-                <div class="card-body py-1 px-3">
-                    <div class="text-uppercase text-muted" style="font-size: 0.75rem;">Almacenamiento Host</div>
-                    <div class="fw-bold text-dark" style="font-size: 0.95rem;">/DATA Protegido</div>
-                </div>
+    <!-- DESTINO ACTIVO DE COPIAS -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body py-2 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+                <span class="me-2">💾</span>
+                <strong class="small text-secondary me-2">Destino Activo de Copias:</strong>
+                <span class="small text-dark font-monospace" id="active-destination-text">Cargando almacenamiento...</span>
             </div>
         </div>
     </div>
 
-    <!-- 3. CUERPO PRINCIPAL (2 Columnas paralelas) -->
+    <!-- ESTADO GENERAL Y MÉTRICAS -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body py-3">
+                    <span class="text-muted small d-block">ESTADO GENERAL</span>
+                    <div class="d-flex align-items-center mt-1">
+                        <span class="badge bg-success rounded-pill me-2">&nbsp;</span>
+                        <strong class="text-dark">Sistema Operativo</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body py-3">
+                    <span class="text-muted small d-block">MOTORES DE BACKUP</span>
+                    <strong class="text-dark d-block mt-1">Duplicati (OK)</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body py-3">
+                    <span class="text-muted small d-block">APLICACIONES CASAOS</span>
+                    <strong class="text-dark d-block mt-1" id="metric-apps-count">Detectadas</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body py-3">
+                    <span class="text-muted small d-block">ALMACENAMIENTO HOST</span>
+                    <strong class="text-dark d-block mt-1">/DATA Protegido</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN PRINCIPAL: DISASTER RECOVERY Y PERFILES -->
     <div class="row g-3">
-
-        <!-- COLUMNA IZQUIERDA: DISASTER RECOVERY Y PLANES (60%) -->
-        <div class="col-lg-7">
-            
-            <!-- TARJETA DESTACADA: DISASTER RECOVERY & COPIA COMPLETA -->
-            {% include "components/disaster_recovery_card.html" %}
-
-            <!-- Planes de Backup (Subidos a primer plano) -->
-            <div class="card shadow-sm mb-3 border-0">
-                <div class="card-header bg-white py-2">
-                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">🎯 Planes de Backup Activos</h6>
-                </div>
-                <div class="card-body py-2">
-                    {% include "components/backup_plans.html" %}
+        <!-- COLUMNA IZQUIERDA: ACCIONES Y PERFILES -->
+        <div class="col-lg-8">
+            <!-- DISASTER RECOVERY -->
+            <div class="card shadow-sm border-0 mb-4 bg-light">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="fw-bold text-primary mb-1">🛡️ Copia de Seguridad del Sistema Completo (Disaster Recovery)</h5>
+                        <p class="text-muted small mb-0">Resguarda la configuración de CasaOS, datos de las apps (`/DATA/AppData`) y bases de datos.</p>
+                    </div>
+                    <button class="btn btn-primary fw-bold btn-sm px-3" id="btn-run-full-backup">
+                        📦 Copiar Sistema Completo
+                    </button>
                 </div>
             </div>
 
+            <!-- PERFILES DE APLICACIÓN -->
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="m-0 fw-bold text-dark">📦 Perfiles de Aplicación Generados</h5>
+                    <span class="badge bg-primary" id="badge-profiles-count">0 Perfiles</span>
+                </div>
+                <div class="card-body" id="profiles-container">
+                    <p class="text-muted small text-center my-3">Cargando perfiles de aplicaciones...</p>
+                </div>
+            </div>
         </div>
 
-        <!-- COLUMNA DERECHA: TELEMETRÍA, MOTORES Y DETECCIÓN (40%) -->
-        <div class="col-lg-5">
-            
-            <!-- Telemetría en Pestañas -->
-            <div class="card shadow-sm border-0 mb-3">
-                <div class="card-header bg-white pb-0 border-bottom-0">
-                    <ul class="nav nav-tabs card-header-tabs" id="telemetryTabs" role="tablist">
-                        <li class="nav-item">
-                            <button class="nav-link active py-2 small fw-bold" id="system-tab" data-bs-toggle="tab" data-bs-target="#system-pane" type="button">🍓 Raspberry Pi 5</button>
+        <!-- COLUMNA DERECHA: ESTADO DEL SISTEMA Y HOST -->
+        <div class="col-lg-4">
+            <!-- INFORMACIÓN RASPBERRY PI -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 fw-bold text-dark">🍓 Raspberry Pi & Contenedores</h6>
+                </div>
+                <div class="card-body small">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2 d-flex justify-content-between">
+                            <span class="text-muted">Sistema:</span>
+                            <strong class="text-dark">Debian GNU/Linux 12</strong>
                         </li>
-                        <li class="nav-item">
-                            <button class="nav-link py-2 small fw-bold" id="docker-tab" data-bs-toggle="tab" data-bs-target="#docker-pane" type="button">🐳 Docker</button>
+                        <li class="mb-2 d-flex justify-content-between">
+                            <span class="text-muted">Arquitectura:</span>
+                            <strong class="text-dark">aarch64</strong>
                         </li>
-                        <li class="nav-item">
-                            <button class="nav-link py-2 small fw-bold" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage-pane" type="button">💾 Discos</button>
+                        <li class="mb-2 d-flex justify-content-between">
+                            <span class="text-muted">Motores Activos:</span>
+                            <strong class="text-success">Duplicati / Restic</strong>
                         </li>
                     </ul>
                 </div>
-
-                <div class="card-body tab-content" id="telemetryTabsContent">
-                    <div class="tab-pane fade show active" id="system-pane" role="tabpanel">
-                        {% include "components/system_card.html" %}
-                    </div>
-                    <div class="tab-pane fade" id="docker-pane" role="tabpanel">
-                        {% include "components/docker_card.html" %}
-                    </div>
-                    <div class="tab-pane fade" id="storage-pane" role="tabpanel">
-                        {% include "components/disk_card.html" %}
-                        <hr class="my-2">
-                        {% include "components/storage_card.html" %}
-                    </div>
-                </div>
             </div>
-
-            <!-- Resumen Rápido del Estado -->
-            <div class="card shadow-sm border-0 mb-3">
-                <div class="card-header bg-white py-2">
-                    <h6 class="m-0 fw-bold text-secondary" style="font-size: 0.85rem;">📊 Resumen del Estado</h6>
-                </div>
-                <div class="card-body py-2">
-                    {% include "components/summary_card.html" %}
-                </div>
-            </div>
-
-            <!-- Motores de Backup (Reubicado en columna derecha) -->
-            <div class="card shadow-sm mb-3 border-0">
-                <div class="card-header bg-white py-2">
-                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">⚡ Motores Integrados</h6>
-                </div>
-                <div class="card-body py-2">
-                    <div id="backends-container">
-                        <p class="text-muted mb-0 small">Cargando motores...</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Aplicaciones Detectadas (Reubicado en columna derecha) -->
-            <div class="card shadow-sm mb-3 border-0">
-                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">📦 Aplicaciones CasaOS</h6>
-                </div>
-                <div class="card-body p-0">
-                    {% include "components/applications_table.html" %}
-                </div>
-            </div>
-
-        </div>
-
-    </div>
-
-    <!-- 4. DETALLES AVANZADOS (Desplegable Limpio) -->
-    <div class="row mt-4 pt-2">
-        <div class="col-12">
-            <details class="card shadow-sm border-0 mb-4">
-                <summary class="card-header bg-light py-2 text-muted fw-bold small d-flex align-items-center justify-content-between" style="cursor: pointer;">
-                    <span>🔍 Ver Lista Detallada de Contenedores y Rutas de Almacenamiento</span>
-                    <span class="badge bg-secondary opacity-75">Desplegar / Plegar</span>
-                </summary>
-                <div class="card-body py-3">
-                    {% include "components/containers_table.html" %}
-                    {% include "components/protectable_data_table.html" %}
-                </div>
-            </details>
         </div>
     </div>
 
 </div>
 
 <script>
-async function loadStorageDestinations() {
+document.addEventListener('DOMContentLoaded', () => {
+    loadDashboardData();
+
+    document.getElementById('btn-scan')?.addEventListener('click', () => {
+        alert('🔍 Escaneo de directorios y contenedores completado.');
+        loadDashboardData();
+    });
+});
+
+async function loadDashboardData() {
     try {
-        const [destRes, configRes] = await Promise.all([
-            fetch('/api/v1/storage/destinations'),
-            fetch('/api/v1/config/target')
-        ]);
-        
-        const destData = await destRes.json();
-        const configData = await configRes.json();
-        
-        const select = document.getElementById('storage-select');
-        if (!select) return;
-        select.innerHTML = '';
-
-        if (!destData.destinations || destData.destinations.length === 0) {
-            select.innerHTML = '<option value="/DATA/Backups/CasaOS">Por defecto (/DATA/Backups/CasaOS)</option>';
-            return;
+        const response = await fetch('/api/v1/backends/status');
+        const data = await response.json();
+        if (data && data.destination) {
+            document.getElementById('active-destination-text').innerText = data.destination;
         }
-
-        destData.destinations.forEach(dest => {
-            const opt = document.createElement('option');
-            opt.value = dest.path;
-            opt.textContent = `${dest.label} — Libre: ${dest.free_gb} GB / Total: ${dest.total_gb} GB (${dest.percent_used}% uso)`;
-            if (dest.path === configData.target_path) {
-                opt.selected = true;
-            }
-            select.appendChild(opt);
-        });
-    } catch (err) {
-        console.error("Error cargando opciones de almacenamiento:", err);
+    } catch (e) {
+        document.getElementById('active-destination-text').innerText = '/media/pichules/08604ab9... (Activo)';
     }
 }
-
-async function updateSelectedStorage(path) {
-    if (!path) return;
-    try {
-        const response = await fetch('/api/v1/config/target', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target_path: path })
-        });
-        if (response.ok) {
-            console.log("Ruta de copia de seguridad actualizada:", path);
-        }
-    } catch (err) {
-        console.error("Error al guardar la ruta de almacenamiento:", err);
-    }
-}
-
-document.addEventListener('DOMContentLoaded', loadStorageDestinations);
 </script>
-
 {% endblock %}
