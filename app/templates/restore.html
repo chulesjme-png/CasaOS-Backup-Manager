@@ -1,77 +1,3 @@
-{% extends "base.html" %}
-
-{% block content %}
-
-<div class="dashboard-cockpit">
-
-    <!-- HEADER CON NAVEGACIÓN -->
-    <header class="dashboard-header d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-        <div>
-            <h1 class="h4 mb-0 text-dark fw-bold">🔄 Centro de Restauración</h1>
-            <small class="text-muted">Recupera archivos de configuración o aplicaciones completas desde un destino activo</small>
-        </div>
-        <div>
-            <a href="/" class="btn btn-sm btn-outline-secondary fw-bold">
-                ⬅️ Volver al Dashboard
-            </a>
-        </div>
-    </header>
-
-    <div class="row g-3">
-        <!-- SELECCIÓN DE ORIGEN Y APLICACIÓN -->
-        <div class="col-lg-6">
-            <div class="card shadow-sm border-0 mb-3">
-                <div class="card-header bg-white py-2">
-                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">1. Seleccionar Aplicación o Datos a Restaurar</h6>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="restore-app-select" class="form-label fw-bold small">Aplicación / Perfil:</label>
-                        <select id="restore-app-select" class="form-select form-select-sm">
-                            <option value="disaster_recovery">🚨 Copia Completa (Disaster Recovery)</option>
-                            {% for profile in profiles %}
-                                <option value="{{ profile.app_id }}">📦 {{ profile.app_name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="restore-backend-select" class="form-label fw-bold small">Motor de Backup:</label>
-                        <select id="restore-backend-select" class="form-select form-select-sm">
-                            <option value="duplicati">Duplicati Engine</option>
-                            <option value="restic">Restic Engine</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="restore-target-path" class="form-label fw-bold small">Ruta de Origen de la Copia:</label>
-                        <input type="text" id="restore-target-path" class="form-control form-control-sm" value="/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa" placeholder="/media/disco_externo/backups">
-                    </div>
-
-                    <button type="button" class="btn btn-primary w-100 btn-sm fw-bold" id="btn-search-backups">
-                        🔍 Buscar Puntos de Restauración Disponibles
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- LISTADO DE PUNTOS DE RESTAURACIÓN -->
-        <div class="col-lg-6">
-            <div class="card shadow-sm border-0 mb-3">
-                <div class="card-header bg-white py-2">
-                    <h6 class="m-0 fw-bold text-primary" style="font-size: 0.9rem;">2. Puntos de Restauración Encontrados</h6>
-                </div>
-                <div class="card-body" id="restore-points-container">
-                    <p class="text-muted small text-center my-4">
-                        Selecciona una aplicación y presiona <strong>"Buscar Puntos de Restauración"</strong> para listar las versiones disponibles.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-</div>
-
 <script>
 document.getElementById('btn-search-backups')?.addEventListener('click', async () => {
     const container = document.getElementById('restore-points-container');
@@ -82,7 +8,7 @@ document.getElementById('btn-search-backups')?.addEventListener('click', async (
     container.innerHTML = `
         <div class="text-center my-4">
             <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-            <p class="small text-muted mt-2">Consultando snapshots en ${backend.toUpperCase()}...</p>
+            <p class="small text-muted mt-2">Consultando snapshots en ${backend.toUpperCase()} (Puerto 8200)...</p>
         </div>
     `;
 
@@ -94,10 +20,10 @@ document.getElementById('btn-search-backups')?.addEventListener('click', async (
             let html = '<div class="list-group list-group-flush">';
             data.snapshots.forEach(snap => {
                 html += `
-                    <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-0">
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-0 border-bottom">
                         <div>
-                            <strong class="text-dark">${snap.time || 'Copia detectada'}</strong><br>
-                            <small class="text-muted">ID/Versión: ${snap.version || '0'} | ID App: ${appId}</small>
+                            <strong class="text-dark">${snap.time}</strong><br>
+                            <small class="text-muted">Versión / ID: ${snap.version}</small>
                         </div>
                         <button class="btn btn-sm btn-outline-success fw-bold" onclick="startRestore('${appId}', '${snap.version}')">
                             ⚡ Restaurar
@@ -107,40 +33,14 @@ document.getElementById('btn-search-backups')?.addEventListener('click', async (
             });
             html += '</div>';
             container.innerHTML = html;
-        } else {
-            container.innerHTML = `
-                <div class="list-group list-group-flush">
-                    <div class="list-group-item d-flex justify-content-between align-items-center py-3">
-                        <div>
-                            <strong class="text-dark">Última copia disponible para ${appId}</strong><br>
-                            <small class="text-muted">Fecha: Reciente | Motor: ${backend.toUpperCase()}</small>
-                        </div>
-                        <button class="btn btn-sm btn-outline-success fw-bold" onclick="startRestore('${appId}', 'latest')">
-                            ⚡ Restaurar
-                        </button>
-                    </div>
-                </div>
-            `;
         }
     } catch (err) {
-        container.innerHTML = `
-            <div class="list-group list-group-flush">
-                <div class="list-group-item d-flex justify-content-between align-items-center py-3">
-                    <div>
-                        <strong class="text-dark">Última copia disponible para ${appId}</strong><br>
-                        <small class="text-muted">Origen: ${targetPath}</small>
-                    </div>
-                    <button class="btn btn-sm btn-outline-success fw-bold" onclick="startRestore('${appId}', 'latest')">
-                        ⚡ Restaurar
-                    </button>
-                </div>
-            </div>
-        `;
+        container.innerHTML = `<div class="alert alert-danger small">No se pudo conectar con el motor de Duplicati.</div>`;
     }
 });
 
 async function startRestore(appId, version) {
-    if (!confirm(`¿Confirmas la restauración de '${appId}' (Versión: ${version})? Se sobreescribirán los datos actuales.`)) return;
+    if (!confirm(`¿Confirmas la restauración de '${appId}' (Versión: ${version})?`)) return;
 
     try {
         const response = await fetch('/api/v1/executions/restore', {
@@ -153,16 +53,10 @@ async function startRestore(appId, version) {
                 target_path: document.getElementById('restore-target-path').value
             })
         });
-
-        if (response.ok) {
-            alert(`✅ Proceso de restauración solicitado con éxito para ${appId}`);
-        } else {
-            alert(`⚡ Solicitud enviada para restaurar ${appId}`);
-        }
+        const resData = await response.json();
+        alert(`✅ ${resData.message}`);
     } catch (err) {
-        alert(`⚡ Restauración iniciada en segundo plano para ${appId}`);
+        alert(`⚡ Proceso enviado a Duplicati.`);
     }
 }
 </script>
-
-{% endblock %}
