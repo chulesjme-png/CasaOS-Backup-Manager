@@ -1,11 +1,10 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- Eliminamos el container-fluid redundante para que respete el main-container del base.html -->
-<div class="py-2">
+<div class="container-fluid py-3">
 
     <!-- HEADER PRINCIPAL -->
-    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
         <div>
             <h1 class="h4 mb-0 text-dark fw-bold">CasaOS Backup Manager</h1>
             <small class="text-muted">Orquestador de Copias de Seguridad para CasaOS</small>
@@ -18,8 +17,9 @@
         </div>
     </div>
 
-    <!-- BLOQUE SUPERIOR DE DESTINO Y MÉTRICAS -->
-    <div class="card shadow-sm border-0 mb-4">
+    <!-- BLOQUE SUPERIOR DE DESTINO -->
+    <div class="card shadow-sm border-0 mb-3">
+        <!-- BLOQUE DE MÉTRICAS -->
         <div class="card-header bg-light py-3 px-3 border-bottom">
             <div class="row g-3">
                 <div class="col-md-3">
@@ -52,40 +52,50 @@
             </div>
         </div>
 
-        <div class="card-body py-3 px-4">
-            <div class="d-flex align-items-center">
-                <span class="me-2 fs-5">💾</span>
-                <strong class="small text-secondary me-3 text-nowrap">Destino Activo:</strong>
-                <select id="backup-destination-select" class="form-select font-monospace text-dark border bg-light shadow-sm" onchange="handleDestinationChange(this.value)">
-                    <option value="disco_externo" selected>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adf6fa — Libre: 1710.63 GB</option>
-                </select>
+        <!-- SELECTOR DE DISCOS -->
+        <div class="card-body py-2 px-3">
+            <div class="row align-items-center g-2">
+                <div class="col-12">
+                    <div class="d-flex align-items-center">
+                        <span class="me-2 fs-6">💾</span>
+                        <strong class="small text-secondary me-2 text-nowrap">Destino Activo de Copias:</strong>
+                        <select id="backup-destination-select" class="form-select form-select-sm font-monospace text-dark border bg-light shadow-sm" onchange="handleDestinationChange(this.value)">
+                            <option value="disco_externo" selected>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adf6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa) — Libre: 1710.63 GB / Total: 2749.54 GB</option>
+                            <option value="disco_2">Disco Externo: a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d (/media/pichules/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d) — Libre: 500.00 GB / Total: 1000.00 GB</option>
+                            <option value="disco_3">Disco Red: backup-nas (/media/pichules/nas-backup) — Libre: 4200.50 GB / Total: 8000.00 GB</option>
+                            <option value="disco_4">SSD Secundario: 99f8e7d6-5c4b-3a21-10ef-fedcba987654 (/media/pichules/99f8e7d6-5c4b-3a21-10ef-fedcba987654) — Libre: 120.40 GB / Total: 480.00 GB</option>
+                            <option value="disco_5">Memoria USB: 1234-5678 (/media/pichules/USB-Backup) — Libre: 15.20 GB / Total: 64.00 GB</option>
+                        </select>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- SECCIÓN PRINCIPAL: 2 COLUMNAS (8 / 4) -->
-    <div class="row g-4">
+    <!-- SECCIÓN PRINCIPAL: PERFILES Y PANEL LATERAL -->
+    <div class="row g-3">
         
         <!-- COLUMNA IZQUIERDA: DISASTER RECOVERY Y PERFILES -->
         <div class="col-lg-8">
             
-            <!-- TARJETA: DISASTER RECOVERY -->
+            <!-- DISASTER RECOVERY -->
             <div class="card shadow border-0 mb-4 bg-white" style="border-left: 6px solid #0d6efd !important;">
                 <div class="card-body p-4">
                     <div class="row align-items-center">
                         <div class="col-lg-8 mb-3 mb-lg-0">
                             <div class="d-flex align-items-center mb-1">
                                 <span class="fs-4 me-2">🛡️</span>
-                                <h5 class="fw-bold text-primary mb-0">Copia de Seguridad de la Raspberry Pi</h5>
+                                <h5 class="fw-bold text-primary mb-0">Copia de Seguridad de la Raspberry Pi (Disaster Recovery)</h5>
                             </div>
-                            <p class="text-muted small mb-3">Resguarda de forma íntegra la configuración de CasaOS y los datos de todas las apps.</p>
+                            <p class="text-muted small mb-3">Resguarda de forma íntegra la configuración de CasaOS, los datos de todas las apps (<code class="text-danger">/DATA/AppData</code>) y bases de datos en un solo clic.</p>
+                            
                             <div class="d-flex flex-wrap gap-2">
-                                <span class="badge bg-light text-secondary border px-2 py-1">🔄 Incremental (Duplicati)</span>
-                                <span class="badge bg-light text-success border px-2 py-1">🟢 Listo para resguardo</span>
+                                <span class="badge bg-light text-secondary border px-2 py-1">🔄 Modo: <strong>Incremental (Duplicati)</strong></span>
+                                <span class="badge bg-light text-success border px-2 py-1">🟢 Estado: <strong>Listo para resguardo</strong></span>
                             </div>
                         </div>
                         <div class="col-lg-4 text-lg-end">
-                            <button class="btn btn-primary fw-bold px-4 py-3 shadow-sm w-100 text-nowrap" id="btn-run-full-backup">
+                            <button class="btn btn-primary btn-lg fw-bold px-4 py-3 shadow-sm w-100 text-nowrap" id="btn-run-full-backup" style="font-size: 0.95rem;">
                                 📦 Copiar Sistema Completo
                             </button>
                         </div>
@@ -93,30 +103,87 @@
                 </div>
             </div>
 
-            <!-- TARJETA: PERFILES DE APLICACIÓN -->
+            <!-- PLANES DE BACKUP ACTIVOS -->
             <div class="card shadow-sm border-0 mb-3">
-                <div class="card-header bg-white py-3 px-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 fw-bold text-dark">📌 Perfiles de Aplicación Generados</h6>
-                    <span class="badge bg-primary rounded-pill">22 Perfiles</span>
+                <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-dark small">📌 Perfiles de Aplicación Generados</h6>
+                    <span class="badge bg-primary">22 Perfiles</span>
                 </div>
-                <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                <div class="card-body py-2 px-3" style="max-height: 500px; overflow-y: auto;">
                     <div class="list-group list-group-flush small">
-                        <!-- Ejemplo: Casaos -->
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-4 py-3">
+                        
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
                             <div>
-                                <strong class="text-dark fs-6">Casaos</strong>
+                                <strong class="text-dark">Casaos</strong>
                                 <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA</span></small>
                             </div>
-                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Casaos')">⚡ Copiar Ahora</button>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Casaos')">⚡ Copiar Ahora</button>
                         </div>
-                        <!-- Ejemplo: Pihole -->
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-4 py-3">
+
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
                             <div>
-                                <strong class="text-dark fs-6">Pihole</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/pihole/etc...</span></small>
+                                <strong class="text-dark">Pihole</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/pihole/etc/pihole, /DATA/AppData/pihole/etc/dnsmasq.d</span></small>
                             </div>
-                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Pihole')">⚡ Copiar Ahora</button>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Pihole')">⚡ Copiar Ahora</button>
                         </div>
+
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Navidrome</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/navidrome/data</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Navidrome')">⚡ Copiar Ahora</button>
+                        </div>
+
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Nextcloud</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/nextcloud/var/www/html</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Nextcloud')">⚡ Copiar Ahora</button>
+                        </div>
+
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Plex</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/plex/config</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Plex')">⚡ Copiar Ahora</button>
+                        </div>
+
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Ddns</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/ddns-updater/data</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Ddns')">⚡ Copiar Ahora</button>
+                        </div>
+
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Duplicati</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA, /DATA/AppData/duplicati/config, /DATA/AppData/duplicati/data</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Duplicati')">⚡ Copiar Ahora</button>
+                        </div>
+
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Immich</strong> <span class="badge bg-warning text-dark py-0">Hook DB</span>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/big-bear-immich/pgdata, /DATA/AppData/big-bear-immich/upload</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Immich')">⚡ Copiar Ahora</button>
+                        </div>
+
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Nginxproxymanager</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/nginxproxymanager/data, /DATA/AppData/nginxproxymanager/etc/letsencrypt</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Nginxproxymanager')">⚡ Copiar Ahora</button>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -125,55 +192,236 @@
         <!-- COLUMNA DERECHA: PESTAÑAS Y ESTADOS -->
         <div class="col-lg-4">
             
-            <!-- TARJETA: PESTAÑAS TELEMETRÍA -->
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white pt-3 pb-0 px-3 border-bottom-0">
-                    <ul class="nav nav-tabs" id="myTab" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active small" id="system-tab" data-bs-toggle="tab" data-bs-target="#system" type="button" role="tab">🍓 Sistema</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link small" id="docker-tab" data-bs-toggle="tab" data-bs-target="#docker" type="button" role="tab">🐳 Docker</button>
-                        </li>
-                    </ul>
+            <!-- Pestañas Sistema / Docker / Discos -->
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-white py-2 px-3 d-flex gap-3">
+                    <button class="btn p-0 fw-bold text-danger border-bottom border-danger pb-1 shadow-none bg-transparent small" onclick="switchTab('system')" id="tab-btn-system">🍓 Raspberry Pi 5</button>
+                    <button class="btn p-0 text-muted shadow-none bg-transparent small" onclick="switchTab('docker')" id="tab-btn-docker">🐳 Docker</button>
+                    <button class="btn p-0 text-muted shadow-none bg-transparent small" onclick="switchTab('disks')" id="tab-btn-disks">💾 Discos</button>
                 </div>
-                <div class="card-body bg-light small">
-                    <div class="tab-content" id="myTabContent">
-                        <div class="tab-pane fade show active" id="system" role="tabpanel">
-                            <ul class="list-unstyled mb-0">
-                                <li class="mb-2 d-flex justify-content-between"><span class="text-muted">OS:</span><strong class="text-dark">Debian GNU/Linux 12</strong></li>
-                                <li class="mb-2 d-flex justify-content-between"><span class="text-muted">CPU:</span><strong class="text-dark">ARMv8 (4 Cores)</strong></li>
-                                <li class="mb-0 d-flex justify-content-between"><span class="text-muted">RAM:</span><strong class="text-dark">7.08 GB / 7.87 GB</strong></li>
-                            </ul>
-                        </div>
-                        <div class="tab-pane fade" id="docker" role="tabpanel">
-                            <ul class="list-unstyled mb-0">
-                                <li class="mb-2 d-flex justify-content-between"><span class="text-muted">Daemon:</span><strong class="text-success">Activo</strong></li>
-                                <li class="mb-0 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">16 Activos</strong></li>
-                            </ul>
-                        </div>
+                
+                <div class="card-body small py-2 px-3">
+                    <div id="tab-content-system">
+                        <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">🖥️ Sistema</h6>
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Sistema operativo:</span><strong class="text-dark">Debian GNU/Linux 12 (bookworm)</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Arquitectura:</span><strong class="text-dark">aarch64</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Kernel:</span><strong class="text-dark">6.12.93+rpt-rpi-2712</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">CPU:</span><strong class="text-dark">ARMv8 (4 Cores @ Raspberry Pi 5)</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">RAM:</span><strong class="text-dark">7.08 GB / 7.87 GB (89.9%)</strong></li>
+                        </ul>
+                    </div>
+
+                    <div id="tab-content-docker" style="display: none;">
+                        <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">🐳 Docker Engine</h6>
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Estado Daemon:</span><strong class="text-success">Activo</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Versión:</span><strong class="text-dark">26.1.3</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores Activos:</span><strong class="text-dark">16</strong></li>
+                        </ul>
+                    </div>
+
+                    <div id="tab-content-disks" style="display: none;">
+                        <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">💾 Almacenamiento Montado</h6>
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Disco Externo:</span><strong class="text-dark">1.04 TB / 2.75 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">USB3.0:</span><strong class="text-dark">1.50 TB / 1.82 TB</strong></li>
+                        </ul>
                     </div>
                 </div>
             </div>
 
-            <!-- TARJETA: RESUMEN Y MOTORES -->
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3 px-3">
-                    <h6 class="m-0 fw-bold text-dark">📊 Estado Integraciones</h6>
+            <!-- RESUMEN DEL ESTADO -->
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-white py-2 px-3">
+                    <h6 class="m-0 fw-bold text-dark small">📊 Resumen del Estado</h6>
                 </div>
-                <div class="card-body small">
-                    <div class="mb-3 pb-3 border-bottom">
-                        <strong class="text-dark d-block mb-1">🔌 Duplicati Engine</strong>
-                        <span class="text-muted">Estado: <span class="badge bg-success">Activo</span></span>
+                <div class="card-body small py-2 px-3">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Aplicaciones:</span><strong class="text-dark">22</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">17</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Rutas persistentes:</span><strong class="text-primary">55</strong></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- MOTORES INTEGRADOS -->
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-white py-2 px-3">
+                    <h6 class="m-0 fw-bold text-dark small">⚡ Motores Integrados</h6>
+                </div>
+                <div class="card-body py-2 px-3 small">
+                    <div class="mb-2 pb-2 border-bottom">
+                        <strong class="text-dark d-block">🔌 Duplicati Engine</strong>
+                        <span class="text-muted">Estado de integración: <strong class="text-success">Activo</strong></span>
                     </div>
                     <div>
-                        <strong class="text-dark d-block mb-1">📦 Aplicaciones Docker</strong>
-                        <span class="text-muted">Detectadas: <span class="badge bg-primary">26</span></span>
+                        <strong class="text-dark d-block">🔌 Restic Engine</strong>
+                        <span class="text-muted">Estado de integración: <strong class="text-dark">Listo</strong></span>
                     </div>
+                </div>
+            </div>
+
+            <!-- APLICACIONES CASAOS -->
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-2 px-3">
+                    <h6 class="m-0 fw-bold text-dark small">📦 Aplicaciones CasaOS</h6>
+                </div>
+                <div class="card-body py-2 px-3 small">
+                    <strong class="text-dark d-block mb-2">📦 Aplicaciones Docker Compose</strong>
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Aplicación</th>
+                                <th>Contenedores</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>CasaOS Apps</td>
+                                <td>26</td>
+                                <td><span class="badge bg-danger text-white">🔴 En ejecución</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
         </div>
     </div>
+
+    <!-- SECCIÓN INFERIOR: TABLAS DETALLADAS CON SCROLL COMPLETO -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-2 px-3">
+                    <button class="btn btn-link text-decoration-none fw-bold text-dark p-0 small" type="button" data-bs-toggle="collapse" data-bs-target="#detailedListsCollapse">
+                        ▼ Ver Lista Detallada de Contenedores y Rutas de Almacenamiento
+                    </button>
+                </div>
+                <div class="collapse show" id="detailedListsCollapse">
+                    <div class="card-body py-3">
+                        
+                        <!-- TABLA 1: CONTENEDORES DOCKER DETECTADOS -->
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold text-dark small mb-0">📦 Contenedores Docker Detectados</h6>
+                            <span class="badge bg-secondary">Total: 26</span>
+                        </div>
+                        <div class="table-responsive mb-4" style="max-height: 380px; overflow-y: auto;">
+                            <table class="table table-sm table-hover small align-middle mb-0">
+                                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                                    <tr>
+                                        <th>Contenedor</th>
+                                        <th>Imagen</th>
+                                        <th class="text-end">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-muted font-monospace">casaos-backup-manager:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-muted font-monospace">deluan/navidrome:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">nextcloud</strong></td><td class="text-muted font-monospace">nextcloud:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">plex</strong></td><td class="text-muted font-monospace">linuxserver/plex:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">ddns-updater</strong></td><td class="text-muted font-monospace">qmcgaw/ddns-updater:v2.10.0</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">duplicati</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/duplicati:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">immich-server</strong></td><td class="text-muted font-monospace">ghcr.io/immich-app/immich-server:v3.0.2</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">immich-redis</strong></td><td class="text-muted font-monospace">docker.io/valkey/valkey:9</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">immich-postgres</strong></td><td class="text-muted font-monospace">ghcr.io/immich-app/postgres:14-vectorchord</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">immich-machine-learning</strong></td><td class="text-muted font-monospace">ghcr.io/immich-app/immich-machine-learning</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">nginxproxymanager</strong></td><td class="text-muted font-monospace">jc21/nginx-proxy-manager:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">transmission</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/transmission:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">sonarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/sonarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">radarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/radarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">pihole</strong></td><td class="text-muted font-monospace">pihole/pihole:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">netdata</strong></td><td class="text-muted font-monospace">netdata/netdata:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">jellyfin</strong></td><td class="text-muted font-monospace">jellyfin/jellyfin:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">qbittorrent</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/qbittorrent:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">prowlarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/prowlarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">bazarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/bazarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">vaultwarden</strong></td><td class="text-muted font-monospace">vaultwarden/server:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">homeassistant</strong></td><td class="text-muted font-monospace">ghcr.io/home-assistant/home-assistant</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">filebrowser</strong></td><td class="text-muted font-monospace">filebrowser/filebrowser:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">portainer</strong></td><td class="text-muted font-monospace">portainer/portainer-ce:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">heimdall</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/heimdall:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    <tr><td><strong class="text-dark">uptime-kuma</strong></td><td class="text-muted font-monospace">louislam/uptime-kuma:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- TABLA 2: DATOS PROTEGIBLES DETECTADOS -->
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold text-dark small mb-0">🛡️ Datos Protegibles Detectados</h6>
+                            <span class="badge bg-secondary">Rutas: 55</span>
+                        </div>
+                        <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+                            <table class="table table-sm table-hover small align-middle mb-0">
+                                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                                    <tr>
+                                        <th>Contenedor</th>
+                                        <th>Ruta en Host (Raspberry Pi)</th>
+                                        <th>Ruta Interna</th>
+                                        <th>Tipo / Hook</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/home/pichules/CasaOS-Backup-Manager/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-dark">bind</span></td></tr>
+                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/media</td><td class="text-muted font-monospace">/media</td><td><span class="badge bg-dark">bind</span></td></tr>
+                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/mnt</td><td class="text-muted font-monospace">/mnt</td><td><span class="badge bg-dark">bind</span></td></tr>
+                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/var/lib/casaos</td><td class="text-muted font-monospace">/var/lib/casaos</td><td><span class="badge bg-dark">bind</span></td></tr>
+                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/DATA</td><td class="text-muted font-monospace">/DATA</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-danger font-monospace">/DATA/AppData/navidrome/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-danger font-monospace">/media/pichules/08604ab9-.../BibliotecaMusica</td><td class="text-muted font-monospace">/music</td><td><span class="badge bg-dark">bind</span></td></tr>
+                                    <tr><td><strong class="text-dark">nextcloud</strong></td><td class="text-danger font-monospace">/DATA/AppData/nextcloud/var/www/html</td><td class="text-muted font-monospace">/var/www/html</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">plex</strong></td><td class="text-danger font-monospace">/media/pichules</td><td class="text-muted font-monospace">/Media</td><td><span class="badge bg-dark">bind</span></td></tr>
+                                    <tr><td><strong class="text-dark">plex</strong></td><td class="text-danger font-monospace">/DATA/AppData/plex/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">transmission</strong></td><td class="text-danger font-monospace">/DATA/Downloads/watch</td><td class="text-muted font-monospace">/watch</td><td><span class="badge bg-dark">bind</span></td></tr>
+                                    <tr><td><strong class="text-dark">transmission</strong></td><td class="text-danger font-monospace">/DATA/Downloads</td><td class="text-muted font-monospace">/downloads</td><td><span class="badge bg-dark">bind</span></td></tr>
+                                    <tr><td><strong class="text-dark">sonarr</strong></td><td class="text-danger font-monospace">/DATA/AppData/sonarr/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">radarr</strong></td><td class="text-danger font-monospace">/DATA/AppData/radarr/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">pihole</strong></td><td class="text-danger font-monospace">/DATA/AppData/pihole/etc/pihole</td><td class="text-muted font-monospace">/etc/pihole</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">netdata</strong></td><td class="text-danger font-monospace">/DATA/AppData/Netdata/config</td><td class="text-muted font-monospace">/etc/netdata</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">jellyfin</strong></td><td class="text-danger font-monospace">/DATA/AppData/jellyfin/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">qbittorrent</strong></td><td class="text-danger font-monospace">/DATA/AppData/qbittorrent/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">prowlarr</strong></td><td class="text-danger font-monospace">/DATA/AppData/prowlarr/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">bazarr</strong></td><td class="text-danger font-monospace">/DATA/AppData/bazarr/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">vaultwarden</strong></td><td class="text-danger font-monospace">/DATA/AppData/vaultwarden/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">homeassistant</strong></td><td class="text-danger font-monospace">/DATA/AppData/homeassistant/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">filebrowser</strong></td><td class="text-danger font-monospace">/DATA/AppData/filebrowser/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">portainer</strong></td><td class="text-danger font-monospace">/DATA/AppData/portainer/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">heimdall</strong></td><td class="text-danger font-monospace">/DATA/AppData/heimdall/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    <tr><td><strong class="text-dark">uptime-kuma</strong></td><td class="text-danger font-monospace">/DATA/AppData/uptime-kuma/data</td><td class="text-muted font-monospace">/app/data</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
+
+<script>
+function triggerAppBackup(appName) {
+    alert(`⚡ Iniciando respaldo individual para: ${appName}`);
+}
+
+function handleDestinationChange(value) {
+    console.log(`Destino de respaldo cambiado a: ${value}`);
+}
+
+function switchTab(tabName) {
+    document.getElementById('tab-content-system').style.display = 'none';
+    document.getElementById('tab-content-docker').style.display = 'none';
+    document.getElementById('tab-content-disks').style.display = 'none';
+
+    document.getElementById('tab-btn-system').className = 'btn p-0 text-muted shadow-none bg-transparent small';
+    document.getElementById('tab-btn-docker').className = 'btn p-0 text-muted shadow-none bg-transparent small';
+    document.getElementById('tab-btn-disks').className = 'btn p-0 text-muted shadow-none bg-transparent small';
+
+    document.getElementById(`tab-content-${tabName}`).style.display = 'block';
+    document.getElementById(`tab-btn-${tabName}`).className = 'btn p-0 fw-bold text-danger border-bottom border-danger pb-1 shadow-none bg-transparent small';
+}
+</script>
 {% endblock %}
