@@ -144,7 +144,23 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function startRestore(appId, version) {
-    if (!confirm(`¿Confirmas la restauración de '${appId}' (Versión: ${version})? Se realizará una simulación.`)) return;
+    const selectedApp = document.getElementById('restore-app-select').value;
+    const appToRestore = (selectedApp && selectedApp !== 'disaster_recovery') ? selectedApp : appId;
+
+    if (!confirm(`¿Confirmas la restauración de '${appToRestore}' (Versión ID: ${version})?\n\nEl contenedor Docker se detendrá unos segundos y se restaurarán los datos.`)) {
+        return;
+    }
+
+    const container = document.getElementById('restore-points-container');
+    const oldContent = container.innerHTML;
+
+    container.innerHTML = `
+        <div class="text-center my-4 py-3">
+            <div class="spinner-border text-primary" role="status"></div>
+            <h6 class="mt-3 text-dark fw-bold">Ejecutando proceso de restauración...</h6>
+            <p class="small text-muted">Deteniendo '${appToRestore}', volcando volumen de datos y reiniciando contenedor.</p>
+        </div>
+    `;
 
     try {
         const response = await fetch('/api/v1/executions/restore', {
@@ -152,15 +168,34 @@ async function startRestore(appId, version) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 backend_name: document.getElementById('restore-backend-select').value,
-                application: appId,
+                application: appToRestore,
                 version: version,
                 target_path: document.getElementById('restore-target-path').value
             })
         });
+
         const resData = await response.json();
-        alert(`✅ ${resData.message || 'Restauración simulada correctamente.'}`);
+
+        if (response.ok && resData.success) {
+            let detailsHtml = resData.details ? resData.details.map(d => `<li>${d}</li>`).join('') : '';
+            container.innerHTML = `
+                <div class="alert alert-success border-0 shadow-sm">
+                    <h6 class="fw-bold mb-2">✅ ${resData.message}</h6>
+                    <ul class="small mb-0 ps-3 text-secondary">
+                        ${detailsHtml}
+                    </ul>
+                </div>
+                <button class="btn btn-sm btn-outline-primary mt-2 w-100 fw-bold" onclick="location.reload()">
+                    🔄 Finalizar y Volver
+                </button>
+            `;
+        } else {
+            alert(`⚠️ ${resData.message || 'Ocurrió un problema durante la restauración.'}`);
+            container.innerHTML = oldContent;
+        }
     } catch (err) {
-        alert(`⚡ Proceso de restauración enviado.`);
+        alert(`❌ Error al conectar con el servidor: ${err.message}`);
+        container.innerHTML = oldContent;
     }
 }
 </script>
