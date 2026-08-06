@@ -1,1 +1,16 @@
-<section class="actions"><button>Escanear</button><button>Crear Backup</button><button>Restaurar</button><button>Configuración</button></section>
+<div class="d-flex align-items-center gap-2">
+    <!-- Botón para forzar un rescaneo de apps y almacenamiento (Acción AJAX) -->
+    <button type="button" class="btn btn-outline-secondary btn-sm px-3 fw-bold" onclick="location.reload();">
+        🔄 Escanear
+    </button>
+
+    <!-- Enlace a la nueva pantalla de Restauración -->
+    <a href="/restore" class="btn btn-warning btn-sm px-3 fw-bold text-dark">
+        ⏪ Restaurar Copias
+    </a>
+
+    <!-- Configuración o estado -->
+    <button type="button" class="btn btn-outline-primary btn-sm px-3 fw-bold" onclick="alert('Configuración guardada en el destino activo.');">
+        ⚙️ Configuración
+    </button>
+</div>
