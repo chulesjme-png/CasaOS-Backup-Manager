@@ -22,17 +22,17 @@
     <div class="card shadow-sm border-0 mb-3">
         <div class="card-body py-2 px-3">
             <div class="row align-items-center g-2">
-                <!-- Selector de Destino con los 5 discos reales -->
+                <!-- Selector de Destino con los 5 discos limpios -->
                 <div class="col-12">
                     <div class="d-flex align-items-center">
                         <span class="me-2 fs-6">💾</span>
                         <strong class="small text-secondary me-2 text-nowrap">Destino Activo:</strong>
                         <select id="backup-destination-select" class="form-select form-select-sm font-monospace text-dark border bg-light shadow-sm" onchange="handleDestinationChange(this.value)">
-                            <option value="almacenamiento" selected>Almacenamiento (Principal) — Usado: 1.2 TB / Total: 1.83 TB</option>
-                            <option value="usb30">USB3.0 — Usado: 1.5 TB / Total: 1.82 TB</option>
-                            <option value="huh728080">HUH728080ALE601 — Usado: 6.86 TB / Total: 7.28 TB</option>
-                            <option value="wdc-wd80edaz">WDC WD80EDAZ-11CEWB0 — Usado: 3.12 TB / Total: 7.28 TB</option>
-                            <option value="my-book">My Book 1144 — Usado: 1.06 TB / Total: 2.73 TB</option>
+                            <option value="data" selected>/DATA (Principal) — 1.2 TB / 1.83 TB</option>
+                            <option value="usb30">USB3.0 — 1.5 TB / 1.82 TB</option>
+                            <option value="huh728080">HUH728080ALE601 — 6.86 TB / 7.28 TB</option>
+                            <option value="wdc">WDC WD80EDAZ-11CEWB0 — 3.12 TB / 7.28 TB</option>
+                            <option value="mybook">My Book 1144 — 1.06 TB / 2.73 TB</option>
                         </select>
                     </div>
                 </div>
@@ -137,7 +137,7 @@
             </div>
         </div>
 
-        <!-- COLUMNA DERECHA: PESTAÑAS Y BLOQUES RECUPERADOS -->
+        <!-- COLUMNA DERECHA: PESTAÑAS Y BLOQUES -->
         <div class="col-lg-4">
             
             <!-- Pestañas Sistema / Docker / Discos -->
@@ -167,10 +167,10 @@
                         </ul>
                     </div>
 
-                    <!-- CONTENIDO PESTAÑA DISCOS (5 Discos Reales) -->
+                    <!-- CONTENIDO PESTAÑA DISCOS -->
                     <div id="tab-content-disks" style="display: none;">
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Almacenamiento:</span><strong class="text-dark">1.2 TB / 1.83 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">/DATA:</span><strong class="text-dark">1.2 TB / 1.83 TB</strong></li>
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">USB3.0:</span><strong class="text-dark">1.5 TB / 1.82 TB</strong></li>
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">HUH728080ALE601:</span><strong class="text-dark">6.86 TB / 7.28 TB</strong></li>
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">WDC WD80EDAZ:</span><strong class="text-dark">3.12 TB / 7.28 TB</strong></li>
