@@ -1,5 +1,5 @@
 """
-Router principal con telemetría real de la Raspberry Pi, CasaOS y Perfiles de Aplicación.
+Router principal con telemetría real de la Raspberry Pi, CasaOS, Perfiles de Aplicación y Restauración.
 """
 
 from fastapi import APIRouter, Request
@@ -113,6 +113,24 @@ async def render_dashboard(request: Request):
                 "backends": backends_list,
                 "summary": summary_info,
                 "summary_info": summary_info,
+            }
+        )
+    except Exception as e:
+        return HTMLResponse(content=f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+
+
+@router.get("/restore", response_class=HTMLResponse)
+async def render_restore(request: Request):
+    try:
+        profiles_raw = profile_service.generate_profiles_from_discovery()
+        profiles_list = [DynamicData(p) for p in profiles_raw]
+
+        return templates.TemplateResponse(
+            "restore.html",
+            {
+                "request": request,
+                "title": "Centro de Restauración",
+                "profiles": profiles_list,
             }
         )
     except Exception as e:
