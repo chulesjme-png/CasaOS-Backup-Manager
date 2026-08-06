@@ -22,17 +22,17 @@
     <div class="card shadow-sm border-0 mb-3">
         <div class="card-body py-2 px-3">
             <div class="row align-items-center g-2">
-                <!-- Selector de Destino con los UUIDs reales exactos -->
+                <!-- Selector de Destino con nombres limpios y legibles -->
                 <div class="col-12">
                     <div class="d-flex align-items-center">
                         <span class="me-2 fs-6">💾</span>
                         <strong class="small text-secondary me-2 text-nowrap">Destino Activo:</strong>
                         <select id="backup-destination-select" class="form-select form-select-sm font-monospace text-dark border bg-light shadow-sm" onchange="handleDestinationChange(this.value)">
-                            <option value="data" selected>/DATA (Principal) — 1.2 TB / 1.83 TB</option>
-                            <option value="uuid-1">08604ab9-10b8-46bc-a6f2-a19f3adfc6fa (/media/pichules/...)</option>
-                            <option value="uuid-2">4515f8b1-6980-4440-91c6-98efe8eb1645 (/media/pichules/...)</option>
-                            <option value="uuid-3">7a4f9383-f80b-4270-8926-8203030bb8d4 (/media/pichules/...)</option>
-                            <option value="uuid-4">c79efbde-f2b9-4de9-8fee-0520d25f04bc (/media/pichules/...)</option>
+                            <option value="data" selected>Almacenamiento (Principal) — Usado: 1.2 TB / Total: 1.83 TB</option>
+                            <option value="usb30">USB3.0 — Usado: 1.5 TB / Total: 1.82 TB</option>
+                            <option value="huh7280">HUH728080ALE601 — Usado: 6.86 TB / Total: 7.28 TB</option>
+                            <option value="wdc">WDC WD80EDAZ-11CEWB0 — Usado: 3.12 TB / Total: 7.28 TB</option>
+                            <option value="mybook">My Book 1144 — Usado: 1.06 TB / Total: 2.73 TB</option>
                         </select>
                     </div>
                 </div>
@@ -78,13 +78,13 @@
                 </div>
             </div>
 
-            <!-- PLANES DE BACKUP ACTIVOS (Con altura fija y scroll restaurado) -->
+            <!-- PLANES DE BACKUP ACTIVOS (Con scroll controlado) -->
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark small">📌 Perfiles de Aplicación Generados</h6>
                     <span class="badge bg-primary">22 Perfiles</span>
                 </div>
-                <div class="card-body py-2 px-3" style="max-height: 450px; overflow-y: auto;">
+                <div class="card-body py-2 px-3" style="max-height: 420px; overflow-y: auto;">
                     <div class="list-group list-group-flush small">
                         
                         <!-- Casaos -->
@@ -137,7 +137,7 @@
             </div>
         </div>
 
-        <!-- COLUMNA DERECHA: PESTAÑAS Y TODOS LOS BLOQUES RESTAURADOS -->
+        <!-- COLUMNA DERECHA: PESTAÑAS Y BLOQUES FIJOS -->
         <div class="col-lg-4">
             
             <!-- Pestañas Sistema / Docker / Discos -->
@@ -170,11 +170,11 @@
                     <!-- CONTENIDO PESTAÑA DISCOS -->
                     <div id="tab-content-disks" style="display: none;">
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">/DATA:</span><strong class="text-dark">1.2 TB / 1.83 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted font-monospace" style="font-size: 0.75rem;">...08604ab9:</span><strong class="text-dark">Conectado</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted font-monospace" style="font-size: 0.75rem;">...4515f8b1:</span><strong class="text-dark">Conectado</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted font-monospace" style="font-size: 0.75rem;">...7a4f9383:</span><strong class="text-dark">Conectado</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted font-monospace" style="font-size: 0.75rem;">...c79efbde:</span><strong class="text-dark">Conectado</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Almacenamiento:</span><strong class="text-dark">1.2 TB / 1.83 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">USB3.0:</span><strong class="text-dark">1.5 TB / 1.82 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">HUH728080:</span><strong class="text-dark">6.86 TB / 7.28 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">WDC WD80EDAZ:</span><strong class="text-dark">3.12 TB / 7.28 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">My Book 1144:</span><strong class="text-dark">1.06 TB / 2.73 TB</strong></li>
                         </ul>
                     </div>
                 </div>
@@ -207,7 +207,7 @@
                 </div>
             </div>
 
-            <!-- APLICACIONES CASAOS (BLOQUE INFERIOR RESTAURADO) -->
+            <!-- APLICACIONES CASAOS -->
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-white py-2 px-3">
                     <h6 class="m-0 fw-bold text-dark small">📦 Aplicaciones CasaOS</h6>
