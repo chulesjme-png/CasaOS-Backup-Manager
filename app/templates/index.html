@@ -264,7 +264,7 @@
         </div>
     </div>
 
-    <!-- SECCIÓN INFERIOR: TABLAS DETALLADAS (CONTENEDORES Y DATOS PROTEGIBLES) -->
+    <!-- SECCIÓN INFERIOR: TABLAS DETALLADAS CON SCROLL -->
     <div class="row mt-4">
         <div class="col-12">
             <div class="card shadow-sm border-0 mb-4">
@@ -276,14 +276,14 @@
                 <div class="collapse show" id="detailedListsCollapse">
                     <div class="card-body py-3">
                         
-                        <!-- TABLA 1: CONTENEDORES DOCKER DETECTADOS -->
+                        <!-- TABLA 1: CONTENEDORES DOCKER DETECTADOS (Con Scroll) -->
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="fw-bold text-dark small mb-0">📦 Contenedores Docker Detectados</h6>
                             <span class="badge bg-secondary">Total: 26</span>
                         </div>
-                        <div class="table-responsive mb-4">
-                            <table class="table table-sm table-hover small align-middle">
-                                <thead class="table-light">
+                        <div class="table-responsive mb-4" style="max-height: 350px; overflow-y: auto;">
+                            <table class="table table-sm table-hover small align-middle sticky-top mb-0">
+                                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
                                     <tr>
                                         <th>Contenedor</th>
                                         <th>Imagen</th>
@@ -312,22 +312,47 @@
                                         <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
                                     </tr>
                                     <tr>
+                                        <td><strong class="text-dark">ddns-updater</strong></td>
+                                        <td class="text-muted font-monospace">qmcgaw/ddns-updater:v2.10.0</td>
+                                        <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                                    </tr>
+                                    <tr>
                                         <td><strong class="text-dark">duplicati</strong></td>
                                         <td class="text-muted font-monospace">lscr.io/linuxserver/duplicati:latest</td>
+                                        <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong class="text-dark">immich-server</strong></td>
+                                        <td class="text-muted font-monospace">ghcr.io/immich-app/immich-server:v3.0.2</td>
+                                        <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong class="text-dark">immich-redis</strong></td>
+                                        <td class="text-muted font-monospace">docker.io/valkey/valkey:9</td>
+                                        <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong class="text-dark">immich-postgres</strong></td>
+                                        <td class="text-muted font-monospace">ghcr.io/immich-app/postgres:14-vectorchord0.4.3</td>
+                                        <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong class="text-dark">nginxproxymanager</strong></td>
+                                        <td class="text-muted font-monospace">jc21/nginx-proxy-manager:latest</td>
                                         <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
 
-                        <!-- TABLA 2: DATOS PROTEGIBLES DETECTADOS -->
+                        <!-- TABLA 2: DATOS PROTEGIBLES DETECTADOS (Con Scroll) -->
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="fw-bold text-dark small mb-0">🛡️ Datos Protegibles Detectados</h6>
                             <span class="badge bg-secondary">Rutas: 55</span>
                         </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover small align-middle">
-                                <thead class="table-light">
+                        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                            <table class="table table-sm table-hover small align-middle sticky-top mb-0">
+                                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
                                     <tr>
                                         <th>Contenedor</th>
                                         <th>Ruta en Host (Raspberry Pi)</th>
@@ -343,10 +368,28 @@
                                         <td><span class="badge bg-dark">bind</span></td>
                                     </tr>
                                     <tr>
+                                        <td><strong class="text-dark">casaos-backup-manager</strong></td>
+                                        <td class="text-danger font-monospace">/media</td>
+                                        <td class="text-muted font-monospace">/media</td>
+                                        <td><span class="badge bg-dark">bind</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong class="text-dark">casaos-backup-manager</strong></td>
+                                        <td class="text-danger font-monospace">/mnt</td>
+                                        <td class="text-muted font-monospace">/mnt</td>
+                                        <td><span class="badge bg-dark">bind</span></td>
+                                    </tr>
+                                    <tr>
                                         <td><strong class="text-dark">navidrome</strong></td>
                                         <td class="text-danger font-monospace">/DATA/AppData/navidrome/data</td>
                                         <td class="text-muted font-monospace">/data</td>
                                         <td><span class="badge bg-success">CasaOS AppData</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong class="text-dark">navidrome</strong></td>
+                                        <td class="text-danger font-monospace">/media/pichules/08604ab9-.../BibliotecaMusica</td>
+                                        <td class="text-muted font-monospace">/music</td>
+                                        <td><span class="badge bg-dark">bind</span></td>
                                     </tr>
                                     <tr>
                                         <td><strong class="text-dark">nextcloud</strong></td>
