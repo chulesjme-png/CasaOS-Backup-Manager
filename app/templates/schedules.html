@@ -17,7 +17,7 @@
     </div>
 
     <!-- TARJETAS DE TAREAS PROGRAMADAS -->
-    <div class="row id="schedules-list-container">
+    <div class="row" id="schedules-list-container">
         <div class="col-12 text-center py-5">
             <div class="spinner-border text-primary" role="status"></div>
             <p class="small text-muted mt-2">Cargando tareas programadas...</p>
@@ -70,6 +70,8 @@ async function loadSchedules() {
                 `;
             });
             container.innerHTML = html;
+        } else {
+            container.innerHTML = '<div class="col-12"><div class="alert alert-warning">No se encontraron tareas programadas.</div></div>';
         }
     } catch (err) {
         container.innerHTML = `
