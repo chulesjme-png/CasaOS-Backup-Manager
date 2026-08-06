@@ -29,10 +29,12 @@
     <!-- DESTINO ACTIVO DE COPIAS -->
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body py-2 d-flex align-items-center justify-content-between">
-            <div class="d-flex align-items-center">
+            <div class="d-flex align-items-center w-100">
                 <span class="me-2">💾</span>
                 <strong class="small text-secondary me-2">Destino Activo de Copias:</strong>
-                <span class="small text-dark font-monospace" id="active-destination-text">Cargando almacenamiento...</span>
+                <select class="form-select form-select-sm font-monospace text-dark w-auto flex-grow-1 border-0 bg-light">
+                    <option>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adfc6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa) — Libre: 1710.63 GB / Total: 2749.54 GB</option>
+                </select>
             </div>
         </div>
     </div>
@@ -54,7 +56,7 @@
             <div class="card shadow-sm border-0 h-100">
                 <div class="card-body py-3">
                     <span class="text-muted small d-block">MOTORES DE BACKUP</span>
-                    <strong class="text-dark d-block mt-1">Duplicati / Restic (OK)</strong>
+                    <strong class="text-dark d-block mt-1">Duplicati (OK)</strong>
                 </div>
             </div>
         </div>
@@ -62,7 +64,7 @@
             <div class="card shadow-sm border-0 h-100">
                 <div class="card-body py-3">
                     <span class="text-muted small d-block">APLICACIONES CASAOS</span>
-                    <strong class="text-dark d-block mt-1" id="metric-apps-count">Detectadas</strong>
+                    <strong class="text-dark d-block mt-1">26 Detectadas</strong>
                 </div>
             </div>
         </div>
@@ -85,7 +87,11 @@
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
                         <h5 class="fw-bold text-primary mb-1">🛡️ Copia de Seguridad del Sistema Completo (Disaster Recovery)</h5>
-                        <p class="text-muted small mb-0">Resguarda la configuración de CasaOS, datos de las apps (`/DATA/AppData`) y bases de datos.</p>
+                        <p class="text-muted small mb-2">Resguarda la configuración de CasaOS, datos de las apps (`/DATA/AppData`) y bases de datos.</p>
+                        <div class="d-flex gap-3 align-items-center">
+                            <span class="badge bg-white text-dark border py-1 px-2"><small>⚙️ Modo: <strong>Incremental (Duplicati)</strong></small></span>
+                            <span class="badge bg-success text-white py-1 px-2"><small>🟢 Estado: <strong>Listo para resguardo</strong></small></span>
+                        </div>
                     </div>
                     <button class="btn btn-primary fw-bold btn-sm px-3" id="btn-run-full-backup">
                         📦 Copiar Sistema Completo
@@ -93,148 +99,236 @@
                 </div>
             </div>
 
-            <!-- PERFILES DE APLICACIÓN -->
+            <!-- PLANES DE BACKUP ACTIVOS -->
+            <h6 class="fw-bold text-dark mb-3">📌 Planes de Backup Activos</h6>
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                    <h5 class="m-0 fw-bold text-dark">📦 Perfiles de Aplicación Generados</h5>
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-primary" id="badge-profiles-count">0 Perfiles</span>
-                        <button class="btn btn-sm btn-outline-success fw-bold" onclick="generateAllProfiles()">⚡ Generar Todos</button>
-                    </div>
+                    <h6 class="m-0 fw-bold text-dark">📦 Perfiles de Aplicación Generados</h6>
+                    <span class="badge bg-primary">22 Perfiles</span>
                 </div>
-                <div class="card-body" id="profiles-container" style="max-height: 650px; overflow-y: auto;">
-                    <p class="text-muted small text-center my-3">Cargando perfiles de aplicaciones...</p>
+                <div class="card-body py-2" style="max-height: 750px; overflow-y: auto;">
+                    <div class="list-group list-group-flush">
+                        
+                        <!-- Casaos -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                            <div>
+                                <strong class="text-dark fs-6">Casaos</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Casaos')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+
+                        <!-- Pihole -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                            <div>
+                                <strong class="text-dark fs-6">Pihole</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/pihole/etc/pihole, /DATA/AppData/pihole/etc/dnsmasq.d</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Pihole')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+
+                        <!-- Navidrome -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                            <div>
+                                <strong class="text-dark fs-6">Navidrome</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/navidrome/data</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Navidrome')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+
+                        <!-- Nextcloud -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                            <div>
+                                <strong class="text-dark fs-6">Nextcloud</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/nextcloud/var/www/html</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Nextcloud')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+
+                        <!-- Plex -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                            <div>
+                                <strong class="text-dark fs-6">Plex</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/plex/config</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Plex')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+
+                        <!-- Ddns -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                            <div>
+                                <strong class="text-dark fs-6">Ddns</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/ddns-updater/data</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Ddns')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+
+                        <!-- Duplicati -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                            <div>
+                                <strong class="text-dark fs-6">Duplicati</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA, /DATA/AppData/duplicati/config, /DATA/AppData/duplicati/data</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Duplicati')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+
+                        <!-- Immich -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                            <div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <strong class="text-dark fs-6">Immich</strong>
+                                    <span class="badge bg-warning text-dark"><small>🪝 Hook DB</small></span>
+                                </div>
+                                <small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/big-bear-immich/pgdata, /DATA/AppData/big-bear-immich/upload</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Immich')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+
+                        <!-- Nginxproxymanager -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3">
+                            <div>
+                                <strong class="text-dark fs-6">Nginxproxymanager</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/nginxproxymanager/data, /DATA/AppData/nginxproxymanager/etc/letsencrypt</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerAppBackup('Nginxproxymanager')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- COLUMNA DERECHA: ESTADO DEL SISTEMA Y HOST -->
+        <!-- COLUMNA DERECHA: HARDWARE, RESUMEN Y MOTORES -->
         <div class="col-lg-4">
-            <!-- INFORMACIÓN RASPBERRY PI -->
+            
+            <!-- INFORMACIÓN RASPBERRY PI 5 -->
             <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 fw-bold text-dark">🍓 Raspberry Pi & Contenedores</h6>
+                <div class="card-header bg-white py-3 d-flex gap-3">
+                    <span class="fw-bold text-primary border-bottom border-primary pb-1">🍓 Raspberry Pi 5</span>
+                    <span class="text-muted">🐳 Docker</span>
+                    <span class="text-muted">💾 Discos</span>
                 </div>
                 <div class="card-body small">
+                    <h6 class="fw-bold text-dark mb-2">💻 Sistema</h6>
                     <ul class="list-unstyled mb-0">
                         <li class="mb-2 d-flex justify-content-between">
-                            <span class="text-muted">Sistema:</span>
-                            <strong class="text-dark">Debian GNU/Linux 12</strong>
+                            <span class="text-muted">Sistema operativo:</span>
+                            <strong class="text-dark">Debian GNU/Linux 12 (bookworm)</strong>
                         </li>
                         <li class="mb-2 d-flex justify-content-between">
                             <span class="text-muted">Arquitectura:</span>
                             <strong class="text-dark">aarch64</strong>
                         </li>
                         <li class="mb-2 d-flex justify-content-between">
-                            <span class="text-muted">Motores Activos:</span>
-                            <strong class="text-success">Duplicati / Restic</strong>
+                            <span class="text-muted">Kernel:</span>
+                            <strong class="text-dark">6.12.93+rpt-rpi-2712</strong>
                         </li>
                         <li class="mb-2 d-flex justify-content-between">
-                            <span class="text-muted">Directorio Base:</span>
-                            <strong class="text-dark font-monospace">/DATA/AppData</strong>
+                            <span class="text-muted">CPU:</span>
+                            <strong class="text-dark">ARMv8 (4 Cores @ Raspberry Pi 5)</strong>
+                        </li>
+                        <li class="mb-2 d-flex justify-content-between">
+                            <span class="text-muted">RAM:</span>
+                            <strong class="text-dark">7.08 GB / 7.87 GB (89.9%)</strong>
                         </li>
                     </ul>
                 </div>
             </div>
 
-            <!-- ACCESOS RÁPIDOS / LOGS RECIENTES -->
-            <div class="card shadow-sm border-0">
+            <!-- RESUMEN DEL ESTADO -->
+            <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3">
-                    <h6 class="m-0 fw-bold text-dark">📊 Estado de Respaldos</h6>
+                    <h6 class="m-0 fw-bold text-dark">📊 Resumen del Estado</h6>
                 </div>
-                <div class="card-body small text-muted">
-                    <p class="mb-1">Último escaneo: <strong class="text-dark">Hace un momento</strong></p>
-                    <p class="mb-0">Estado de motor: <strong class="text-success">Operativo</strong></p>
+                <div class="card-body small">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2 d-flex justify-content-between">
+                            <span class="text-muted">Aplicaciones:</span>
+                            <strong class="text-dark">22</strong>
+                        </li>
+                        <li class="mb-2 d-flex justify-content-between">
+                            <span class="text-muted">Contenedores:</span>
+                            <strong class="text-dark">17</strong>
+                        </li>
+                        <li class="mb-2 d-flex justify-content-between">
+                            <span class="text-muted">Rutas persistentes:</span>
+                            <strong class="text-primary">55</strong>
+                        </li>
+                    </ul>
                 </div>
             </div>
+
+            <!-- MOTORES INTEGRADOS -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 fw-bold text-dark">⚡ Motores Integrados</h6>
+                </div>
+                <div class="card-body">
+                    <div class="p-3 bg-light rounded mb-3">
+                        <strong class="text-dark d-block">⚡ Duplicati Engine</strong>
+                        <small class="text-muted">Estado de integración: <strong class="text-success">Activo</strong></small>
+                    </div>
+                    <div class="p-3 bg-light rounded">
+                        <strong class="text-dark d-block">⚡ Restic Engine</strong>
+                        <small class="text-muted">Estado de integración: <strong class="text-dark">Listo</strong></small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- APLICACIONES CASAOS / DOCKER COMPOSE -->
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 fw-bold text-dark">📦 Aplicaciones CasaOS</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="p-3 border-bottom">
+                        <strong class="text-dark d-block mb-2">📦 Aplicaciones Docker Compose</strong>
+                        <table class="table table-sm mb-0 align-middle small">
+                            <thead>
+                                <tr class="text-muted">
+                                    <th>Aplicación</th>
+                                    <th>Contenedores</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>CasaOS Apps</td>
+                                    <td>26</td>
+                                    <td><span class="badge bg-danger text-white"><small>🔴 En ejecución</small></span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    loadDashboardData();
-
-    document.getElementById('btn-scan')?.addEventListener('click', () => {
-        loadDashboardData();
-        alert('🔍 Escaneo de directorios y contenedores completado.');
-    });
-
-    document.getElementById('btn-run-full-backup')?.addEventListener('click', async () => {
-        if(confirm('¿Deseas iniciar el respaldo completo del sistema (Disaster Recovery)?')) {
-            alert('📦 Respaldo de Disaster Recovery en curso...');
-        }
-    });
-});
-
-async function loadDashboardData() {
-    try {
-        const resBackends = await fetch('/api/v1/backends/status');
-        const dataBackends = await resBackends.json();
-        if (dataBackends && dataBackends.destination) {
-            document.getElementById('active-destination-text').innerText = dataBackends.destination;
-        }
-    } catch (e) {
-        document.getElementById('active-destination-text').innerText = '/media/pichules/08604ab9... (Activo)';
-    }
-
-    try {
-        const resProfiles = await fetch('/api/v1/backups/profiles');
-        const profiles = await resProfiles.json();
-        
-        const container = document.getElementById('profiles-container');
-        const badge = document.getElementById('badge-profiles-count');
-        const metricApps = document.getElementById('metric-apps-count');
-
-        if (profiles && profiles.length > 0) {
-            badge.innerText = `${profiles.length} Perfiles`;
-            metricApps.innerText = `${profiles.length} Detectadas`;
-            let html = '<div class="list-group list-group-flush">';
-            profiles.forEach(p => {
-                const appName = p.name || p.app_name;
-                const appPath = p.path || `/DATA/AppData/${appName}`;
-                html += `
-                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
-                        <div>
-                            <strong class="text-dark fs-6">📦 ${appName}</strong>
-                            <br><small class="text-muted font-monospace">Ruta: ${appPath}</small>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-success py-2 px-2">Protegido</span>
-                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="backupSingleApp('${appName}')" title="Respaldar aplicación">
-                                🚀 Copiar
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="viewAppConfig('${appName}')" title="Configurar perfil">
-                                ⚙️
-                            </button>
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            container.innerHTML = html;
-        } else {
-            badge.innerText = '0 Perfiles';
-            metricApps.innerText = '0 Detectadas';
-            container.innerHTML = '<p class="text-muted small text-center my-3">No se detectaron perfiles de aplicaciones en /DATA/AppData.</p>';
-        }
-    } catch (e) {
-        document.getElementById('profiles-container').innerHTML = '<p class="text-danger small text-center my-3">Error al cargar los perfiles de aplicación.</p>';
-    }
-}
-
-function backupSingleApp(appName) {
-    alert(`🚀 Iniciando copia de seguridad para la aplicación: ${appName}`);
-}
-
-function viewAppConfig(appName) {
-    alert(`⚙️ Configuración del perfil de aplicación: ${appName}`);
-}
-
-function generateAllProfiles() {
-    alert('⚡ Generando perfiles automáticos para todas las aplicaciones detectadas...');
-    loadDashboardData();
+function triggerAppBackup(appName) {
+    alert(`⚡ Iniciando respaldo individual para: ${appName}`);
 }
 </script>
-{% endblock %}
+{% endblock `}
