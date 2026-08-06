@@ -11,49 +11,58 @@
         </div>
         <div class="d-flex align-items-center gap-2">
             <button id="btn-scan" class="btn btn-sm btn-outline-primary fw-bold">🔍 Escanear</button>
-            <a href="/restore" class="btn btn-sm btn-warning fw-bold text-dark">🔄 Restaurar</a>
-            <a href="/schedules" class="btn btn-sm btn-outline-primary fw-bold">⏰ Programación</a>
+            <a href="/restore" class="btn btn-sm btn-warning fw-bold text-dark">🔄 Restaurar Copias</a>
             <a href="/config" class="btn btn-sm btn-outline-secondary fw-bold">⚙️ Configuración</a>
             <span class="badge bg-secondary py-2 px-3">v0.5.0-alpha7</span>
         </div>
     </div>
 
-    <!-- BLOQUE SUPERIOR DE DESTINO Y MÉTRICAS -->
+    <!-- BLOQUE SUPERIOR DE DESTINO -->
     <div class="card shadow-sm border-0 mb-3">
         <div class="card-body py-2 px-3">
             <div class="row align-items-center g-2">
                 <div class="col-12">
                     <div class="d-flex align-items-center">
                         <span class="me-2 fs-6">💾</span>
-                        <strong class="small text-secondary me-2 text-nowrap">Destino Activo:</strong>
+                        <strong class="small text-secondary me-2 text-nowrap">Destino Activo de Copias:</strong>
                         <select id="backup-destination-select" class="form-select form-select-sm font-monospace text-dark border bg-light shadow-sm" onchange="handleDestinationChange(this.value)">
-                            <option value="data" selected>Almacenamiento (Principal) — Usado: 1.2 TB / Total: 1.83 TB</option>
-                            <option value="usb30">USB3.0 — Usado: 1.5 TB / Total: 1.82 TB</option>
-                            <option value="huh7280">HUH728080ALE601 — Usado: 6.86 TB / Total: 7.28 TB</option>
-                            <option value="wdc">WDC WD80EDAZ-11CEWB0 — Usado: 3.12 TB / Total: 7.28 TB</option>
-                            <option value="mybook">My Book 1144 — Usado: 1.06 TB / Total: 2.73 TB</option>
+                            <option value="disco_externo" selected>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adf6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa) — Libre: 1710.63 GB / Total: 2749.54 GB</option>
+                            <option value="usb30">USB3.0 — Libre: 320 GB / Total: 1.82 TB</option>
                         </select>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="card-footer bg-light py-2 px-3 border-top">
-            <div class="row text-center g-0">
-                <div class="col-3 border-end">
-                    <span class="text-muted d-block" style="font-size: 0.7rem;">ESTADO GENERAL</span>
-                    <span class="badge bg-success rounded-pill" style="font-size: 0.65rem;">● Sistema Operativo OK</span>
+        
+        <!-- BLOQUE DE MÉTRICAS CON BORDES DE COLORES (ESTILO REQUERIDO) -->
+        <div class="card-footer bg-light py-3 px-3 border-top">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="p-2 bg-white rounded shadow-sm border-start border-4 border-success h-100 d-flex flex-column justify-content-center">
+                        <span class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 0.5px;">Estado General</span>
+                        <div class="d-flex align-items-center mt-1">
+                            <span class="badge bg-success rounded-pill me-1" style="font-size: 0.5rem;">●</span>
+                            <strong class="text-dark" style="font-size: 0.85rem;">Sistema Operativo</strong>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-3 border-end">
-                    <span class="text-muted d-block" style="font-size: 0.7rem;">MOTORES DE BACKUP</span>
-                    <strong class="text-dark" style="font-size: 0.8rem;">Duplicati (OK)</strong>
+                <div class="col-md-3">
+                    <div class="p-2 bg-white rounded shadow-sm border-start border-4 border-primary h-100 d-flex flex-column justify-content-center">
+                        <span class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 0.5px;">Motores de Backup</span>
+                        <strong class="text-dark mt-1" style="font-size: 0.85rem;">Duplicati (OK)</strong>
+                    </div>
                 </div>
-                <div class="col-3 border-end">
-                    <span class="text-muted d-block" style="font-size: 0.7rem;">APLICACIONES CASAOS</span>
-                    <strong class="text-dark" style="font-size: 0.8rem;">26 Detectadas</strong>
+                <div class="col-md-3">
+                    <div class="p-2 bg-white rounded shadow-sm border-start border-4 border-warning h-100 d-flex flex-column justify-content-center">
+                        <span class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 0.5px;">Aplicaciones CasaOS</span>
+                        <strong class="text-dark mt-1" style="font-size: 0.85rem;">26 Detectadas</strong>
+                    </div>
                 </div>
-                <div class="col-3">
-                    <span class="text-muted d-block" style="font-size: 0.7rem;">ALMACENAMIENTO HOST</span>
-                    <strong class="text-dark" style="font-size: 0.8rem;">/DATA Protegido</strong>
+                <div class="col-md-3">
+                    <div class="p-2 bg-white rounded shadow-sm border-start border-4 border-info h-100 d-flex flex-column justify-content-center">
+                        <span class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 0.5px;">Almacenamiento Host</span>
+                        <strong class="text-dark mt-1" style="font-size: 0.85rem;">/DATA Protegido</strong>
+                    </div>
                 </div>
             </div>
         </div>
@@ -70,9 +79,13 @@
                     <div>
                         <h6 class="fw-bold text-primary mb-1" style="font-size: 0.9rem;">🛡️ Copia de Seguridad del Sistema Completo (Disaster Recovery)</h6>
                         <p class="text-muted small mb-0" style="font-size: 0.75rem;">Resguarda la configuración de CasaOS, datos de las apps (`/DATA/AppData`) y bases de datos.</p>
+                        <div class="mt-1">
+                            <span class="badge bg-light text-secondary border me-2">🔄 Modo: <strong>Incremental (Duplicati)</strong></span>
+                            <span class="badge bg-light text-success border">🟢 Estado: <strong>Listo para resguardo</strong></span>
+                        </div>
                     </div>
                     <button class="btn btn-primary fw-bold btn-sm text-nowrap" id="btn-run-full-backup">
-                        📦 Copiar Sistema
+                        📦 Copiar Sistema Completo
                     </button>
                 </div>
             </div>
@@ -93,6 +106,15 @@
                                 <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA</span></small>
                             </div>
                             <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Casaos')">⚡ Copiar Ahora</button>
+                        </div>
+
+                        <!-- Pihole -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Pihole</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/pihole/etc/pihole, /DATA/AppData/pihole/etc/dnsmasq.d</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Pihole')">⚡ Copiar Ahora</button>
                         </div>
 
                         <!-- Navidrome -->
@@ -122,58 +144,40 @@
                             <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Plex')">⚡ Copiar Ahora</button>
                         </div>
 
+                        <!-- Ddns -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Ddns</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/ddns-updater/data</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Ddns')">⚡ Copiar Ahora</button>
+                        </div>
+
+                        <!-- Duplicati -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong class="text-dark">Duplicati</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA, /DATA/AppData/duplicati/config, /DATA/AppData/duplicati/data</span></small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Duplicati')">⚡ Copiar Ahora</button>
+                        </div>
+
                         <!-- Immich -->
                         <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
                             <div>
                                 <strong class="text-dark">Immich</strong> <span class="badge bg-warning text-dark py-0">Hook DB</span>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/big-bear-immich/pgdata</span></small>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/big-bear-immich/pgdata, /DATA/AppData/big-bear-immich/upload</span></small>
                             </div>
                             <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Immich')">⚡ Copiar Ahora</button>
                         </div>
 
-                        <!-- Transmission -->
+                        <!-- Nginxproxymanager -->
                         <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
                             <div>
-                                <strong class="text-dark">Transmission</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/Downloads/watch, /DATA/Downloads, /DATA/AppData/transmission/config</span></small>
+                                <strong class="text-dark">Nginxproxymanager</strong>
+                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/nginxproxymanager/data, /DATA/AppData/nginxproxymanager/etc/letsencrypt</span></small>
                             </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Transmission')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <!-- Sonarr -->
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Sonarr</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/sonarr/config, /DATA/Downloads, /DATA/Media/Series</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Sonarr')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <!-- Radarr -->
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Radarr</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/Downloads, /DATA/Media/Movies, /DATA/AppData/radarr/config</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Radarr')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <!-- Pihole -->
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Pihole</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/pihole/etc/pihole, /DATA/AppData/pihole/etc/dnsmasq.d</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Pihole')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <!-- Netdata -->
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Netdata</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/Netdata/cache, /DATA/AppData/Netdata/lib, /DATA/AppData/Netdata/config</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Netdata')">⚡ Copiar Ahora</button>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Nginxproxymanager')">⚡ Copiar Ahora</button>
                         </div>
 
                     </div>
@@ -187,35 +191,37 @@
             <!-- Pestañas Sistema / Docker / Discos -->
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header bg-white py-2 px-3 d-flex gap-3">
-                    <button class="btn p-0 fw-bold text-primary border-bottom border-primary pb-1 shadow-none bg-transparent small" onclick="switchTab('system')" id="tab-btn-system">🍓 Sistema</button>
+                    <button class="btn p-0 fw-bold text-danger border-bottom border-danger pb-1 shadow-none bg-transparent small" onclick="switchTab('system')" id="tab-btn-system">🍓 Raspberry Pi 5</button>
                     <button class="btn p-0 text-muted shadow-none bg-transparent small" onclick="switchTab('docker')" id="tab-btn-docker">🐳 Docker</button>
-                    <button class="btn p-0 text-muted shadow-none bg-transparent small" onclick="switchTab('disks')" id="tab-btn-disks">💾 Discos (5)</button>
+                    <button class="btn p-0 text-muted shadow-none bg-transparent small" onclick="switchTab('disks')" id="tab-btn-disks">💾 Discos</button>
                 </div>
                 
                 <div class="card-body small py-2 px-3">
                     <div id="tab-content-system">
+                        <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">🖥️ Sistema</h6>
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">OS:</span><strong class="text-dark">Debian 12 (bookworm)</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Kernel:</span><strong class="text-dark">6.12.93+rpt-rpi</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">CPU / RAM:</span><strong class="text-dark">ARMv8 / 6.56 GB (83%)</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Sistema operativo:</span><strong class="text-dark">Debian GNU/Linux 12 (bookworm)</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Arquitectura:</span><strong class="text-dark">aarch64</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Kernel:</span><strong class="text-dark">6.12.93+rpt-rpi-2712</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">CPU:</span><strong class="text-dark">ARMv8 (4 Cores @ Raspberry Pi 5)</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">RAM:</span><strong class="text-dark">7.08 GB / 7.87 GB (89.9%)</strong></li>
                         </ul>
                     </div>
 
                     <div id="tab-content-docker" style="display: none;">
+                        <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">🐳 Docker Engine</h6>
                         <ul class="list-unstyled mb-0">
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Estado Daemon:</span><strong class="text-success">Activo</strong></li>
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Versión:</span><strong class="text-dark">26.1.3</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">16 Activos</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores Activos:</span><strong class="text-dark">16</strong></li>
                         </ul>
                     </div>
 
                     <div id="tab-content-disks" style="display: none;">
+                        <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">💾 Almacenamiento Montado</h6>
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Almacenamiento:</span><strong class="text-dark">1.2 TB / 1.83 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">USB3.0:</span><strong class="text-dark">1.5 TB / 1.82 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">HUH728080:</span><strong class="text-dark">6.86 TB / 7.28 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">WDC WD80EDAZ:</span><strong class="text-dark">3.12 TB / 7.28 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">My Book 1144:</span><strong class="text-dark">1.06 TB / 2.73 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Disco Externo:</span><strong class="text-dark">1.04 TB / 2.75 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">USB3.0:</span><strong class="text-dark">1.50 TB / 1.82 TB</strong></li>
                         </ul>
                     </div>
                 </div>
@@ -229,7 +235,7 @@
                 <div class="card-body small py-2 px-3">
                     <ul class="list-unstyled mb-0">
                         <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Aplicaciones:</span><strong class="text-dark">22</strong></li>
-                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">16</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">17</strong></li>
                         <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Rutas persistentes:</span><strong class="text-primary">55</strong></li>
                     </ul>
                 </div>
@@ -241,9 +247,13 @@
                     <h6 class="m-0 fw-bold text-dark small">⚡ Motores Integrados</h6>
                 </div>
                 <div class="card-body py-2 px-3 small">
-                    <div class="d-flex justify-content-between">
-                        <span>Duplicati: <strong class="text-success">Activo</strong></span>
-                        <span>Restic: <strong class="text-dark">Listo</strong></span>
+                    <div class="mb-2 pb-2 border-bottom">
+                        <strong class="text-dark d-block">🔌 Duplicati Engine</strong>
+                        <span class="text-muted">Estado de integración: <strong class="text-success">Activo</strong></span>
+                    </div>
+                    <div>
+                        <strong class="text-dark d-block">🔌 Restic Engine</strong>
+                        <span class="text-muted">Estado de integración: <strong class="text-dark">Listo</strong></span>
                     </div>
                 </div>
             </div>
@@ -254,10 +264,23 @@
                     <h6 class="m-0 fw-bold text-dark small">📦 Aplicaciones CasaOS</h6>
                 </div>
                 <div class="card-body py-2 px-3 small">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="text-muted">CasaOS Apps:</span>
-                        <span class="badge bg-danger text-white">🔴 26 En ejecución</span>
-                    </div>
+                    <strong class="text-dark d-block mb-2">📦 Aplicaciones Docker Compose</strong>
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Aplicación</th>
+                                <th>Contenedores</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>CasaOS Apps</td>
+                                <td>26</td>
+                                <td><span class="badge bg-danger text-white">🔴 En ejecución</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -394,7 +417,7 @@ function switchTab(tabName) {
     document.getElementById('tab-btn-disks').className = 'btn p-0 text-muted shadow-none bg-transparent small';
 
     document.getElementById(`tab-content-${tabName}`).style.display = 'block';
-    document.getElementById(`tab-btn-${tabName}`).className = 'btn p-0 fw-bold text-primary border-bottom border-primary pb-1 shadow-none bg-transparent small';
+    document.getElementById(`tab-btn-${tabName}`).className = 'btn p-0 fw-bold text-danger border-bottom border-danger pb-1 shadow-none bg-transparent small';
 }
 </script>
 {% endblock %}
