@@ -139,20 +139,56 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDashboardData();
 
     document.getElementById('btn-scan')?.addEventListener('click', () => {
-        alert('🔍 Escaneo de directorios y contenedores completado.');
         loadDashboardData();
+        alert('🔍 Escaneo de directorios y contenedores completado.');
     });
 });
 
 async function loadDashboardData() {
     try {
-        const response = await fetch('/api/v1/backends/status');
-        const data = await response.json();
-        if (data && data.destination) {
-            document.getElementById('active-destination-text').innerText = data.destination;
+        // Cargar estado de backends / destino
+        const resBackends = await fetch('/api/v1/backends/status');
+        const dataBackends = await resBackends.json();
+        if (dataBackends && dataBackends.destination) {
+            document.getElementById('active-destination-text').innerText = dataBackends.destination;
         }
     } catch (e) {
-        document.getElementById('active-destination-text').innerText = '/media/pichules/08604ab9... (Activo)';
+        document.getElementById('active-destination-text').innerText = '/DATA/Backups (Activo)';
+    }
+
+    try {
+        // Cargar perfiles de aplicaciones detectados
+        const resProfiles = await fetch('/api/v1/backups/profiles');
+        const profiles = await resProfiles.json();
+        
+        const container = document.getElementById('profiles-container');
+        const badge = document.getElementById('badge-profiles-count');
+        const metricApps = document.getElementById('metric-apps-count');
+
+        if (profiles && profiles.length > 0) {
+            badge.innerText = `${profiles.length} Perfiles`;
+            metricApps.innerText = `${profiles.length} Detectadas`;
+            let html = '<div class="list-group list-group-flush">';
+            profiles.forEach(p => {
+                html += `
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <div>
+                            <strong class="text-dark">${p.name || p.app_name}</strong>
+                            <br><small class="text-muted font-monospace">Ruta: ${p.path || '/DATA/AppData/'}</small>
+                        </div>
+                        <span class="badge bg-success">Protegido</span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        } else {
+            badge.innerText = '0 Perfiles';
+            metricApps.innerText = '0 Detectadas';
+            container.innerHTML = '<p class="text-muted small text-center my-3">No se detectaron perfiles de aplicaciones en /DATA/AppData.</p>';
+        }
+    } catch (e) {
+        document.getElementById('profiles-container').innerHTML = '<p class="text-danger small text-center my-3">Error al cargar los perfiles de aplicación.</p>';
     }
 }
 </script>
