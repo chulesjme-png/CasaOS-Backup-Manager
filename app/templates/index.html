@@ -27,7 +27,10 @@
                         <strong class="small text-secondary me-2 text-nowrap">Destino Activo de Copias:</strong>
                         <select id="backup-destination-select" class="form-select form-select-sm font-monospace text-dark border bg-light shadow-sm" onchange="handleDestinationChange(this.value)">
                             <option value="disco_externo" selected>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adf6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa) — Libre: 1710.63 GB / Total: 2749.54 GB</option>
-                            <option value="usb30">USB3.0 — Libre: 320 GB / Total: 1.82 TB</option>
+                            <option value="usb30">USB3.0 (/media/pichules/USB30) — Libre: 320 GB / Total: 1.82 TB</option>
+                            <option value="ssd_nvme">SSD NVMe Principal (/mnt/nvme0n1) — Libre: 450.20 GB / Total: 931.51 GB</option>
+                            <option value="nas_backup">NAS Red Backup (/mnt/nas/backups) — Libre: 3.20 TB / Total: 7.28 TB</option>
+                            <option value="backup_local">Carpeta Local Host (/var/backups/casaos) — Libre: 45.10 GB / Total: 100.00 GB</option>
                         </select>
                     </div>
                 </div>
