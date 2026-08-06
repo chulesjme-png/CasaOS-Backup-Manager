@@ -54,7 +54,7 @@
             <div class="card shadow-sm border-0 h-100">
                 <div class="card-body py-3">
                     <span class="text-muted small d-block">MOTORES DE BACKUP</span>
-                    <strong class="text-dark d-block mt-1">Duplicati (OK)</strong>
+                    <strong class="text-dark d-block mt-1">Duplicati / Restic (OK)</strong>
                 </div>
             </div>
         </div>
@@ -97,9 +97,12 @@
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                     <h5 class="m-0 fw-bold text-dark">📦 Perfiles de Aplicación Generados</h5>
-                    <span class="badge bg-primary" id="badge-profiles-count">0 Perfiles</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary" id="badge-profiles-count">0 Perfiles</span>
+                        <button class="btn btn-sm btn-outline-success fw-bold" onclick="generateAllProfiles()">⚡ Generar Todos</button>
+                    </div>
                 </div>
-                <div class="card-body" id="profiles-container" style="max-height: 600px; overflow-y: auto;">
+                <div class="card-body" id="profiles-container" style="max-height: 650px; overflow-y: auto;">
                     <p class="text-muted small text-center my-3">Cargando perfiles de aplicaciones...</p>
                 </div>
             </div>
@@ -126,7 +129,22 @@
                             <span class="text-muted">Motores Activos:</span>
                             <strong class="text-success">Duplicati / Restic</strong>
                         </li>
+                        <li class="mb-2 d-flex justify-content-between">
+                            <span class="text-muted">Directorio Base:</span>
+                            <strong class="text-dark font-monospace">/DATA/AppData</strong>
+                        </li>
                     </ul>
+                </div>
+            </div>
+
+            <!-- ACCESOS RÁPIDOS / LOGS RECIENTES -->
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 fw-bold text-dark">📊 Estado de Respaldos</h6>
+                </div>
+                <div class="card-body small text-muted">
+                    <p class="mb-1">Último escaneo: <strong class="text-dark">Hace un momento</strong></p>
+                    <p class="mb-0">Estado de motor: <strong class="text-success">Operativo</strong></p>
                 </div>
             </div>
         </div>
@@ -143,8 +161,10 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('🔍 Escaneo de directorios y contenedores completado.');
     });
 
-    document.getElementById('btn-run-full-backup')?.addEventListener('click', () => {
-        alert('📦 Iniciando respaldo de Disaster Recovery del sistema completo...');
+    document.getElementById('btn-run-full-backup')?.addEventListener('click', async () => {
+        if(confirm('¿Deseas iniciar el respaldo completo del sistema (Disaster Recovery)?')) {
+            alert('📦 Respaldo de Disaster Recovery en curso...');
+        }
     });
 });
 
@@ -173,16 +193,20 @@ async function loadDashboardData() {
             let html = '<div class="list-group list-group-flush">';
             profiles.forEach(p => {
                 const appName = p.name || p.app_name;
+                const appPath = p.path || `/DATA/AppData/${appName}`;
                 html += `
-                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3">
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
                         <div>
-                            <strong class="text-dark fs-6">${appName}</strong>
-                            <br><small class="text-muted font-monospace">Ruta: ${p.path || '/DATA/AppData/' + appName}</small>
+                            <strong class="text-dark fs-6">📦 ${appName}</strong>
+                            <br><small class="text-muted font-monospace">Ruta: ${appPath}</small>
                         </div>
                         <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-success">Protegido</span>
-                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="backupApp('${appName}')">
-                                📦 Copiar
+                            <span class="badge bg-success py-2 px-2">Protegido</span>
+                            <button class="btn btn-sm btn-outline-primary fw-bold" onclick="backupSingleApp('${appName}')" title="Respaldar aplicación">
+                                🚀 Copiar
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="viewAppConfig('${appName}')" title="Configurar perfil">
+                                ⚙️
                             </button>
                         </div>
                     </div>
@@ -200,8 +224,17 @@ async function loadDashboardData() {
     }
 }
 
-function backupApp(appName) {
-    alert(`📦 Iniciando copia de seguridad para la aplicación: ${appName}`);
+function backupSingleApp(appName) {
+    alert(`🚀 Iniciando copia de seguridad para la aplicación: ${appName}`);
+}
+
+function viewAppConfig(appName) {
+    alert(`⚙️ Configuración del perfil de aplicación: ${appName}`);
+}
+
+function generateAllProfiles() {
+    alert('⚡ Generando perfiles automáticos para todas las aplicaciones detectadas...');
+    loadDashboardData();
 }
 </script>
 {% endblock %}
