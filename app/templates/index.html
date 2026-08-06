@@ -27,52 +27,52 @@
     </div>
 
     <!-- DESTINO ACTIVO DE COPIAS -->
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-body py-2 d-flex align-items-center justify-content-between">
-            <div class="d-flex align-items-center w-100">
-                <span class="me-2">💾</span>
-                <strong class="small text-secondary me-2">Destino Activo de Copias:</strong>
-                <select class="form-select form-select-sm font-monospace text-dark w-auto flex-grow-1 border-0 bg-light">
-                    <option>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adfc6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa) — Libre: 1710.63 GB / Total: 2749.54 GB</option>
-                </select>
-            </div>
+    <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body py-2 px-3 d-flex align-items-center">
+            <span class="me-2 fs-5">💾</span>
+            <strong class="small text-secondary me-2 text-nowrap">Destino Activo de Copias:</strong>
+            <select id="backup-destination-select" class="form-select form-select-sm font-monospace text-dark w-100 border bg-light shadow-sm" onchange="handleDestinationChange(this.value)">
+                <option value="ext-08604ab9" selected>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adfc6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa) — Libre: 1710.63 GB / Total: 2749.54 GB</option>
+                <option value="nvme-data">NVMe Principal: /DATA (Interno) — Libre: 512.40 GB / Total: 931.50 GB</option>
+                <option value="ext-secondary">Disco Secundario: Backup-USB-2TB (/media/pichules/backup-usb) — Libre: 840.10 GB / Total: 1862.00 GB</option>
+            </select>
         </div>
     </div>
 
-    <!-- ESTADO GENERAL Y MÉTRICAS -->
-    <div class="row g-3 mb-4">
+    <!-- ESTADO GENERAL Y MÉTRICAS (COMPACTO) -->
+    <div class="row g-2 mb-3">
         <div class="col-md-3">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-body py-3">
-                    <span class="text-muted small d-block">ESTADO GENERAL</span>
+                <div class="card-body py-2 px-3">
+                    <span class="text-muted d-block" style="font-size: 0.75rem; letter-spacing: 0.5px;">ESTADO GENERAL</span>
                     <div class="d-flex align-items-center mt-1">
-                        <span class="badge bg-success rounded-pill me-2">&nbsp;</span>
-                        <strong class="text-dark">Sistema Operativo</strong>
+                        <span class="badge bg-success rounded-pill me-2" style="width: 8px; height: 8px; padding: 0;">&nbsp;</span>
+                        <strong class="text-dark small">Sistema Operativo</strong>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-body py-3">
-                    <span class="text-muted small d-block">MOTORES DE BACKUP</span>
-                    <strong class="text-dark d-block mt-1">Duplicati (OK)</strong>
+                <div class="card-body py-2 px-3">
+                    <span class="text-muted d-block" style="font-size: 0.75rem; letter-spacing: 0.5px;">MOTORES DE BACKUP</span>
+                    <strong class="text-dark small d-block mt-1">Duplicati (OK)</strong>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-body py-3">
-                    <span class="text-muted small d-block">APLICACIONES CASAOS</span>
-                    <strong class="text-dark d-block mt-1">26 Detectadas</strong>
+                <div class="card-body py-2 px-3">
+                    <span class="text-muted d-block" style="font-size: 0.75rem; letter-spacing: 0.5px;">APLICACIONES CASAOS</span>
+                    <strong class="text-dark small d-block mt-1">26 Detectadas</strong>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-body py-3">
-                    <span class="text-muted small d-block">ALMACENAMIENTO HOST</span>
-                    <strong class="text-dark d-block mt-1">/DATA Protegido</strong>
+                <div class="card-body py-2 px-3">
+                    <span class="text-muted d-block" style="font-size: 0.75rem; letter-spacing: 0.5px;">ALMACENAMIENTO HOST</span>
+                    <strong class="text-dark small d-block mt-1">/DATA Protegido</strong>
                 </div>
             </div>
         </div>
@@ -84,16 +84,16 @@
         <div class="col-lg-8">
             <!-- DISASTER RECOVERY -->
             <div class="card shadow-sm border-0 mb-4 bg-light">
-                <div class="card-body d-flex justify-content-between align-items-center">
+                <div class="card-body d-flex justify-content-between align-items-center py-3">
                     <div>
-                        <h5 class="fw-bold text-primary mb-1">🛡️ Copia de Seguridad del Sistema Completo (Disaster Recovery)</h5>
+                        <h5 class="fw-bold text-primary mb-1 fs-6">🛡️ Copia de Seguridad del Sistema Completo (Disaster Recovery)</h5>
                         <p class="text-muted small mb-2">Resguarda la configuración de CasaOS, datos de las apps (`/DATA/AppData`) y bases de datos.</p>
                         <div class="d-flex gap-3 align-items-center">
                             <span class="badge bg-white text-dark border py-1 px-2"><small>⚙️ Modo: <strong>Incremental (Duplicati)</strong></small></span>
                             <span class="badge bg-success text-white py-1 px-2"><small>🟢 Estado: <strong>Listo para resguardo</strong></small></span>
                         </div>
                     </div>
-                    <button class="btn btn-primary fw-bold btn-sm px-3" id="btn-run-full-backup">
+                    <button class="btn btn-primary fw-bold btn-sm px-3 text-nowrap" id="btn-run-full-backup">
                         📦 Copiar Sistema Completo
                     </button>
                 </div>
@@ -428,18 +428,19 @@ function triggerAppBackup(appName) {
     alert(`⚡ Iniciando respaldo individual para: ${appName}`);
 }
 
+function handleDestinationChange(value) {
+    console.log(`Destino de respaldo cambiado a: ${value}`);
+}
+
 function switchTab(tabName) {
-    // Ocultar todos
     document.getElementById('tab-content-system').style.display = 'none';
     document.getElementById('tab-content-docker').style.display = 'none';
     document.getElementById('tab-content-disks').style.display = 'none';
 
-    // Desactivar botones
     document.getElementById('tab-btn-system').className = 'btn p-0 text-muted shadow-none bg-transparent';
     document.getElementById('tab-btn-docker').className = 'btn p-0 text-muted shadow-none bg-transparent';
     document.getElementById('tab-btn-disks').className = 'btn p-0 text-muted shadow-none bg-transparent';
 
-    // Mostrar el seleccionado y activar su botón
     document.getElementById(`tab-content-${tabName}`).style.display = 'block';
     document.getElementById(`tab-btn-${tabName}`).className = 'btn p-0 fw-bold text-primary border-bottom border-primary pb-1 shadow-none bg-transparent';
 }
