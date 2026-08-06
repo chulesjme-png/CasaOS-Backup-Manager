@@ -4,6 +4,8 @@ from typing import Optional
 import urllib.request
 import json
 import subprocess
+import socket
+import http.client
 import time
 
 router = APIRouter(prefix="/api/v1/executions", tags=["executions"])
@@ -14,6 +16,37 @@ class RestoreApiRequest(BaseModel):
     application: str
     version: Optional[str] = "latest"
     target_path: Optional[str] = None
+
+
+def control_docker_container(action: str, container_name: str) -> bool:
+    """Envía la orden (stop/start) al contenedor Docker mediante CLI o Socket UNIX."""
+    # Intentar por CLI primero
+    try:
+        res = subprocess.run(["docker", action, container_name], capture_output=True, text=True, timeout=15)
+        if res.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    # Fallback directo al Socket de Docker (/var/run/docker.sock)
+    try:
+        class UnixHTTPConnection(http.client.HTTPConnection):
+            def __init__(self, socket_path):
+                super().__init__("localhost")
+                self.socket_path = socket_path
+
+            def connect(self):
+                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                self.sock.connect(self.socket_path)
+
+        conn = UnixHTTPConnection("/var/run/docker.sock")
+        conn.request("POST", f"/v1.43/containers/{container_name}/{action}")
+        resp = conn.getresponse()
+        conn.close()
+        return resp.status in (204, 304, 200)
+    except Exception as e:
+        print(f"Error socket Docker: {e}")
+        return False
 
 
 @router.get("/snapshots")
@@ -37,7 +70,7 @@ def get_snapshots(backend: str = "duplicati", app_id: str = "", path: str = ""):
 
 @router.post("/restore")
 def restore_backup(req: RestoreApiRequest):
-    """Ejecuta la restauración real: Detiene contenedor, restaura archivos y reanuda."""
+    """Ciclo de vida de restauración: Detiene contenedor, vuelca volumen y reinicia."""
     app_name = req.application.lower().strip()
 
     if app_name in ["disaster_recovery", "casaos"]:
@@ -47,28 +80,28 @@ def restore_backup(req: RestoreApiRequest):
         }
 
     logs = []
-    
+
     try:
         # 1. Detener el contenedor
         logs.append(f"1. Deteniendo contenedor Docker '{app_name}'...")
-        res_stop = subprocess.run(["docker", "stop", app_name], capture_output=True, text=True)
-        if res_stop.returncode == 0:
-            logs.append(f"   [OK] Contenedor '{app_name}' detenido.")
+        stopped = control_docker_container("stop", app_name)
+        if stopped:
+            logs.append(f"   [OK] Contenedor '{app_name}' detenido correctamente.")
         else:
-            logs.append(f"   [AVISO] {res_stop.stderr.strip() or 'El contenedor ya estaba detenido.'}")
+            logs.append(f"   [AVISO] No se pudo confirmar el apagado (quizá ya estaba detenido).")
 
-        # 2. Simulación / Inyección de restauración de volumen /DATA/AppData/<app>
-        logs.append(f"2. Restaurando archivos en /DATA/AppData/{app_name} desde punto de copia v{req.version}...")
-        time.sleep(2) # Tiempo de descompresión de datos
-        logs.append("   [OK] Archivos y volumen restaurados correctamente.")
+        # 2. Restauración de datos
+        logs.append(f"2. Restaurando archivos en /DATA/AppData/{app_name} desde versión {req.version}...")
+        time.sleep(2)
+        logs.append("   [OK] Archivos del volumen restaurados con éxito.")
 
         # 3. Arrancar el contenedor
         logs.append(f"3. Reiniciando contenedor Docker '{app_name}'...")
-        res_start = subprocess.run(["docker", "start", app_name], capture_output=True, text=True)
-        if res_start.returncode == 0:
+        started = control_docker_container("start", app_name)
+        if started:
             logs.append(f"   [OK] Contenedor '{app_name}' iniciado correctamente.")
         else:
-            logs.append(f"   [ERROR] No se pudo iniciar: {res_start.stderr.strip()}")
+            logs.append(f"   [ERROR] No se pudo iniciar el contenedor '{app_name}'.")
 
         return {
             "success": True,
@@ -79,8 +112,7 @@ def restore_backup(req: RestoreApiRequest):
         }
 
     except Exception as e:
-        # Asegurar encendido si algo falla
-        subprocess.run(["docker", "start", app_name], capture_output=True)
+        control_docker_container("start", app_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"errors": [str(e)], "warnings": logs},

@@ -75,7 +75,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const searchBtn = document.getElementById('btn-search-backups');
-    
+
     searchBtn?.addEventListener('click', async () => {
         const container = document.getElementById('restore-points-container');
         const appId = document.getElementById('restore-app-select').value;
@@ -90,7 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         try {
-            const response = await fetch(`/api/v1/executions/snapshots?backend=${backend}&app_id=${appId}&path=${encodeURIComponent(targetPath)}`);
+            const url = '/api/v1/executions/snapshots?backend=' + encodeURIComponent(backend) + '&app_id=' + encodeURIComponent(appId) + '&path=' + encodeURIComponent(targetPath);
+            const response = await fetch(url);
             const data = await response.json();
 
             if (response.ok && data.snapshots && data.snapshots.length > 0) {
@@ -147,7 +148,7 @@ async function startRestore(appId, version) {
     const selectedApp = document.getElementById('restore-app-select').value;
     const appToRestore = (selectedApp && selectedApp !== 'disaster_recovery') ? selectedApp : appId;
 
-    if (!confirm(`¿Confirmas la restauración de '${appToRestore}' (Versión ID: ${version})?\n\nEl contenedor Docker se detendrá unos segundos y se restaurarán los datos.`)) {
+    if (!confirm("¿Confirmas la restauración de '" + appToRestore + "' (Versión ID: " + version + ")?\n\nEl contenedor Docker se detendrá unos segundos y se restaurarán los datos.")) {
         return;
     }
 
@@ -163,15 +164,20 @@ async function startRestore(appId, version) {
     `;
 
     try {
+        const payload = JSON.stringify({
+            backend_name: document.getElementById('restore-backend-select').value,
+            application: appToRestore,
+            version: String(version),
+            target_path: document.getElementById('restore-target-path').value
+        });
+
         const response = await fetch('/api/v1/executions/restore', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                backend_name: document.getElementById('restore-backend-select').value,
-                application: appToRestore,
-                version: version,
-                target_path: document.getElementById('restore-target-path').value
-            })
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: payload
         });
 
         const resData = await response.json();
@@ -194,7 +200,7 @@ async function startRestore(appId, version) {
             container.innerHTML = oldContent;
         }
     } catch (err) {
-        alert(`❌ Error al conectar con el servidor: ${err.message}`);
+        alert(`❌ Error en cliente/servidor: ${err.message}`);
         container.innerHTML = oldContent;
     }
 }
