@@ -12,12 +12,13 @@ from app.routers.api_v1 import router as api_v1_router
 from app.routers.api_backends import router as backends_router
 from app.routers.api_executions import router as executions_router
 from app.routers.api_health import router as health_router
-from app.routers.backups import router as backups_router  # <-- Nuevo router de backups
-from app.routers.api_schedules import router as schedules_router  # <-- Nuevo router de programación
+from app.routers.backups import router as backups_router
+from app.routers.api_schedules import router as schedules_router
 
-# Importaciones para el registro de backends
+# Importaciones para el registro de backends y el programador
 from app.core.backends.backend_registry import BackendRegistry
 from app.core.backends.duplicati_backend import DuplicatiBackend
+from app.services.scheduler_service import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
@@ -30,7 +31,13 @@ async def lifespan(app: FastAPI):
     if "duplicati" not in registry.available():
         registry.register(DuplicatiBackend())
         
+    # Iniciar motor de tareas programadas en segundo plano
+    start_scheduler()
+
     yield
+
+    # Detener el motor al apagar la app
+    stop_scheduler()
 
 
 app = FastAPI(
@@ -69,5 +76,5 @@ app.include_router(api_v1_router)
 app.include_router(health_router)
 app.include_router(backends_router)
 app.include_router(executions_router)
-app.include_router(backups_router)  # <-- Registro del router de backups
-app.include_router(schedules_router)  # <-- Registro del router de programación
+app.include_router(backups_router)
+app.include_router(schedules_router)

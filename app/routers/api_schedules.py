@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 import json
@@ -16,7 +16,7 @@ class ScheduleTask(BaseModel):
     backend: str     # 'duplicati' o 'restic'
     frequency: str   # 'daily', 'weekly', 'monthly'
     time: str        # Formato 'HH:MM', ej: '03:00'
-    days_of_week: Optional[List[int]] = [1] # 0 = Lunes, 6 = Domingo
+    days_of_week: Optional[List[int]] = [0, 1, 2, 3, 4, 5, 6]
     retention_days: int = 30
     enabled: bool = True
     notify_webhook: Optional[str] = ""
@@ -65,6 +65,14 @@ def save_schedules(data: List[dict]):
         json.dump(data, f, indent=4)
 
 
+def reload_scheduler_jobs_safe():
+    try:
+        from app.services.scheduler_service import sync_scheduler_jobs
+        sync_scheduler_jobs()
+    except Exception:
+        pass
+
+
 @router.get("/")
 def get_all_schedules():
     """Obtiene el listado de tareas programadas actualmente."""
@@ -87,6 +95,7 @@ def save_schedule(task: ScheduleTask):
         schedules.append(task.dict())
 
     save_schedules(schedules)
+    reload_scheduler_jobs_safe()
     return {"success": True, "message": f"Tarea '{task.name}' guardada correctamente."}
 
 
@@ -98,6 +107,7 @@ def toggle_schedule(task_id: str):
         if s["id"] == task_id:
             s["enabled"] = not s["enabled"]
             save_schedules(schedules)
+            reload_scheduler_jobs_safe()
             state = "activada" if s["enabled"] else "desactivada"
             return {"success": True, "message": f"Tarea '{s['name']}' {state}."}
 
