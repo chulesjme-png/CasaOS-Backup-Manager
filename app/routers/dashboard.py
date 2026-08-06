@@ -134,4 +134,4 @@ async def render_restore(request: Request):
             }
         )
     except Exception as e:
-        return HTMLResponse(content=f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+        return HTMLResponse(content=f"<h3>Error al renderizar restauración</h3><pre>{traceback.format_exc()}</pre>", status_code=500)
