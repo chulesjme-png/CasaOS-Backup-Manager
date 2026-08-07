@@ -52,7 +52,7 @@
             </div>
         </div>
 
-        <!-- SELECTOR DE DISCOS (TODOS LOS DISCOS) -->
+        <!-- SELECTOR DE DISCOS -->
         <div class="card-body py-2 px-3">
             <div class="d-flex align-items-center">
                 <span class="me-2 fs-6">💾</span>
@@ -83,7 +83,7 @@
             <div class="card shadow border-0 mb-4 bg-white" style="border-left: 6px solid #0d6efd !important;">
                 <div class="card-body p-4">
                     <div class="row align-items-center">
-                        <div class="col-lg-8 mb-3 mb-lg-0">
+                        <div class="col-md-7 col-lg-7 mb-3 mb-md-0">
                             <div class="d-flex align-items-center mb-1">
                                 <span class="fs-4 me-2">🛡️</span>
                                 <h5 class="fw-bold text-primary mb-0">Copia de Seguridad de la Raspberry Pi (Disaster Recovery)</h5>
@@ -94,8 +94,8 @@
                                 <span class="badge bg-light text-success border px-2 py-1">🟢 Listo para resguardo</span>
                             </div>
                         </div>
-                        <div class="col-lg-4 text-lg-end">
-                            <button class="btn btn-primary btn-lg fw-bold px-4 py-3 shadow-sm w-100 text-nowrap" onclick="triggerFullBackup()">
+                        <div class="col-md-5 col-lg-5 text-md-end">
+                            <button class="btn btn-primary btn-md fw-bold px-3 py-2 shadow-sm w-100" onclick="triggerFullBackup()">
                                 📦 Copiar Sistema Completo
                             </button>
                         </div>
@@ -175,7 +175,6 @@
                         </ul>
                     </div>
 
-                    <!-- TABLA DISCOS (TODOS LOS DISCOS DETECTADOS) -->
                     <div id="tab-content-disks" style="display: none;">
                         <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">💾 Almacenamiento Montado</h6>
                         <ul class="list-unstyled mb-0">
@@ -217,7 +216,7 @@
                 <div class="collapse show" id="detailedListsCollapse">
                     <div class="card-body py-3">
                         
-                        <!-- TABLA 1: CONTENEDORES DOCKER (ORDENADOS: ACTIVOS PRIMERO, DETENIDOS AL FINAL) -->
+                        <!-- TABLA CONTENEDORES -->
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="fw-bold text-dark small mb-0">📦 Contenedores Docker Detectados</h6>
                             <span class="badge bg-secondary">Total: 26</span>
@@ -232,7 +231,6 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <!-- ACTIVOS PRIMERO -->
                                     <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-muted font-monospace">casaos-backup-manager:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
                                     <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-muted font-monospace">deluan/navidrome:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
                                     <tr><td><strong class="text-dark">nextcloud</strong></td><td class="text-muted font-monospace">nextcloud:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
@@ -247,13 +245,12 @@
                                     <tr><td><strong class="text-dark">sonarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/sonarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
                                     <tr><td><strong class="text-dark">radarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/radarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
                                     <tr><td><strong class="text-dark">jellyfin</strong></td><td class="text-muted font-monospace">jellyfin/jellyfin:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <!-- DETENIDOS AL FINAL -->
                                     <tr><td><strong class="text-dark">pihole</strong></td><td class="text-muted font-monospace">pihole/pihole:latest</td><td class="text-end"><span class="badge bg-danger">Detenido</span></td></tr>
                                 </tbody>
                             </table>
                         </div>
 
-                        <!-- TABLA 2: DATOS PROTEGIBLES DETECTADOS (RESTAURADA) -->
+                        <!-- TABLA DATOS PROTEGIBLES DETECTADOS -->
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="fw-bold text-dark small mb-0">🛡️ Datos Protegibles Detectados</h6>
                             <span class="badge bg-secondary">Rutas: 55</span>
@@ -292,9 +289,9 @@
 
 </div>
 
-<!-- CONTENEDOR DE NOTIFICACIONES TOAST (ELEGANTE Y NO INVASIVO) -->
+<!-- CONTENEDOR TOAST CON SOMBRA Y MARGEN -->
 <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100;">
-    <div id="backupToast" class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div id="backupToast" class="toast align-items-center text-white bg-primary border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true">
         <div class="d-flex">
             <div class="toast-body" id="toastMessage">
                 ⚡ Iniciando copia...
