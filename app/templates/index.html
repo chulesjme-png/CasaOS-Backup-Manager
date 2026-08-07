@@ -10,7 +10,8 @@
             <small class="text-muted">Orquestador de Copias de Seguridad para CasaOS</small>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <button id="btn-scan" class="btn btn-sm btn-outline-primary fw-bold">🔍 Escanear</button>
+            <button id="btn-scan" class="btn btn-sm btn-outline-primary fw-bold" onclick="triggerScan()">🔍 Escanear</button>
+            <a href="/schedules" class="btn btn-sm btn-outline-info fw-bold text-dark">📅 Programación</a>
             <a href="/restore" class="btn btn-sm btn-warning fw-bold text-dark">🔄 Restaurar Copias</a>
             <a href="/config" class="btn btn-sm btn-outline-secondary fw-bold">⚙️ Configuración</a>
             <span class="badge bg-secondary py-2 px-3">v0.5.0-alpha7</span>
@@ -40,7 +41,7 @@
                 <div class="col-md-3">
                     <div class="p-2 bg-white rounded shadow-sm border-start border-4 border-warning h-100 d-flex flex-column justify-content-center">
                         <span class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 0.5px;">Aplicaciones CasaOS</span>
-                        <strong class="text-dark mt-1" style="font-size: 0.85rem;">26 Detectadas</strong>
+                        <strong class="text-dark mt-1" style="font-size: 0.85rem;">{{ app_profiles|length if app_profiles else 0 }} Detectadas</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -52,7 +53,7 @@
             </div>
         </div>
 
-        <!-- SELECTOR DE DISCOS -->
+        <!-- SELECTOR DE DISCOS (DINÁMICO) -->
         <div class="card-body py-2 px-3">
             <div class="row align-items-center g-2">
                 <div class="col-12">
@@ -60,11 +61,15 @@
                         <span class="me-2 fs-6">💾</span>
                         <strong class="small text-secondary me-2 text-nowrap">Destino Activo de Copias:</strong>
                         <select id="backup-destination-select" class="form-select form-select-sm font-monospace text-dark border bg-light shadow-sm" onchange="handleDestinationChange(this.value)">
-                            <option value="disco_externo" selected>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adf6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa) — Libre: 1710.63 GB / Total: 2749.54 GB</option>
-                            <option value="disco_2">Disco Externo: a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d (/media/pichules/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d) — Libre: 500.00 GB / Total: 1000.00 GB</option>
-                            <option value="disco_3">Disco Red: backup-nas (/media/pichules/nas-backup) — Libre: 4200.50 GB / Total: 8000.00 GB</option>
-                            <option value="disco_4">SSD Secundario: 99f8e7d6-5c4b-3a21-10ef-fedcba987654 (/media/pichules/99f8e7d6-5c4b-3a21-10ef-fedcba987654) — Libre: 120.40 GB / Total: 480.00 GB</option>
-                            <option value="disco_5">Memoria USB: 1234-5678 (/media/pichules/USB-Backup) — Libre: 15.20 GB / Total: 64.00 GB</option>
+                            {% if system_info and system_info.storage %}
+                                {% for disk in system_info.storage %}
+                                <option value="{{ disk.mountpoint if disk.mountpoint else disk.device }}">
+                                    {{ disk.device }} ({{ disk.mountpoint }}) — Libre: {{ disk.free if disk.free else 'N/D' }} / Total: {{ disk.total if disk.total else 'N/D' }}
+                                </option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="">No se detectaron unidades de almacenamiento</option>
+                            {% endif %}
                         </select>
                     </div>
                 </div>
@@ -95,7 +100,7 @@
                             </div>
                         </div>
                         <div class="col-lg-4 text-lg-end">
-                            <button class="btn btn-primary btn-lg fw-bold px-4 py-3 shadow-sm w-100 text-nowrap" id="btn-run-full-backup" style="font-size: 0.95rem;">
+                            <button class="btn btn-primary btn-lg fw-bold px-4 py-3 shadow-sm w-100 text-nowrap" id="btn-run-full-backup" onclick="triggerFullBackup()" style="font-size: 0.95rem;">
                                 📦 Copiar Sistema Completo
                             </button>
                         </div>
@@ -103,87 +108,41 @@
                 </div>
             </div>
 
-            <!-- PLANES DE BACKUP ACTIVOS -->
+            <!-- PLANES DE BACKUP ACTIVOS (DINÁMICO - MOSTRANDO TODOS LOS PERFILES) -->
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark small">📌 Perfiles de Aplicación Generados</h6>
-                    <span class="badge bg-primary">22 Perfiles</span>
+                    <span class="badge bg-primary">{{ app_profiles|length if app_profiles else 0 }} Perfiles</span>
                 </div>
                 <div class="card-body py-2 px-3" style="max-height: 500px; overflow-y: auto;">
                     <div class="list-group list-group-flush small">
-                        
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Casaos</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA</span></small>
+                        {% if app_profiles %}
+                            {% for app_name, profile in app_profiles.items() %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                                <div>
+                                    <strong class="text-dark">{{ app_name }}</strong>
+                                    {% if profile.hook %}
+                                        <span class="badge bg-warning text-dark py-0 ms-1">{{ profile.hook }}</span>
+                                    {% endif %}
+                                    <br>
+                                    <small class="text-muted">Rutas: 
+                                        <span class="text-danger font-monospace">
+                                            {% if profile.paths %}
+                                                {{ profile.paths|join(', ') }}
+                                            {% elif profile.path %}
+                                                {{ profile.path }}
+                                            {% else %}
+                                                /DATA/AppData/{{ app_name|lower }}
+                                            {% endif %}
+                                        </span>
+                                    </small>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('{{ app_name }}')">⚡ Copiar Ahora</button>
                             </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Casaos')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Pihole</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/pihole/etc/pihole, /DATA/AppData/pihole/etc/dnsmasq.d</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Pihole')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Navidrome</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/navidrome/data</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Navidrome')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Nextcloud</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/nextcloud/var/www/html</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Nextcloud')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Plex</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/plex/config</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Plex')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Ddns</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/ddns-updater/data</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Ddns')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Duplicati</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA, /DATA/AppData/duplicati/config, /DATA/AppData/duplicati/data</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Duplicati')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Immich</strong> <span class="badge bg-warning text-dark py-0">Hook DB</span>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/big-bear-immich/pgdata, /DATA/AppData/big-bear-immich/upload</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Immich')">⚡ Copiar Ahora</button>
-                        </div>
-
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                            <div>
-                                <strong class="text-dark">Nginxproxymanager</strong>
-                                <br><small class="text-muted">Rutas: <span class="text-danger font-monospace">/DATA/AppData/nginxproxymanager/data, /DATA/AppData/nginxproxymanager/etc/letsencrypt</span></small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="triggerAppBackup('Nginxproxymanager')">⚡ Copiar Ahora</button>
-                        </div>
-
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center py-3 text-muted">No se detectaron perfiles de aplicación. Presiona "Escanear".</div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -195,7 +154,7 @@
             <!-- Pestañas Sistema / Docker / Discos -->
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header bg-white py-2 px-3 d-flex gap-3">
-                    <button class="btn p-0 fw-bold text-danger border-bottom border-danger pb-1 shadow-none bg-transparent small" onclick="switchTab('system')" id="tab-btn-system">🍓 Raspberry Pi 5</button>
+                    <button class="btn p-0 fw-bold text-danger border-bottom border-danger pb-1 shadow-none bg-transparent small" onclick="switchTab('system')" id="tab-btn-system">🍓 Raspberry Pi</button>
                     <button class="btn p-0 text-muted shadow-none bg-transparent small" onclick="switchTab('docker')" id="tab-btn-docker">🐳 Docker</button>
                     <button class="btn p-0 text-muted shadow-none bg-transparent small" onclick="switchTab('disks')" id="tab-btn-disks">💾 Discos</button>
                 </div>
@@ -204,11 +163,9 @@
                     <div id="tab-content-system">
                         <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">🖥️ Sistema</h6>
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Sistema operativo:</span><strong class="text-dark">Debian GNU/Linux 12 (bookworm)</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Arquitectura:</span><strong class="text-dark">aarch64</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Kernel:</span><strong class="text-dark">6.12.93+rpt-rpi-2712</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">CPU:</span><strong class="text-dark">ARMv8 (4 Cores @ Raspberry Pi 5)</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">RAM:</span><strong class="text-dark">7.08 GB / 7.87 GB (89.9%)</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">OS:</span><strong class="text-dark">{{ system_info.os if system_info else 'Linux' }}</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">CPU:</span><strong class="text-dark">{{ system_info.cpu if system_info else 'ARM' }}</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">RAM:</span><strong class="text-dark">{{ system_info.ram if system_info else 'N/D' }}</strong></li>
                         </ul>
                     </div>
 
@@ -216,16 +173,24 @@
                         <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">🐳 Docker Engine</h6>
                         <ul class="list-unstyled mb-0">
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Estado Daemon:</span><strong class="text-success">Activo</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Versión:</span><strong class="text-dark">26.1.3</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores Activos:</span><strong class="text-dark">16</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores Activos:</span><strong class="text-dark">{{ containers|length if containers else 0 }}</strong></li>
                         </ul>
                     </div>
 
+                    <!-- DISCOS EN PESTAÑA LATERAL (DINÁMICO) -->
                     <div id="tab-content-disks" style="display: none;">
                         <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">💾 Almacenamiento Montado</h6>
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Disco Externo:</span><strong class="text-dark">1.04 TB / 2.75 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">USB3.0:</span><strong class="text-dark">1.50 TB / 1.82 TB</strong></li>
+                            {% if system_info and system_info.storage %}
+                                {% for disk in system_info.storage %}
+                                <li class="mb-1 d-flex justify-content-between">
+                                    <span class="text-muted text-truncate me-2" style="max-width: 120px;" title="{{ disk.device }}">{{ disk.device }}:</span>
+                                    <strong class="text-dark">{{ disk.free if disk.free else 'N/D' }} / {{ disk.total if disk.total else 'N/D' }}</strong>
+                                </li>
+                                {% endfor %}
+                            {% else %}
+                                <li class="text-muted">No hay discos montados.</li>
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
@@ -238,9 +203,9 @@
                 </div>
                 <div class="card-body small py-2 px-3">
                     <ul class="list-unstyled mb-0">
-                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Aplicaciones:</span><strong class="text-dark">22</strong></li>
-                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">17</strong></li>
-                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Rutas persistentes:</span><strong class="text-primary">55</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Aplicaciones:</span><strong class="text-dark">{{ app_profiles|length if app_profiles else 0 }}</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">{{ containers|length if containers else 0 }}</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Rutas persistentes:</span><strong class="text-primary">{{ storage_paths|length if storage_paths else 0 }}</strong></li>
                     </ul>
                 </div>
             </div>
@@ -262,32 +227,6 @@
                 </div>
             </div>
 
-            <!-- APLICACIONES CASAOS -->
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-white py-2 px-3">
-                    <h6 class="m-0 fw-bold text-dark small">📦 Aplicaciones CasaOS</h6>
-                </div>
-                <div class="card-body py-2 px-3 small">
-                    <strong class="text-dark d-block mb-2">📦 Aplicaciones Docker Compose</strong>
-                    <table class="table table-sm table-bordered mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Aplicación</th>
-                                <th>Contenedores</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>CasaOS Apps</td>
-                                <td>26</td>
-                                <td><span class="badge bg-danger text-white">🔴 En ejecución</span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
         </div>
     </div>
 
@@ -303,10 +242,10 @@
                 <div class="collapse show" id="detailedListsCollapse">
                     <div class="card-body py-3">
                         
-                        <!-- TABLA 1: CONTENEDORES DOCKER DETECTADOS -->
+                        <!-- TABLA 1: CONTENEDORES DOCKER DETECTADOS (DINÁMICA) -->
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="fw-bold text-dark small mb-0">📦 Contenedores Docker Detectados</h6>
-                            <span class="badge bg-secondary">Total: 26</span>
+                            <span class="badge bg-secondary">Total: {{ containers|length if containers else 0 }}</span>
                         </div>
                         <div class="table-responsive mb-4" style="max-height: 380px; overflow-y: auto;">
                             <table class="table table-sm table-hover small align-middle mb-0">
@@ -318,40 +257,25 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-muted font-monospace">casaos-backup-manager:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-muted font-monospace">deluan/navidrome:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">nextcloud</strong></td><td class="text-muted font-monospace">nextcloud:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">plex</strong></td><td class="text-muted font-monospace">linuxserver/plex:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">ddns-updater</strong></td><td class="text-muted font-monospace">qmcgaw/ddns-updater:v2.10.0</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">duplicati</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/duplicati:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">immich-server</strong></td><td class="text-muted font-monospace">ghcr.io/immich-app/immich-server:v3.0.2</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">immich-redis</strong></td><td class="text-muted font-monospace">docker.io/valkey/valkey:9</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">immich-postgres</strong></td><td class="text-muted font-monospace">ghcr.io/immich-app/postgres:14-vectorchord</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">immich-machine-learning</strong></td><td class="text-muted font-monospace">ghcr.io/immich-app/immich-machine-learning</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">nginxproxymanager</strong></td><td class="text-muted font-monospace">jc21/nginx-proxy-manager:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">transmission</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/transmission:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">sonarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/sonarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">radarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/radarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">pihole</strong></td><td class="text-muted font-monospace">pihole/pihole:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">netdata</strong></td><td class="text-muted font-monospace">netdata/netdata:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">jellyfin</strong></td><td class="text-muted font-monospace">jellyfin/jellyfin:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">qbittorrent</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/qbittorrent:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">prowlarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/prowlarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">bazarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/bazarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">vaultwarden</strong></td><td class="text-muted font-monospace">vaultwarden/server:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">homeassistant</strong></td><td class="text-muted font-monospace">ghcr.io/home-assistant/home-assistant</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">filebrowser</strong></td><td class="text-muted font-monospace">filebrowser/filebrowser:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">portainer</strong></td><td class="text-muted font-monospace">portainer/portainer-ce:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">heimdall</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/heimdall:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">uptime-kuma</strong></td><td class="text-muted font-monospace">louislam/uptime-kuma:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
+                                    {% if containers %}
+                                        {% for c in containers %}
+                                        <tr>
+                                            <td><strong class="text-dark">{{ c.name }}</strong></td>
+                                            <td class="text-muted font-monospace">{{ c.image }}</td>
+                                            <td class="text-end"><span class="badge bg-success">{{ c.status }}</span></td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr><td colspan="3" class="text-center text-muted">Sin contenedores detectados.</td></tr>
+                                    {% endif %}
                                 </tbody>
                             </table>
                         </div>
 
-                        <!-- TABLA 2: DATOS PROTEGIBLES DETECTADOS -->
+                        <!-- TABLA 2: DATOS PROTEGIBLES DETECTADOS (DINÁMICA) -->
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="fw-bold text-dark small mb-0">🛡️ Datos Protegibles Detectados</h6>
-                            <span class="badge bg-secondary">Rutas: 55</span>
+                            <span class="badge bg-secondary">Rutas: {{ storage_paths|length if storage_paths else 0 }}</span>
                         </div>
                         <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
                             <table class="table table-sm table-hover small align-middle mb-0">
@@ -364,32 +288,18 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/home/pichules/CasaOS-Backup-Manager/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/media</td><td class="text-muted font-monospace">/media</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/mnt</td><td class="text-muted font-monospace">/mnt</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/var/lib/casaos</td><td class="text-muted font-monospace">/var/lib/casaos</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/DATA</td><td class="text-muted font-monospace">/DATA</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-danger font-monospace">/DATA/AppData/navidrome/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-danger font-monospace">/media/pichules/08604ab9-.../BibliotecaMusica</td><td class="text-muted font-monospace">/music</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">nextcloud</strong></td><td class="text-danger font-monospace">/DATA/AppData/nextcloud/var/www/html</td><td class="text-muted font-monospace">/var/www/html</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">plex</strong></td><td class="text-danger font-monospace">/media/pichules</td><td class="text-muted font-monospace">/Media</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">plex</strong></td><td class="text-danger font-monospace">/DATA/AppData/plex/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">transmission</strong></td><td class="text-danger font-monospace">/DATA/Downloads/watch</td><td class="text-muted font-monospace">/watch</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">transmission</strong></td><td class="text-danger font-monospace">/DATA/Downloads</td><td class="text-muted font-monospace">/downloads</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">sonarr</strong></td><td class="text-danger font-monospace">/DATA/AppData/sonarr/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">radarr</strong></td><td class="text-danger font-monospace">/DATA/AppData/radarr/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">pihole</strong></td><td class="text-danger font-monospace">/DATA/AppData/pihole/etc/pihole</td><td class="text-muted font-monospace">/etc/pihole</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">netdata</strong></td><td class="text-danger font-monospace">/DATA/AppData/Netdata/config</td><td class="text-muted font-monospace">/etc/netdata</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">jellyfin</strong></td><td class="text-danger font-monospace">/DATA/AppData/jellyfin/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">qbittorrent</strong></td><td class="text-danger font-monospace">/DATA/AppData/qbittorrent/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">prowlarr</strong></td><td class="text-danger font-monospace">/DATA/AppData/prowlarr/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">bazarr</strong></td><td class="text-danger font-monospace">/DATA/AppData/bazarr/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">vaultwarden</strong></td><td class="text-danger font-monospace">/DATA/AppData/vaultwarden/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">homeassistant</strong></td><td class="text-danger font-monospace">/DATA/AppData/homeassistant/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">filebrowser</strong></td><td class="text-danger font-monospace">/DATA/AppData/filebrowser/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">portainer</strong></td><td class="text-danger font-monospace">/DATA/AppData/portainer/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">heimdall</strong></td><td class="text-danger font-monospace">/DATA/AppData/heimdall/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">uptime-kuma</strong></td><td class="text-danger font-monospace">/DATA/AppData/uptime-kuma/data</td><td class="text-muted font-monospace">/app/data</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
+                                    {% if storage_paths %}
+                                        {% for path in storage_paths %}
+                                        <tr>
+                                            <td><strong class="text-dark">{{ path.container if path.container else 'Sistema' }}</strong></td>
+                                            <td class="text-danger font-monospace">{{ path.host_path }}</td>
+                                            <td class="text-muted font-monospace">{{ path.container_path if path.container_path else '-' }}</td>
+                                            <td><span class="badge bg-dark">{{ path.type if path.type else 'bind' }}</span></td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr><td colspan="4" class="text-center text-muted">Sin rutas de almacenamiento detectadas.</td></tr>
+                                    {% endif %}
                                 </tbody>
                             </table>
                         </div>
@@ -402,13 +312,47 @@
 
 </div>
 
+<!-- SCRIPTS DE INTEGRACIÓN REAL CON FLASK -->
 <script>
+function triggerScan() {
+    const btn = document.getElementById('btn-scan');
+    btn.disabled = true;
+    btn.innerHTML = '🔄 Escaneando...';
+    
+    fetch('/scan', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            alert('Escaneo completado con éxito.');
+            window.location.reload();
+        })
+        .catch(err => {
+            alert('Error al ejecutar el escaneo.');
+            btn.disabled = false;
+            btn.innerHTML = '🔍 Escanear';
+        });
+}
+
+function triggerFullBackup() {
+    if(!confirm('¿Deseas iniciar una copia completa del sistema ahora?')) return;
+    fetch('/api/backup/full', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => alert(data.message || 'Respaldo iniciado'))
+        .catch(err => alert('Error al iniciar copia completa'));
+}
+
 function triggerAppBackup(appName) {
-    alert(`⚡ Iniciando respaldo individual para: ${appName}`);
+    fetch(`/api/backup/app/${appName}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => alert(`Respaldo iniciado para ${appName}: ${data.message || 'OK'}`))
+        .catch(err => alert(`Error iniciando respaldo para ${appName}`));
 }
 
 function handleDestinationChange(value) {
-    console.log(`Destino de respaldo cambiado a: ${value}`);
+    fetch('/api/config/destination', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination: value })
+    });
 }
 
 function switchTab(tabName) {
