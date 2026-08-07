@@ -8,29 +8,26 @@ Gestor profesional de backups para CasaOS basado en arquitectura modular y Clean
 
 CasaOS Backup Manager es una plataforma de gestión de copias de seguridad diseñada para entornos CasaOS.
 
-Su objetivo es proporcionar una capa inteligente entre las aplicaciones desplegadas en CasaOS y diferentes motores de backup.
+Su objetivo es proporcionar una capa inteligente entre las aplicaciones desplegadas en CasaOS, el sistema de archivos del host y diferentes motores de backup.
 
-No es un script de copias.
+No es un simple script de copias; el sistema:
 
-El sistema:
-
-* descubre aplicaciones.
-* analiza almacenamiento.
-* genera planes de backup.
-* construye trabajos.
-* delega ejecución en backends especializados.
-* monitoriza estados.
-* proporciona una interfaz visual.
+* Descubre aplicaciones y contenedores automáticamente.
+* Analiza y valida rutas de almacenamiento persistente.
+* Genera perfiles de aplicación y planes de resguardo.
+* Construye trabajos de copia parametrizados.
+* Delega la ejecución en backends especializados.
+* Proporciona un dashboard visual con telemetría e identidad integrada.
 
 ---
 
 # Arquitectura
 
-El proyecto utiliza Clean Architecture.
+El proyecto utiliza Clean Architecture dividiendo responsabilidades de forma desacoplada.
 
 Flujo principal:
 
-Docker Engine
+Docker Engine / Host System
       |
       v
 AppDiscoveryService
@@ -63,269 +60,130 @@ BackupJobBuilderService
 BackupJob
       |
       v
-BackupBackend
+BackupBackend (BackendRegistry)
       |
       v
-Motor de backup externo
+Motor de backup externo (Duplicati / Restic)
+      |
+      v
+UI Dashboard (FastAPI / Jinja2 / Bootstrap)
 
 ---
 
 # Estado actual
 
-Versión:
+**Versión:** `v0.5.0-alpha7`
 
-v0.5.0-alpha7
-
-Estado:
-
-Motor principal, registro de backends y API unificada completamente funcionales. 
+**Estado:** 
+Motor principal, interfaz de usuario con identidad de marca, registro de backends y API unificada completamente funcionales. 
 Cobertura de pruebas sólida con **57 tests unitarios y de integración pasando al 100%**.
 
-Actualmente el sistema puede orquestar operaciones a través de la API REST y delegarlas correctamente en backends reales como Duplicati.
+Actualmente el sistema permite la monitorización visual completa desde la web e interactuar con operaciones a través de la API REST delegadas en backends reales como Duplicati.
 
-Operaciones verificadas y testeadas:
+Capacidades verificadas y testeadas:
 
-* detección de backends.
-* autenticación.
-* consulta de capacidades y estado.
-* consulta de backups existentes.
-* creación de trabajos remotos.
-* **ejecución de copias de seguridad (Run).**
-* **cancelación de copias en curso (Cancel).**
+* Detección de backends y capacidades de motor.
+* Identificación automática de contenedores y volúmenes de CasaOS.
+* Visualización en panel Web con métricas en tiempo real.
+* Consulta de copias existentes y estado de ejecución.
+* **Ejecución de copias de seguridad (Run).**
+* **Cancelación de copias en curso (Cancel).**
 
 ---
 
 # Características implementadas
 
-## Dashboard inicial y Telemetría de Hardware
+## Interfaz de Usuario e Identidad Visual
 
-Estado:
-
-Completado y optimizado.
+Estado: Completado e integrado.
 
 Funciones:
 
-* visualización del estado interno y resumen de aplicaciones/contenedores.
-* **Telemetría en tiempo real para Raspberry Pi 5:** Extracción directa de métricas de CPU, arquitectura (`aarch64`), kernel y almacenamiento.
-* **Métricas de Memoria RAM:** Formato estructurado `Usado / Total (%)` evitando redundancias de unidades.
-* **Resiliencia en Plantillas (Jinja2):** Integración de filtros `default(..., true)` para garantizar que ninguna métrica de hardware quede en blanco ante respuestas dinámicas o vacías.
-* integración con servicios internos y componentes de interfaz modularizados.
+* **Branding e Identidad:** Incorporación del logo oficial horizontal en el panel de control.
+* **Header de Estado General:** Resumen rápido de SO, motores activos, apps detectadas y almacenamiento `/DATA` protegido.
+* **Selector Dinámico de Destino:** Menú desplegable para alternar destinos de resguardo (Discos externos, NAS, SSD, USB).
+* **Control Disaster Recovery:** Módulo para lanzar copias completas del sistema de la Raspberry Pi.
+* **Perfiles de Aplicación:** Lista de perfiles detectados con accesos directos para ejecución individual.
+* **Pestañas de Telemetría Dinámicas:** Monitoreo del sistema host (Debian/Raspberry Pi 5), Docker Daemon y almacenamiento montado.
+* **Inspector Detallado:** Tablas colapsables para auditar contenedores Docker activos y rutas de datos protegibles (`/DATA/AppData` y *bind mounts*).
 
----
+## Telemetría de Hardware (Raspberry Pi 5)
 
-## Descubrimiento Docker
-
-Estado:
-
-Completado.
+Estado: Completado y optimizado.
 
 Funciones:
 
-* detección de contenedores CasaOS.
-* identificación de aplicaciones.
-* generación de perfiles.
+* Extracción directa de métricas de CPU, arquitectura (`aarch64`), versión de kernel y almacenamiento.
+* Métrica de Memoria RAM en formato estructurado `Usado / Total (%)`.
+* Resiliencia en Plantillas (Jinja2) mediante filtros `default(..., true)` para garantizar disponibilidad de datos en pantalla.
 
----
+## Descubrimiento Docker & Storage Intelligence
 
-## Storage Intelligence
-
-Estado:
-
-Completado.
+Estado: Completado.
 
 Funciones:
 
-* detección de almacenamiento.
-* resolución de recursos.
-* validación de rutas.
-* comprobación de accesibilidad.
-
----
+* Detección automática de contenedores activos e identificación de perfiles CasaOS.
+* Resolución de rutas físicas en el host y validación de accesibilidad de almacenamiento.
 
 ## Backup Engine & API REST
 
-Estado:
-
-Completado.
+Estado: Completado.
 
 Implementado:
 
-* BackupPlan & BackupJob.
-* BackupPlannerService & BackupJobBuilderService.
-* BackendRegistry modular para inyección de conectores.
-* Endpoints de estado (`/health`) y descubrimiento (`/backends`).
-* Conexión completa con ejecución real (`/executions/run`).
-* Sistema de interrupción de tareas (`/executions/cancel`).
+* `BackupPlan` & `BackupJob`.
+* `BackendRegistry` modular para inyección de conectores.
+* Endpoints de salud (`/health`), descubrimiento (`/backends`) y ejecución (`/executions/run` y `/executions/cancel`).
+* Persistencia local en base de datos SQLite/FastAPI.
 
 ---
 
 # Backends
 
-La arquitectura permite integrar diferentes motores.
+La arquitectura permite integrar diferentes motores mediante conectores:
 
-Backends previstos:
-
-* Duplicati (✅ Funcional).
-* Restic.
-* Borg.
-* Rsync.
-
----
-
-# Integración Duplicati
-
-Estado:
-
-Completada y Validada.
-
-Arquitectura:
-
-BackupBackend
-      |
-      v
-DuplicatiBackend
-      |
-      v
-DuplicatiJobBuilder
-      |
-      v
-DuplicatiPayloadBuilder
-      |
-      v
-DuplicatiClient
-      |
-      v
-Duplicati REST API
-
----
-
-# Operaciones Duplicati verificadas
-
-## Autenticación y Estado
-
-Funcionamiento validado mediante API REST y suite de tests.
-
----
-
-## Obtener backups
-
-Endpoint:
-
-GET /api/v1/backups
-
-Permite obtener ID, nombre, destino, programación, metadata y estado.
-
----
-
-## Crear, Ejecutar y Cancelar trabajos
-
-Endpoints API unificada:
-
-POST /api/v1/executions/run
-POST /api/v1/executions/cancel
-
-Flujo validado de extremo a extremo:
-1. El `BackupEngineService` prepara el manifiesto.
-2. Se resuelve el backend mediante el `BackendRegistry`.
-3. Se invoca el método correspondiente y se recupera el `execution_reference`.
-4. El sistema interrumpe la tarea exitosamente usando el modelo de datos en mayúsculas (`{"operation": "CANCEL"}`).
+* **Duplicati Engine** (✅ Completamente funcional).
+* **Restic Engine** (🔌 Preparado para integración).
+* **Borg / Rsync** (📋 Planificados).
 
 ---
 
 # Tecnologías
 
-Backend:
-
-* Python 3.9 / FastAPI
-* Uvicorn / Jinja2 / Pydantic
-
-Infraestructura:
-
-* Docker / Docker Compose
-* Linux ARM64 / Debian (Optimizado para Raspberry Pi 5 / BCM2712)
-
-Integraciones:
-
-* Docker SDK
-* Duplicati REST API
-
-Testing:
-
-* pytest
-* unittest.mock
+* **Backend:** Python 3.9 / FastAPI / Pydantic / Uvicorn.
+* **Frontend:** HTML5 / Jinja2 / Bootstrap 5 / Vanilla JavaScript.
+* **Infraestructura:** Docker / Docker Compose / Linux ARM64 (Debian GNU/Linux 12 - Raspberry Pi 5).
+* **Integraciones:** Docker SDK / Duplicati REST API.
+* **Testing:** Pytest / Unittest.mock (**57 tests pasando**).
 
 ---
 
 # Estructura del proyecto
 
+```text
 CasaOS-Backup-Manager/
-
 ├── app/
 │   ├── api/
 │   ├── connectors/
 │   ├── core/
+│   ├── database/
 │   ├── models/
 │   ├── routers/
 │   ├── schemas/
 │   ├── services/
+│   ├── static/
+│   │   └── img/
+│   │       └── logo-horizontal.svg
 │   └── templates/
+│       ├── base.html
+│       ├── index.html
 │       └── components/
-│           ├── system_card.html
-│           ├── docker_card.html
-│           └── disk_card.html
-│
 ├── docs/
 ├── scripts/
 ├── tests/
 ├── docker-compose.yml
 ├── Dockerfile
 ├── README.md
-├── ARCHITECTURE.md
+├── CHANGELOG.md
 └── ROADMAP.md
-
----
-
-# Desarrollo y Despliegue en Raspberry Pi (CasaOS)
-
-## Requisitos de montaje en Docker
-
-Para una correcta telemetría del sistema en la Raspberry Pi 5 y la autodetección de contenedores y almacenamiento de CasaOS, el contenedor debe mapear el puerto interno `8000` de FastAPI al puerto anfitrión `8088`, así como los siguientes volúmenes del host:
-
-* `/var/run/docker.sock:/var/run/docker.sock:ro`: Acceso a la API de Docker para descubrir contenedores.
-* `/:/host_root:ro`: Lectura del sistema de archivos raíz para inspección de discos.
-* `/proc:/host/proc:ro` y `/sys:/host/sys:ro`: Telemetría del hardware en tiempo real (CPU, RAM, Kernel ARM).
-* `/DATA:/DATA:ro` y `/var/lib/casaos:/var/lib/casaos:ro`: Acceso a los datos persistentes y configuraciones de apps en CasaOS.
-
-## Comandos principales
-
-Construcción y arranque:
-
-docker compose up -d --build
-
-Parada:
-
-docker compose down
-
-Logs en tiempo real:
-
-docker logs -f casaos-backup-manager
-
-Ejecución de tests unitarios e integración:
-
-docker compose exec casaos-backup-manager pytest -v --tb=short
-
----
-
-# Próxima fase
-
-Dado que el motor interno de planificación ya está conectado exitosamente con la ejecución real (Duplicati) y probado al 100%, la siguiente etapa consiste en:
-
-* Integración del Frontend (Interfaz de usuario).
-* Seguimiento visual de las ejecuciones e historial.
-* Preparación del empaquetado final para la tienda de aplicaciones de CasaOS.
-
----
-
-# Licencia
-
-Proyecto en desarrollo.
