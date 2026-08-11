@@ -1,83 +1,66 @@
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
+from sqlalchemy.orm import Session
 
-from app.config.settings import APP_DESCRIPTION, APP_NAME, APP_VERSION
-from app.config.template import templates
-from app.database.connection import init_db
-
-# Importación de modelos para asegurar que SQLAlchemy cree todas las tablas
-import app.models.execution  # noqa: F401
-
-# Importación de Routers
-from app.routers.dashboard import router as dashboard_router
-from app.routers.api_v1 import router as api_v1_router
-from app.routers.api_backends import router as backends_router
-from app.routers.api_executions import router as executions_router
-from app.routers.api_health import router as health_router
-from app.routers.backups import router as backups_router
-from app.routers.api_schedules import router as schedules_router
-
-# Importaciones para el registro de backends y el programador
-from app.core.backends.backend_registry import BackendRegistry
-from app.core.backends.duplicati_backend import DuplicatiBackend
+from app.database.connection import engine, Base, get_db
+from app.routers import api_backends, api_executions, api_schedules, api_restore
 from app.services.scheduler_service import start_scheduler, stop_scheduler
+
+# Configuración de logs
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+# Creación automática de tablas en SQLite
+Base.metadata.create_all(bind=engine)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Inicializa las tablas de SQLite en la base de datos al arrancar
-    init_db()
-    
-    # Registrar backends por defecto al iniciar la app
-    registry = BackendRegistry()
-    if "duplicati" not in registry.available():
-        registry.register(DuplicatiBackend())
-        
-    # Iniciar motor de tareas programadas en segundo plano
+    # Inicio de servicios en background
     start_scheduler()
-
     yield
-
-    # Detener el motor al apagar la app
+    # Apagado limpio
     stop_scheduler()
 
 
 app = FastAPI(
-    title=APP_NAME,
-    description=APP_DESCRIPTION,
-    version=APP_VERSION,
-    lifespan=lifespan,
+    title="CasaOS Backup Manager",
+    version="1.0.0",
+    lifespan=lifespan
 )
 
-# Archivos estáticos
-app.mount(
-    "/static",
-    StaticFiles(directory="app/static"),
-    name="static",
-)
+# Servir archivos estáticos y plantillas Jinja2
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+templates = Jinja2Templates(directory="app/templates")
+
+# Registro de Routers API
+app.include_router(api_backends.router)
+app.include_router(api_executions.router)
+app.include_router(api_schedules.router)
+app.include_router(api_restore.router)
+
 
 # ------------------------------------------------------------------------------
-# VISTAS UI (Jinja2)
+# RUTAS DE INTERFAZ WEB (HTML)
 # ------------------------------------------------------------------------------
 
-@app.get("/schedules")
-def schedules_page(request: Request):
+@app.get("/", response_class=HTMLResponse)
+def read_dashboard(request: Request, db: Session = Depends(get_db)):
+    """Renderiza el dashboard principal."""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
+
+@app.get("/schedules", response_class=HTMLResponse)
+def read_schedules(request: Request):
+    """Renderiza la vista de gestión de programaciones."""
     return templates.TemplateResponse("schedules.html", {"request": request})
 
-# ------------------------------------------------------------------------------
-# ROUTERS
-# ------------------------------------------------------------------------------
 
-# 1. UI Router (Vistas HTML / Jinja2)
-app.include_router(dashboard_router)
-
-# 2. REST API v1 Router (Endpoints unificados para frontend)
-app.include_router(api_v1_router)
-
-# 3. REST API Routers adicionales (Salud, Backends, Ejecuciones, Backups, Schedules)
-app.include_router(health_router)
-app.include_router(backends_router)
-app.include_router(executions_router)  # Incluido directamente sin prefix adicional
-app.include_router(backups_router)
-app.include_router(schedules_router)
+@app.get("/restore", response_class=HTMLResponse)
+def read_restore(request: Request):
+    """Renderiza la vista de restauración de respaldos."""
+    return templates.TemplateResponse("restore.html", {"request": request})
