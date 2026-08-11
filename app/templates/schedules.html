@@ -3,183 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Programación de Tareas - CasaOS Backup Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Programaciones - CasaOS Backup Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans min-h-screen p-6">
-
-    <div class="max-w-6xl mx-auto space-y-6">
-        
-        <!-- ENCABEZADO -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex justify-between items-center">
-            <div>
-                <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                    <i class="fa-regular fa-clock text-indigo-600"></i> Programación de Tareas
-                </h1>
-                <p class="text-slate-500 text-sm mt-1">Gestiona la frecuencia y automatización de tus copias de seguridad.</p>
-            </div>
-            <div class="flex gap-3">
-                <button onclick="openModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
-                    <i class="fa-solid fa-plus"></i> Nueva Programación
-                </button>
-                <a href="/" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
-                    <i class="fa-solid fa-arrow-left"></i> Volver al Dashboard
-                </a>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">🚀 CasaOS Backup Manager</a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="/">Dashboard</a>
+                <a class="nav-link active" href="/schedules">Programaciones</a>
+                <a class="nav-link" href="/restore">Restauración</a>
             </div>
         </div>
+    </nav>
 
-        <!-- CONTENEDOR DE PROGRAMACIONES -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div id="schedules-list" class="space-y-4">
-                <div class="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-center text-sm">
-                    No se encontraron tareas programadas. Haz clic en <b>"Nueva Programación"</b> para crear una.
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- MODAL NUEVA PROGRAMACIÓN -->
-    <div id="schedule-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="text-lg font-bold text-slate-800">Nueva Programación</h3>
-                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-
-            <form id="schedule-form" onsubmit="saveSchedule(event)" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Aplicación / Perfil</label>
-                    <select id="app_name" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" required>
-                        <option value="system_disaster_recovery">Sistema Completo (Disaster Recovery)</option>
-                        <option value="immich-postgres">Immich (Base de Datos PostgreSQL)</option>
-                        <option value="nextcloud">Nextcloud (Archivos y Configuración)</option>
-                        <option value="navidrome">Navidrome (Servidor de Música)</option>
-                        <option value="plex">Plex Media Server</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Frecuencia / Regla Cron</label>
-                    <select id="cron_preset" onchange="updateCronInput(this.value)" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm mb-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                        <option value="0 2 * * *">Cada día a las 02:00 AM</option>
-                        <option value="0 3 * * 0">Cada domingo a las 03:00 AM</option>
-                        <option value="0 0 1 * *">El día 1 de cada mes</option>
-                        <option value="custom">Personalizada (Expresión Cron)</option>
-                    </select>
-                    <input type="text" id="cron_expression" value="0 2 * * *" class="w-full border border-slate-300 rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none" required>
-                </div>
-
-                <div class="flex justify-end gap-2 border-t pt-4">
-                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-300">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">Guardar Programación</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- JAVASCRIPT -->
-    <script>
-        // Diccionario de traducción de identificadores técnicos a nombres amigables
-        const APP_NAMES_MAP = {
-            'system_disaster_recovery': 'Copia del Sistema Completo (Disaster Recovery)',
-            'immich-postgres': 'Immich (Base de Datos PostgreSQL)',
-            'immich-server': 'Immich Server',
-            'nextcloud': 'Nextcloud',
-            'navidrome': 'Navidrome',
-            'plex': 'Plex Media Server'
-        };
-
-        function getFriendlyAppName(rawName) {
-            return APP_NAMES_MAP[rawName] || rawName;
-        }
-
-        async function loadSchedules() {
-            try {
-                const res = await fetch('/api/v1/schedules');
-                const data = await res.json();
-                const container = document.getElementById('schedules-list');
-
-                if (data.length === 0) {
-                    container.innerHTML = `
-                        <div class="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-center text-sm">
-                            No se encontraron tareas programadas. Haz clic en <b>"Nueva Programación"</b> para crear una.
-                        </div>`;
-                    return;
-                }
-
-                container.innerHTML = data.map(item => `
-                    <div class="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition">
-                        <div>
-                            <span class="font-bold text-slate-800 text-base">${getFriendlyAppName(item.app_name)}</span>
-                            <div class="text-xs text-slate-500 font-mono mt-1">
-                                Regla Cron: <span class="bg-slate-200 px-1.5 py-0.5 rounded">${item.cron_expression}</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <button onclick="toggleSchedule(${item.id})" class="px-3 py-1 rounded-full text-xs font-semibold ${item.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
-                                ${item.is_active ? '● Activa' : '○ Pausada'}
-                            </button>
-                            <button onclick="deleteSchedule(${item.id})" class="text-rose-500 hover:text-rose-700 p-2 text-sm">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        </div>
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <h2 class="card-title">Gestión de Programaciones</h2>
+                        <p class="card-text">Administra las tareas automatizadas y frecuencias de tus respaldos.</p>
+                        <span class="badge bg-primary">APScheduler Activo</span>
                     </div>
-                `).join('');
-            } catch (err) {
-                console.error("Error cargando schedules:", err);
-            }
-        }
-
-        function openModal() {
-            document.getElementById('schedule-modal').classList.remove('hidden');
-            document.getElementById('schedule-modal').classList.add('flex');
-        }
-
-        function closeModal() {
-            document.getElementById('schedule-modal').classList.add('hidden');
-            document.getElementById('schedule-modal').classList.remove('flex');
-        }
-
-        function updateCronInput(val) {
-            if (val !== 'custom') {
-                document.getElementById('cron_expression').value = val;
-            }
-        }
-
-        async function saveSchedule(e) {
-            e.preventDefault();
-            const payload = {
-                app_name: document.getElementById('app_name').value,
-                cron_expression: document.getElementById('cron_expression').value
-            };
-
-            const res = await fetch('/api/v1/schedules', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (res.ok) {
-                closeModal();
-                loadSchedules();
-            }
-        }
-
-        async function toggleSchedule(id) {
-            await fetch(`/api/v1/schedules/${id}/toggle`, { method: 'PUT' });
-            loadSchedules();
-        }
-
-        async function deleteSchedule(id) {
-            if (confirm("¿Seguro que deseas eliminar esta programación?")) {
-                await fetch(`/api/v1/schedules/${id}`, { method: 'DELETE' });
-                loadSchedules();
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', loadSchedules);
-    </script>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
