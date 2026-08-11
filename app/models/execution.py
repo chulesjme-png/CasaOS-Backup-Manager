@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, DateTime, Enum as SQLEnum
-from app.database.base import Base  # O la ruta donde tengas tu SQLAlchemy Base
+
+# Corrección de importación: apunta al conector de base de datos de la app
+from app.database.connection import Base
 from app.schemas.execution import ExecutionStatus
 
 

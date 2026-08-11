@@ -1,12 +1,19 @@
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
-from typing import Optional
-import urllib.request
-import json
-import subprocess
-import socket
 import http.client
+import json
+import socket
+import subprocess
 import time
+import urllib.request
+from typing import List, Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.database.connection import SessionLocal, get_db
+from app.schemas.execution import ExecutionCreate, ExecutionResponse, ExecutionStatus, ExecutionUpdate
+from app.services.background_worker_service import BackgroundWorkerService
+from app.services.execution_history_service import ExecutionHistoryService
 
 router = APIRouter(prefix="/api/v1/executions", tags=["executions"])
 
@@ -20,7 +27,6 @@ class RestoreApiRequest(BaseModel):
 
 def control_docker_container(action: str, container_name: str) -> bool:
     """Envía la orden (stop/start) al contenedor Docker mediante CLI o Socket UNIX."""
-    # Intentar por CLI primero
     try:
         res = subprocess.run(["docker", action, container_name], capture_output=True, text=True, timeout=15)
         if res.returncode == 0:
@@ -28,7 +34,6 @@ def control_docker_container(action: str, container_name: str) -> bool:
     except Exception:
         pass
 
-    # Fallback directo al Socket de Docker (/var/run/docker.sock)
     try:
         class UnixHTTPConnection(http.client.HTTPConnection):
             def __init__(self, socket_path):
@@ -49,9 +54,42 @@ def control_docker_container(action: str, container_name: str) -> bool:
         return False
 
 
+# ------------------------------------------------------------------------------
+# ENDPOINTS DE EJECUCIÓN Y SEGUNDO PLANO
+# ------------------------------------------------------------------------------
+
+@router.post("/run", response_model=ExecutionResponse, status_code=status.HTTP_202_ACCEPTED)
+async def run_execution(
+    payload: ExecutionCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Crea una tarea de backup en BD y la despacha inmediatamente a segundo plano."""
+    history_service = ExecutionHistoryService(db)
+    
+    # 1. Registrar en BD en estado PENDING
+    record = history_service.create_execution(payload)
+    
+    # 2. Despachar tarea asíncrona
+    background_tasks.add_task(
+        BackgroundWorkerService.run_backup_job_async,
+        execution_id=record.id,
+        db_factory=SessionLocal
+    )
+
+    return record
+
+
+@router.get("", response_model=List[ExecutionResponse])
+def list_execution_history(limit: int = 20, db: Session = Depends(get_db)):
+    """Obtiene el historial de ejecuciones guardadas en la base de datos."""
+    history_service = ExecutionHistoryService(db)
+    return history_service.list_executions(limit=limit)
+
+
 @router.get("/snapshots")
 def get_snapshots(backend: str = "duplicati", app_id: str = "", path: str = ""):
-    """Consulta la API local de Duplicati para extraer las ejecuciones/versiones reales."""
+    """Consulta las copias reales disponibles."""
     try:
         req = urllib.request.Request("http://127.0.0.1:8200/api/v1/backup/latest/restoredir")
         with urllib.request.urlopen(req, timeout=3) as response:
@@ -68,9 +106,22 @@ def get_snapshots(backend: str = "duplicati", app_id: str = "", path: str = ""):
     return {"snapshots": snapshots}
 
 
+@router.get("/{execution_id}", response_model=ExecutionResponse)
+def get_execution_status(execution_id: str, db: Session = Depends(get_db)):
+    """Obtiene el estado actual y porcentaje de avance de una ejecución por su ID."""
+    history_service = ExecutionHistoryService(db)
+    record = history_service.get_execution(execution_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ejecución {execution_id} no encontrada."
+        )
+    return record
+
+
 @router.post("/restore")
 def restore_backup(req: RestoreApiRequest):
-    """Ciclo de vida de restauración: Detiene contenedor, vuelca volumen y reinicia."""
+    """Ciclo de vida de restauración."""
     app_name = req.application.lower().strip()
 
     if app_name in ["disaster_recovery", "casaos"]:
@@ -82,20 +133,17 @@ def restore_backup(req: RestoreApiRequest):
     logs = []
 
     try:
-        # 1. Detener el contenedor
         logs.append(f"1. Deteniendo contenedor Docker '{app_name}'...")
         stopped = control_docker_container("stop", app_name)
         if stopped:
             logs.append(f"   [OK] Contenedor '{app_name}' detenido correctamente.")
         else:
-            logs.append(f"   [AVISO] No se pudo confirmar el apagado (quizá ya estaba detenido).")
+            logs.append("   [AVISO] No se pudo confirmar el apagado (quizá ya estaba detenido).")
 
-        # 2. Restauración de datos
         logs.append(f"2. Restaurando archivos en /DATA/AppData/{app_name} desde versión {req.version}...")
         time.sleep(2)
         logs.append("   [OK] Archivos del volumen restaurados con éxito.")
 
-        # 3. Arrancar el contenedor
         logs.append(f"3. Reiniciando contenedor Docker '{app_name}'...")
         started = control_docker_container("start", app_name)
         if started:
