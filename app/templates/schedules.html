@@ -1,99 +1,171 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Programación de Tareas - CasaOS Backup Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen p-6">
 
-{% block content %}
-<div class="container-fluid py-3">
-
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
-        <div>
-            <h1 class="h4 mb-0 text-dark fw-bold">⏰ Programación de Tareas</h1>
-            <small class="text-muted">Gestiona la frecuencia, hora de ejecución y retención de tus respaldos automáticos</small>
+    <div class="max-w-6xl mx-auto space-y-6">
+        
+        <!-- ENCABEZADO -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-regular fa-clock text-indigo-600"></i> Programación de Tareas
+                </h1>
+                <p class="text-slate-500 text-sm mt-1">Gestiona la frecuencia y automatización de tus copias de seguridad.</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="openModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> Nueva Programación
+                </button>
+                <a href="/" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                    <i class="fa-solid fa-arrow-left"></i> Volver al Dashboard
+                </a>
+            </div>
         </div>
-        <div>
-            <a href="/" class="btn btn-sm btn-outline-secondary fw-bold">
-                ⬅️ Volver al Dashboard
-            </a>
+
+        <!-- CONTENEDOR DE PROGRAMACIONES -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div id="schedules-list" class="space-y-4">
+                <div class="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-center text-sm">
+                    No se encontraron tareas programadas. Haz clic en <b>"Nueva Programación"</b> para crear una.
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL NUEVA PROGRAMACIÓN -->
+    <div id="schedule-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-800">Nueva Programación</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <form id="schedule-form" onsubmit="saveSchedule(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Aplicación / Perfil</label>
+                    <select id="app_name" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" required>
+                        <option value="system_disaster_recovery">Sistema Completo (Disaster Recovery)</option>
+                        <option value="immich-postgres">Immich (PostgreSQL)</option>
+                        <option value="nextcloud">Nextcloud</option>
+                        <option value="navidrome">Navidrome</option>
+                        <option value="plex">Plex</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Frecuencia / Regla Cron</label>
+                    <select id="cron_preset" onchange="updateCronInput(this.value)" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm mb-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="0 2 * * *">Cada día a las 02:00 AM</option>
+                        <option value="0 3 * * 0">Cada domingo a las 03:00 AM</option>
+                        <option value="0 0 1 * *">El día 1 de cada mes</option>
+                        <option value="custom">Personalizada (Expresión Cron)</option>
+                    </select>
+                    <input type="text" id="cron_expression" value="0 2 * * *" class="w-full border border-slate-300 rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none" required>
+                </div>
+
+                <div class="flex justify-end gap-2 border-t pt-4">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-300">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">Guardar Programación</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <!-- TARJETAS DE TAREAS PROGRAMADAS -->
-    <div class="row" id="schedules-list-container">
-        <div class="col-12 text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="small text-muted mt-2">Cargando tareas programadas...</p>
-        </div>
-    </div>
+    <!-- JAVASCRIPT -->
+    <script>
+        async function loadSchedules() {
+            try {
+                const res = await fetch('/api/v1/schedules');
+                const data = await res.json();
+                const container = document.getElementById('schedules-list');
 
-</div>
+                if (data.length === 0) {
+                    container.innerHTML = `
+                        <div class="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-center text-sm">
+                            No se encontraron tareas programadas. Haz clic en <b>"Nueva Programación"</b> para crear una.
+                        </div>`;
+                    return;
+                }
 
-<script>
-document.addEventListener('DOMContentLoaded', loadSchedules);
-
-async function loadSchedules() {
-    const container = document.getElementById('schedules-list-container');
-    try {
-        const response = await fetch('/api/v1/schedules/');
-        const data = await response.json();
-
-        if (response.ok && data.schedules) {
-            let html = '';
-            data.schedules.forEach(task => {
-                const isChecked = task.enabled ? 'checked' : '';
-                const statusBadge = task.enabled 
-                    ? '<span class="badge bg-success">Activa</span>' 
-                    : '<span class="badge bg-secondary">Pausada</span>';
-
-                html += `
-                    <div class="col-md-6 mb-3">
-                        <div class="card shadow-sm border-0 h-100">
-                            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-                                <h6 class="m-0 fw-bold text-dark">${task.name}</h6>
-                                ${statusBadge}
-                            </div>
-                            <div class="card-body">
-                                <ul class="list-unstyled small mb-3">
-                                    <li class="mb-1"><strong>🎯 Objetivo:</strong> ${task.target_app}</li>
-                                    <li class="mb-1"><strong>⚙️ Motor:</strong> ${task.backend.toUpperCase()}</li>
-                                    <li class="mb-1"><strong>⏰ Hora de ejecución:</strong> ${task.time} hrs (${task.frequency})</li>
-                                    <li class="mb-1"><strong>🗓️ Retención:</strong> ${task.retention_days} días</li>
-                                </ul>
-
-                                <div class="form-check form-switch mt-3 pt-2 border-top">
-                                    <input class="form-check-input" type="checkbox" id="switch-${task.id}" ${isChecked} onchange="toggleTask('${task.id}')">
-                                    <label class="form-check-label small fw-bold" for="switch-${task.id}">
-                                        ${task.enabled ? 'Tarea Habilitada' : 'Tarea Pausada'}
-                                    </label>
-                                </div>
+                container.innerHTML = data.map(item => `
+                    <div class="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition">
+                        <div>
+                            <span class="font-bold text-slate-800 text-base">${item.app_name}</span>
+                            <div class="text-xs text-slate-500 font-mono mt-1">
+                                Regla Cron: <span class="bg-slate-200 px-1.5 py-0.5 rounded">${item.cron_expression}</span>
                             </div>
                         </div>
+                        <div class="flex items-center gap-3">
+                            <button onclick="toggleSchedule(${item.id})" class="px-3 py-1 rounded-full text-xs font-semibold ${item.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
+                                ${item.is_active ? '● Activa' : '○ Pausada'}
+                            </button>
+                            <button onclick="deleteSchedule(${item.id})" class="text-rose-500 hover:text-rose-700 p-2 text-sm">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
                     </div>
-                `;
-            });
-            container.innerHTML = html;
-        } else {
-            container.innerHTML = '<div class="col-12"><div class="alert alert-warning">No se encontraron tareas programadas.</div></div>';
+                `).join('');
+            } catch (err) {
+                console.error("Error cargando schedules:", err);
+            }
         }
-    } catch (err) {
-        container.innerHTML = `
-            <div class="col-12">
-                <div class="alert alert-danger">Error al cargar la lista de tareas programadas.</div>
-            </div>
-        `;
-    }
-}
 
-async function toggleTask(taskId) {
-    try {
-        const response = await fetch(`/api/v1/schedules/toggle/${taskId}`, { method: 'POST' });
-        const resData = await response.json();
-        if (response.ok) {
-            loadSchedules();
-        } else {
-            alert(resData.message || 'No se pudo cambiar el estado de la tarea.');
+        function openModal() {
+            document.getElementById('schedule-modal').classList.remove('hidden');
+            document.getElementById('schedule-modal').classList.add('flex');
         }
-    } catch (err) {
-        alert('Error de conexión con el servidor.');
-    }
-}
-</script>
-{% endblock %}
+
+        function closeModal() {
+            document.getElementById('schedule-modal').classList.add('hidden');
+            document.getElementById('schedule-modal').classList.remove('flex');
+        }
+
+        function updateCronInput(val) {
+            if (val !== 'custom') {
+                document.getElementById('cron_expression').value = val;
+            }
+        }
+
+        async function saveSchedule(e) {
+            e.preventDefault();
+            const payload = {
+                app_name: document.getElementById('app_name').value,
+                cron_expression: document.getElementById('cron_expression').value
+            };
+
+            const res = await fetch('/api/v1/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                closeModal();
+                loadSchedules();
+            }
+        }
+
+        async function toggleSchedule(id) {
+            await fetch(`/api/v1/schedules/${id}/toggle`, { method: 'PUT' });
+            loadSchedules();
+        }
+
+        async function deleteSchedule(id) {
+            if (confirm("¿Seguro que deseas eliminar esta programación?")) {
+                await fetch(`/api/v1/schedules/${id}`, { method: 'DELETE' });
+                loadSchedules();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadSchedules);
+    </script>
+</body>
+</html>
