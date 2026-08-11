@@ -8,13 +8,22 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 import jinja2
 
-from app.database.connection import engine, Base, get_db
-from app.routers import api_backends, api_executions, api_schedules, api_restore
-from app.services.scheduler_service import start_scheduler, stop_scheduler
-
 # Configuración de logs
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# ------------------------------------------------------------------------------
+# DIAGNÓSTICO DE ESTRUCTURA DE ARCHIVOS EN LOGS
+# ------------------------------------------------------------------------------
+logger.info("=== RASTREANDO ARCHIVOS EN EL CONTENEDOR ===")
+for root, dirs, files in os.walk("/app"):
+    html_files = [f for f in files if f.endswith(".html")]
+    if html_files:
+        logger.info(f"📂 Plantillas encontradas en '{root}': {html_files}")
+
+from app.database.connection import engine, Base, get_db
+from app.routers import api_backends, api_executions, api_schedules, api_restore
+from app.services.scheduler_service import start_scheduler, stop_scheduler
 
 # Creación automática de tablas en SQLite
 Base.metadata.create_all(bind=engine)
@@ -34,34 +43,26 @@ app = FastAPI(
 )
 
 # ------------------------------------------------------------------------------
-# RESOLUCIÓN DE RUTAS ROBUSTA PARA PLANTILLAS Y ESTÁTICOS
+# CONFIGURACIÓN DE PLANTILLAS Y ESTÁTICOS MULTI-RUTA
 # ------------------------------------------------------------------------------
-# Definimos los posibles directorios donde pueden residir las plantillas
-possible_template_dirs = [
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates"),            # /app/app/templates
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates"), # /app/templates
+# Búsqueda exhaustiva en todas las ubicaciones posibles del contenedor
+search_dirs = [
+    "/app/app/templates",
     "/app/templates",
-    "/app/app/templates"
+    "/app",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates"),
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
 ]
 
-# Filtramos solo las carpetas que realmente existen en el sistema de archivos del contenedor
-valid_template_dirs = [d for d in possible_template_dirs if os.path.exists(d)]
+valid_dirs = [d for d in search_dirs if os.path.isdir(d)]
 
-logger.info(f"📁 Directorios de plantillas detectados: {valid_template_dirs}")
+# Jinja2 buscará 'dashboard.html' en todas estas rutas hasta encontrarlo
+templates = Jinja2Templates(directory=valid_dirs[0] if valid_dirs else "/app")
+templates.env.loader = jinja2.FileSystemLoader(valid_dirs)
 
-# Configuramos un Loader de Jinja2 multi-ruta
-templates = Jinja2Templates(directory=valid_template_dirs[0] if valid_template_dirs else "/app/templates")
-if valid_template_dirs:
-    templates.env.loader = jinja2.FileSystemLoader(valid_template_dirs)
-
-# Manejo seguro del directorio estático
-possible_static_dirs = [
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"),
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static"),
-    "/app/static",
-    "/app/app/static"
-]
-for s_dir in possible_static_dirs:
+# Manejo seguro de archivos estáticos
+static_dirs = ["/app/app/static", "/app/static"]
+for s_dir in static_dirs:
     os.makedirs(s_dir, exist_ok=True)
     if os.path.exists(s_dir):
         app.mount("/static", StaticFiles(directory=s_dir), name="static")
