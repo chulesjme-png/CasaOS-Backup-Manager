@@ -39,7 +39,7 @@
                 <div class="col-md-3">
                     <div class="p-2 bg-white rounded shadow-sm border-start border-4 border-warning h-100 d-flex flex-column justify-content-center">
                         <span class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.65rem;">Aplicaciones CasaOS</span>
-                        <strong class="text-dark mt-1" style="font-size: 0.85rem;">26 Detectadas</strong>
+                        <strong class="text-dark mt-1" style="font-size: 0.85rem;">{{ apps_list|length if apps_list else '15' }} Detectadas</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -67,8 +67,6 @@
                         <option value="/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa" selected>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adf6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa) — Libre: 1710.63 GB / Total: 2749.54 GB</option>
                         <option value="/media/pichules/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d">Disco Externo 2: a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d (/media/pichules/a1b2c3d4...) — Libre: 500.00 GB / Total: 1000.00 GB</option>
                         <option value="/media/pichules/nas-backup">Disco Red NAS: backup-nas (/media/pichules/nas-backup) — Libre: 4200.50 GB / Total: 8000.00 GB</option>
-                        <option value="/media/pichules/99f8e7d6-5c4b-3a21-10ef-fedcba987654">SSD Secundario: 99f8e7d6-5c4b-3a21-10ef-fedcba987654 (/media/pichules/99f8e7d6...) — Libre: 120.40 GB / Total: 480.00 GB</option>
-                        <option value="/media/pichules/USB-Backup">Memoria USB: 1234-5678 (/media/pichules/USB-Backup) — Libre: 15.20 GB / Total: 64.00 GB</option>
                     {% endif %}
                 </select>
             </div>
@@ -102,15 +100,21 @@
                 </div>
             </div>
 
-            <!-- PERFILES DE APLICACIÓN -->
+            <!-- PERFILES DE APLICACIÓN DINÁMICOS -->
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark small">📌 Perfiles de Aplicación Generados</h6>
-                    <span class="badge bg-primary">26 Perfiles</span>
+                    <span class="badge bg-primary" id="apps-count-badge">
+                        {% if apps_list %}
+                            {{ apps_list|length }} Perfiles
+                        {% else %}
+                            15 Perfiles
+                        {% endif %}
+                    </span>
                 </div>
                 <div class="card-body py-2 px-3" style="max-height: 500px; overflow-y: auto;">
                     <div class="list-group list-group-flush small">
-                        {% set apps_list = [
+                        {% set dynamic_apps = apps_list if apps_list else [
                             {'name': 'Casaos-backup-manager', 'path': '/DATA/AppData/casaos-backup-manager'},
                             {'name': 'Pihole', 'path': '/DATA/AppData/pihole'},
                             {'name': 'Navidrome', 'path': '/DATA/AppData/navidrome'},
@@ -125,12 +129,9 @@
                             {'name': 'Transmission', 'path': '/DATA/AppData/transmission'},
                             {'name': 'Sonarr', 'path': '/DATA/AppData/sonarr'},
                             {'name': 'Radarr', 'path': '/DATA/AppData/radarr'},
-                            {'name': 'Jellyfin', 'path': '/DATA/AppData/jellyfin'},
-                            {'name': 'Qbittorrent', 'path': '/DATA/AppData/qbittorrent'},
-                            {'name': 'Vaultwarden', 'path': '/DATA/AppData/vaultwarden'},
-                            {'name': 'Homeassistant', 'path': '/DATA/AppData/homeassistant'}
+                            {'name': 'Jellyfin', 'path': '/DATA/AppData/jellyfin'}
                         ] %}
-                        {% for app in apps_list %}
+                        {% for app in dynamic_apps %}
                         <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
                             <div>
                                 <strong class="text-dark">{{ app.name }}</strong>
@@ -171,7 +172,7 @@
                         <ul class="list-unstyled mb-0">
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Estado Daemon:</span><strong class="text-success">Activo</strong></li>
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Versión:</span><strong class="text-dark">26.1.3</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores Activos:</span><strong class="text-dark">25 / 26</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores Activos:</span><strong class="text-dark">15 Activos</strong></li>
                         </ul>
                     </div>
 
@@ -179,10 +180,6 @@
                         <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">💾 Almacenamiento Montado</h6>
                         <ul class="list-unstyled mb-0">
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Disco Ext 1:</span><strong class="text-dark">1.04 TB / 2.75 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Disco Ext 2:</span><strong class="text-dark">500 GB / 1.00 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">NAS Backup:</span><strong class="text-dark">4.20 TB / 8.00 TB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">SSD Secundario:</span><strong class="text-dark">120 GB / 480 GB</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">USB3.0:</span><strong class="text-dark">15.2 GB / 64.0 GB</strong></li>
                         </ul>
                     </div>
                 </div>
@@ -195,9 +192,8 @@
                 </div>
                 <div class="card-body small py-2 px-3">
                     <ul class="list-unstyled mb-0">
-                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Aplicaciones:</span><strong class="text-dark">26</strong></li>
-                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">26</strong></li>
-                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Rutas persistentes:</span><strong class="text-primary">55</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Aplicaciones:</span><strong class="text-dark">15</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">15</strong></li>
                     </ul>
                 </div>
             </div>
@@ -215,127 +211,9 @@
                         </div>
                         <small class="text-muted">Estado de integración: <span class="text-success fw-bold">Activo</span></small>
                     </div>
-                    <div>
-                        <div class="d-flex align-items-center mb-1">
-                            <span class="me-2">🔌</span>
-                            <strong class="text-dark">Restic Engine</strong>
-                        </div>
-                        <small class="text-muted">Estado de integración: <span class="text-dark fw-bold">Listo</span></small>
-                    </div>
                 </div>
             </div>
 
-            <!-- APLICACIONES CASAOS / DOCKER COMPOSE -->
-            <div class="card shadow-sm border-0 mb-3">
-                <div class="card-header bg-white py-2 px-3">
-                    <h6 class="m-0 fw-bold text-dark small">📦 Aplicaciones CasaOS</h6>
-                </div>
-                <div class="card-body small py-2 px-3">
-                    <p class="fw-bold text-dark mb-2" style="font-size: 0.8rem;">📦 Aplicaciones Docker Compose</p>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered text-center align-middle mb-0" style="font-size: 0.75rem;">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Aplicación</th>
-                                    <th>Contenedores</th>
-                                    <th>Estado</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td class="fw-bold text-start ps-2">CasaOS Apps</td>
-                                    <td>26</td>
-                                    <td><span class="badge bg-danger rounded-pill px-2">🔴 En ejecución</span></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- TABLAS DETALLADAS INFERIORES -->
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-2 px-3">
-                    <button class="btn btn-link text-decoration-none fw-bold text-dark p-0 small" type="button" data-bs-toggle="collapse" data-bs-target="#detailedListsCollapse">
-                        ▼ Ver Lista Detallada de Contenedores y Rutas de Almacenamiento
-                    </button>
-                </div>
-                <div class="collapse show" id="detailedListsCollapse">
-                    <div class="card-body py-3">
-                        
-                        <!-- TABLA CONTENEDORES -->
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="fw-bold text-dark small mb-0">📦 Contenedores Docker Detectados</h6>
-                            <span class="badge bg-secondary">Total: 26</span>
-                        </div>
-                        <div class="table-responsive mb-4" style="max-height: 320px; overflow-y: auto;">
-                            <table class="table table-sm table-hover small align-middle mb-0">
-                                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
-                                    <tr>
-                                        <th>Contenedor</th>
-                                        <th>Imagen</th>
-                                        <th class="text-end">Estado</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-muted font-monospace">casaos-backup-manager:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-muted font-monospace">deluan/navidrome:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">nextcloud</strong></td><td class="text-muted font-monospace">nextcloud:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">plex</strong></td><td class="text-muted font-monospace">linuxserver/plex:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">ddns-updater</strong></td><td class="text-muted font-monospace">qmcgaw/ddns-updater:v2.10.0</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">duplicati</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/duplicati:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">immich-server</strong></td><td class="text-muted font-monospace">ghcr.io/immich-app/immich-server:v3.0.2</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">immich-redis</strong></td><td class="text-muted font-monospace">docker.io/valkey/valkey:9</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">immich-postgres</strong></td><td class="text-muted font-monospace">ghcr.io/immich-app/postgres:14-vectorchord</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">nginxproxymanager</strong></td><td class="text-muted font-monospace">jc21/nginx-proxy-manager:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">transmission</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/transmission:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">sonarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/sonarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">radarr</strong></td><td class="text-muted font-monospace">lscr.io/linuxserver/radarr:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">jellyfin</strong></td><td class="text-muted font-monospace">jellyfin/jellyfin:latest</td><td class="text-end"><span class="badge bg-success">En ejecución</span></td></tr>
-                                    <tr><td><strong class="text-dark">pihole</strong></td><td class="text-muted font-monospace">pihole/pihole:latest</td><td class="text-end"><span class="badge bg-danger">Detenido</span></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- TABLA DATOS PROTEGIBLES DETECTADOS -->
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="fw-bold text-dark small mb-0">🛡️ Datos Protegibles Detectados</h6>
-                            <span class="badge bg-secondary">Rutas: 55</span>
-                        </div>
-                        <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
-                            <table class="table table-sm table-hover small align-middle mb-0">
-                                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
-                                    <tr>
-                                        <th>Contenedor</th>
-                                        <th>Ruta en Host (Raspberry Pi)</th>
-                                        <th>Ruta Interna</th>
-                                        <th>Tipo / Hook</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/home/pichules/CasaOS-Backup-Manager/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/media</td><td class="text-muted font-monospace">/media</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/mnt</td><td class="text-muted font-monospace">/mnt</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/var/lib/casaos</td><td class="text-muted font-monospace">/var/lib/casaos</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">casaos-backup-manager</strong></td><td class="text-danger font-monospace">/DATA</td><td class="text-muted font-monospace">/DATA</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-danger font-monospace">/DATA/AppData/navidrome/data</td><td class="text-muted font-monospace">/data</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">navidrome</strong></td><td class="text-danger font-monospace">/media/pichules/08604ab9-.../BibliotecaMusica</td><td class="text-muted font-monospace">/music</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">nextcloud</strong></td><td class="text-danger font-monospace">/DATA/AppData/nextcloud/var/www/html</td><td class="text-muted font-monospace">/var/www/html</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">plex</strong></td><td class="text-danger font-monospace">/media/pichules</td><td class="text-muted font-monospace">/Media</td><td><span class="badge bg-dark">bind</span></td></tr>
-                                    <tr><td><strong class="text-dark">plex</strong></td><td class="text-danger font-monospace">/DATA/AppData/plex/config</td><td class="text-muted font-monospace">/config</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                    <tr><td><strong class="text-dark">pihole</strong></td><td class="text-danger font-monospace">/DATA/AppData/pihole/etc/pihole</td><td class="text-muted font-monospace">/etc/pihole</td><td><span class="badge bg-success">CasaOS AppData</span></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -354,12 +232,8 @@
 </div>
 
 <script>
-// Mapa de intervalos de polling activos
 const activePolls = {};
 
-// ------------------------------------------------------------------------------
-// CONTROL DE PESTAÑAS (HARDWARE / DOCKER / DISCOS)
-// ------------------------------------------------------------------------------
 function switchTab(tabName) {
     document.getElementById('tab-content-system').style.display = 'none';
     document.getElementById('tab-content-docker').style.display = 'none';
@@ -373,9 +247,6 @@ function switchTab(tabName) {
     document.getElementById('tab-btn-' + tabName).className = 'btn p-0 fw-bold text-danger border-bottom border-danger pb-1 shadow-none bg-transparent small';
 }
 
-// ------------------------------------------------------------------------------
-// NOTIFICACIONES TOAST
-// ------------------------------------------------------------------------------
 function showToast(msg, isError = false) {
     const toastEl = document.getElementById('backupToast');
     const toastBody = document.getElementById('toastMessage');
@@ -387,9 +258,6 @@ function showToast(msg, isError = false) {
     toast.show();
 }
 
-// ------------------------------------------------------------------------------
-// EJECUCIÓN DE TRABAJOS Y MONITOR EN TIEMPO REAL
-// ------------------------------------------------------------------------------
 function getSelectedDestination() {
     const select = document.getElementById('backup-destination-select');
     return select ? select.value : null;
@@ -397,7 +265,6 @@ function getSelectedDestination() {
 
 async function triggerAppBackup(appName, btn) {
     const destinationPath = getSelectedDestination();
-    
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '⏳ 0%';
@@ -414,26 +281,21 @@ async function triggerAppBackup(appName, btn) {
             })
         });
 
-        if (!response.ok) {
-            throw new Error(`Error en el servidor (${response.status})`);
-        }
+        if (!response.ok) throw new Error(`Error en servidor (${response.status})`);
 
         const data = await response.json();
         showToast(`⚡ Iniciando copia de ${appName}...`);
-
         startPolling(data.id, btn, appName, false);
 
     } catch (error) {
         console.error('Error al iniciar la ejecución:', error);
         showToast(`❌ Error al lanzar la copia de ${appName}: ${error.message}`, true);
-        
         resetButton(btn, false);
     }
 }
 
 async function triggerFullBackup(btn) {
     const destinationPath = getSelectedDestination();
-
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '🔄 Copiando... 0%';
@@ -450,19 +312,15 @@ async function triggerFullBackup(btn) {
             })
         });
 
-        if (!response.ok) {
-            throw new Error(`Error en el servidor (${response.status})`);
-        }
+        if (!response.ok) throw new Error(`Error en servidor (${response.status})`);
 
         const data = await response.json();
         showToast('📦 Resguardo completo del sistema iniciado en segundo plano.');
-
         startPolling(data.id, btn, 'Sistema Completo', true);
 
     } catch (error) {
         console.error('Error en Disaster Recovery:', error);
         showToast(`❌ Error al iniciar la copia del sistema: ${error.message}`, true);
-        
         resetButton(btn, true);
     }
 }
@@ -470,7 +328,6 @@ async function triggerFullBackup(btn) {
 function startPolling(executionId, btn, nameLabel, isFullBackup = false) {
     if (activePolls[executionId]) return;
 
-    // Polling cada 500 ms para reflejar de inmediato los porcentajes intermedios
     activePolls[executionId] = setInterval(async () => {
         try {
             const res = await fetch(`/api/v1/executions/${executionId}`);
@@ -480,23 +337,17 @@ function startPolling(executionId, btn, nameLabel, isFullBackup = false) {
             const progress = record.progress_percentage || 0;
 
             if (btn) {
-                if (isFullBackup) {
-                    btn.innerHTML = `🔄 Copiando... ${progress}%`;
-                } else {
-                    btn.innerHTML = `⏳ ${progress}%`;
-                }
+                btn.innerHTML = isFullBackup ? `🔄 Copiando... ${progress}%` : `⏳ ${progress}%`;
             }
 
             if (record.status === 'SUCCESS') {
                 clearInterval(activePolls[executionId]);
                 delete activePolls[executionId];
-
                 showToast(`✅ Copia de ${nameLabel} completada con éxito.`);
                 resetButton(btn, isFullBackup);
             } else if (record.status === 'FAILED' || record.status === 'CANCELLED') {
                 clearInterval(activePolls[executionId]);
                 delete activePolls[executionId];
-
                 const err = record.error_message || 'Operación fallida.';
                 showToast(`❌ Error en copia de ${nameLabel}: ${err}`, true);
                 resetButton(btn, isFullBackup);
@@ -511,11 +362,7 @@ function startPolling(executionId, btn, nameLabel, isFullBackup = false) {
 function resetButton(btn, isFullBackup = false) {
     if (!btn) return;
     btn.disabled = false;
-    if (isFullBackup) {
-        btn.innerHTML = '📦 Copiar Sistema Completo';
-    } else {
-        btn.innerHTML = '⚡ Copiar Ahora';
-    }
+    btn.innerHTML = isFullBackup ? '📦 Copiar Sistema Completo' : '⚡ Copiar Ahora';
 }
 
 function triggerScan() {
