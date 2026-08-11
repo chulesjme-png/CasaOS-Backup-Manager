@@ -1,114 +1,108 @@
-from fastapi import APIRouter, HTTPException
+import logging
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from typing import Optional, List
-import json
-import os
+from sqlalchemy.orm import Session
+
+from app.database.connection import get_db
+from app.services.scheduler_service import add_cron_job, remove_cron_job
+from app.models.execution import ScheduleRecordModel
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/schedules", tags=["schedules"])
 
-CONFIG_FILE = "app/config/schedules_config.json"
+
+# ------------------------------------------------------------------------------
+# SCHEMAS (Pydantic)
+# ------------------------------------------------------------------------------
+
+class ScheduleCreate(BaseModel):
+    app_name: str
+    cron_expression: str  # Ej: "0 2 * * *" (diario a las 02:00 AM)
+    destination_path: Optional[str] = "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa"
+    is_active: Optional[bool] = True
 
 
-class ScheduleTask(BaseModel):
-    id: str
-    name: str
-    target_app: str  # 'all', 'disaster_recovery', o app_id específico
-    backend: str     # 'duplicati' o 'restic'
-    frequency: str   # 'daily', 'weekly', 'monthly'
-    time: str        # Formato 'HH:MM', ej: '03:00'
-    days_of_week: Optional[List[int]] = [0, 1, 2, 3, 4, 5, 6]
-    retention_days: int = 30
-    enabled: bool = True
-    notify_webhook: Optional[str] = ""
+class ScheduleResponse(BaseModel):
+    id: int
+    app_name: str
+    cron_expression: str
+    destination_path: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
 
 
-def load_schedules() -> List[dict]:
-    if not os.path.exists(CONFIG_FILE):
-        default_data = [
-            {
-                "id": "sched_full_daily",
-                "name": "Copia Completa de Seguridad",
-                "target_app": "disaster_recovery",
-                "backend": "duplicati",
-                "frequency": "daily",
-                "time": "03:00",
-                "days_of_week": [0, 1, 2, 3, 4, 5, 6],
-                "retention_days": 30,
-                "enabled": True,
-                "notify_webhook": ""
-            },
-            {
-                "id": "sched_apps_weekly",
-                "name": "Respaldo Semanal de Datos (/DATA/AppData)",
-                "target_app": "all",
-                "backend": "duplicati",
-                "frequency": "weekly",
-                "time": "04:30",
-                "days_of_week": [6],
-                "retention_days": 60,
-                "enabled": True,
-                "notify_webhook": ""
-            }
-        ]
-        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(default_data, f, indent=4)
-        return default_data
+# ------------------------------------------------------------------------------
+# ENDPOINTS REST API
+# ------------------------------------------------------------------------------
 
-    with open(CONFIG_FILE, "r") as f:
-        return json.load(f)
+@router.get("", response_model=List[ScheduleResponse])
+def list_schedules(db: Session = Depends(get_db)):
+    """Devuelve el listado de todas las tareas de respaldo programadas."""
+    schedules = db.query(ScheduleRecordModel).all()
+    return schedules
 
 
-def save_schedules(data: List[dict]):
-    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+@router.post("", response_model=ScheduleResponse, status_code=status.HTTP_201_CREATED)
+def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db)):
+    """Crea una nueva regla de automatización y la registra en el motor APScheduler."""
+    schedule = ScheduleRecordModel(
+        app_name=payload.app_name,
+        cron_expression=payload.cron_expression,
+        destination_path=payload.destination_path,
+        is_active=payload.is_active
+    )
+    db.add(schedule)
+    db.commit()
+    db.refresh(schedule)
+
+    # Registrar en el motor cron si está marcado como activo
+    if schedule.is_active:
+        add_cron_job(
+            job_id=str(schedule.id),
+            app_name=schedule.app_name,
+            cron_expression=schedule.cron_expression,
+            destination_path=schedule.destination_path
+        )
+
+    return schedule
 
 
-def reload_scheduler_jobs_safe():
-    try:
-        from app.services.scheduler_service import sync_scheduler_jobs
-        sync_scheduler_jobs()
-    except Exception:
-        pass
+@router.put("/{schedule_id}/toggle", response_model=ScheduleResponse)
+def toggle_schedule(schedule_id: int, db: Session = Depends(get_db)):
+    """Activa o deshabilita la ejecución automática de una programación existente."""
+    schedule = db.query(ScheduleRecordModel).filter(ScheduleRecordModel.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Programación no encontrada")
+
+    schedule.is_active = not schedule.is_active
+    db.commit()
+    db.refresh(schedule)
+
+    if schedule.is_active:
+        add_cron_job(
+            job_id=str(schedule.id),
+            app_name=schedule.app_name,
+            cron_expression=schedule.cron_expression,
+            destination_path=schedule.destination_path
+        )
+    else:
+        remove_cron_job(str(schedule.id))
+
+    return schedule
 
 
-@router.get("/")
-def get_all_schedules():
-    """Obtiene el listado de tareas programadas actualmente."""
-    return {"schedules": load_schedules()}
+@router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
+    """Elimina una programación de la base de datos y detiene su ejecución en APScheduler."""
+    schedule = db.query(ScheduleRecordModel).filter(ScheduleRecordModel.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Programación no encontrada")
 
-
-@router.post("/save")
-def save_schedule(task: ScheduleTask):
-    """Crea o actualiza una tarea programada."""
-    schedules = load_schedules()
-    updated = False
-
-    for i, s in enumerate(schedules):
-        if s["id"] == task.id:
-            schedules[i] = task.dict()
-            updated = True
-            break
-
-    if not updated:
-        schedules.append(task.dict())
-
-    save_schedules(schedules)
-    reload_scheduler_jobs_safe()
-    return {"success": True, "message": f"Tarea '{task.name}' guardada correctamente."}
-
-
-@router.post("/toggle/{task_id}")
-def toggle_schedule(task_id: str):
-    """Activa o desactiva una tarea programada por su ID."""
-    schedules = load_schedules()
-    for s in schedules:
-        if s["id"] == task_id:
-            s["enabled"] = not s["enabled"]
-            save_schedules(schedules)
-            reload_scheduler_jobs_safe()
-            state = "activada" if s["enabled"] else "desactivada"
-            return {"success": True, "message": f"Tarea '{s['name']}' {state}."}
-
-    raise HTTPException(status_code=404, detail="Tarea programada no encontrada")
+    remove_cron_job(str(schedule.id))
+    db.delete(schedule)
+    db.commit()
+    return None

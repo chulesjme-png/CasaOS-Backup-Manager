@@ -1,26 +1,27 @@
-import uuid
-from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, Enum as SQLEnum
-
-# Corrección de importación: apunta al conector de base de datos de la app
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy.sql import func
 from app.database.connection import Base
-from app.schemas.execution import ExecutionStatus
-
 
 class ExecutionRecordModel(Base):
-    __tablename__ = "execution_records"
+    __tablename__ = "executions"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    app_name = Column(String(100), nullable=False)
-    job_id = Column(String(100), nullable=True)
-    backend_type = Column(String(50), nullable=False, default="duplicati")
-    destination_path = Column(String(255), nullable=True)
-    
-    status = Column(SQLEnum(ExecutionStatus), default=ExecutionStatus.PENDING, nullable=False)
-    progress_percentage = Column(Integer, default=0, nullable=False)
-    
-    start_time = Column(DateTime, default=datetime.utcnow, nullable=False)
-    end_time = Column(DateTime, nullable=True)
-    
-    error_message = Column(String(500), nullable=True)
-    execution_reference = Column(String(255), nullable=True)
+    id = Column(String, primary_key=True, index=True)
+    app_name = Column(String, nullable=False)
+    backend_type = Column(String, default="duplicati")
+    destination_path = Column(String, nullable=True)
+    status = Column(String, default="PENDING")  # PENDING, RUNNING, SUCCESS, FAILED
+    progress_percentage = Column(Integer, default=0)
+    error_message = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class ScheduleRecordModel(Base):
+    __tablename__ = "schedules"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    app_name = Column(String, nullable=False)
+    cron_expression = Column(String, nullable=False)  # Ej. "0 2 * * *"
+    destination_path = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
