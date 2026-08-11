@@ -6,7 +6,7 @@ from app.config.settings import APP_DESCRIPTION, APP_NAME, APP_VERSION
 from app.config.template import templates
 from app.database.connection import init_db
 
-# Importación de modelos para asegurar que SQLAlchemy cree todas las tablas (incluida ExecutionRecordModel)
+# Importación de modelos para asegurar que SQLAlchemy cree todas las tablas
 import app.models.execution  # noqa: F401
 
 # Importación de Routers
@@ -72,12 +72,12 @@ def schedules_page(request: Request):
 # 1. UI Router (Vistas HTML / Jinja2)
 app.include_router(dashboard_router)
 
-# 2. REST API v1 Router (Endpoints unificados para frontend app.js)
+# 2. REST API v1 Router (Endpoints unificados para frontend)
 app.include_router(api_v1_router)
 
 # 3. REST API Routers adicionales (Salud, Backends, Ejecuciones, Backups, Schedules)
 app.include_router(health_router)
 app.include_router(backends_router)
-app.include_router(executions_router)
+app.include_router(executions_router)  # Incluido directamente sin prefix adicional
 app.include_router(backups_router)
 app.include_router(schedules_router)
