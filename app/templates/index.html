@@ -354,6 +354,12 @@
 </div>
 
 <script>
+// Mapa de intervalos de polling activos
+const activePolls = {};
+
+// ------------------------------------------------------------------------------
+// CONTROL DE PESTAÑAS (HARDWARE / DOCKER / DISCOS)
+// ------------------------------------------------------------------------------
 function switchTab(tabName) {
     document.getElementById('tab-content-system').style.display = 'none';
     document.getElementById('tab-content-docker').style.display = 'none';
@@ -367,25 +373,155 @@ function switchTab(tabName) {
     document.getElementById('tab-btn-' + tabName).className = 'btn p-0 fw-bold text-danger border-bottom border-danger pb-1 shadow-none bg-transparent small';
 }
 
-function showToast(msg) {
+// ------------------------------------------------------------------------------
+// NOTIFICACIONES TOAST
+// ------------------------------------------------------------------------------
+function showToast(msg, isError = false) {
     const toastEl = document.getElementById('backupToast');
-    document.getElementById('toastMessage').innerText = msg;
-    const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+    const toastBody = document.getElementById('toastMessage');
+    
+    toastEl.className = `toast align-items-center text-white border-0 shadow-lg ${isError ? 'bg-danger' : 'bg-primary'}`;
+    toastBody.innerText = msg;
+    
+    const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
     toast.show();
 }
 
-function triggerAppBackup(appName, btn) {
-    if(btn) {
+// ------------------------------------------------------------------------------
+// EJECUCIÓN DE TRABAJOS Y MONITOR EN TIEMPO REAL
+// ------------------------------------------------------------------------------
+function getSelectedDestination() {
+    const select = document.getElementById('backup-destination-select');
+    return select ? select.value : null;
+}
+
+async function triggerAppBackup(appName, btn) {
+    const destinationPath = getSelectedDestination();
+    
+    if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '⏳ Copiando...';
+        btn.innerHTML = '⏳ Enviando...';
     }
-    showToast(`⚡ Copia iniciada para: ${appName}`);
-    setTimeout(() => {
-        if(btn) {
+
+    try {
+        const response = await fetch('/api/v1/executions/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                app_name: appName,
+                backend_type: 'duplicati',
+                destination_path: destinationPath
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error en el servidor (${response.status})`);
+        }
+
+        const data = await response.json();
+        showToast(`⚡ Tarea en segundo plano iniciada para ${appName}`);
+
+        startPolling(data.id, btn, appName);
+
+    } catch (error) {
+        console.error('Error al iniciar la ejecución:', error);
+        showToast(`❌ Error al lanzar la copia de ${appName}: ${error.message}`, true);
+        
+        if (btn) {
             btn.disabled = false;
             btn.innerHTML = '⚡ Copiar Ahora';
         }
-    }, 2500);
+    }
+}
+
+async function triggerFullBackup() {
+    const btn = event ? event.currentTarget : null;
+    const destinationPath = getSelectedDestination();
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Preparando copia completa...';
+    }
+
+    try {
+        const response = await fetch('/api/v1/executions/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                app_name: 'system_disaster_recovery',
+                backend_type: 'duplicati',
+                destination_path: destinationPath
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error en el servidor (${response.status})`);
+        }
+
+        const data = await response.json();
+        showToast('📦 Resguardo completo del sistema iniciado en segundo plano.');
+
+        startPolling(data.id, btn, 'Sistema Completo', true);
+
+    } catch (error) {
+        console.error('Error en Disaster Recovery:', error);
+        showToast(`❌ Error al iniciar la copia del sistema: ${error.message}`, true);
+        
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '📦 Copiar Sistema Completo';
+        }
+    }
+}
+
+function startPolling(executionId, btn, nameLabel, isFullBackup = false) {
+    if (activePolls[executionId]) return;
+
+    activePolls[executionId] = setInterval(async () => {
+        try {
+            const res = await fetch(`/api/v1/executions/${executionId}`);
+            if (!res.ok) return;
+
+            const record = await res.json();
+            const progress = record.progress_percentage || 0;
+
+            if (btn) {
+                if (isFullBackup) {
+                    btn.innerHTML = `🔄 Copiando... ${progress}%`;
+                } else {
+                    btn.innerHTML = `⏳ ${progress}%`;
+                }
+            }
+
+            if (record.status === 'SUCCESS') {
+                clearInterval(activePolls[executionId]);
+                delete activePolls[executionId];
+
+                showToast(`✅ Copia de ${nameLabel} completada con éxito.`);
+                resetButton(btn, isFullBackup);
+            } else if (record.status === 'FAILED' || record.status === 'CANCELLED') {
+                clearInterval(activePolls[executionId]);
+                delete activePolls[executionId];
+
+                const err = record.error_message || 'Operación fallida.';
+                showToast(`❌ Error en copia de ${nameLabel}: ${err}`, true);
+                resetButton(btn, isFullBackup);
+            }
+
+        } catch (err) {
+            console.error('Error durante el polling:', err);
+        }
+    }, 1500);
+}
+
+function resetButton(btn, isFullBackup = false) {
+    if (!btn) return;
+    btn.disabled = false;
+    if (isFullBackup) {
+        btn.innerHTML = '📦 Copiar Sistema Completo';
+    } else {
+        btn.innerHTML = '⚡ Copiar Ahora';
+    }
 }
 
 function triggerScan() {
@@ -393,11 +529,7 @@ function triggerScan() {
     btn.disabled = true;
     btn.innerText = '🔄 Escaneando...';
     showToast('🔄 Escaneando contenedores y discos...');
-    setTimeout(() => { location.reload(); }, 1500);
-}
-
-function triggerFullBackup() {
-    showToast('📦 Resguardo completo del sistema iniciado.');
+    setTimeout(() => { location.reload(); }, 1200);
 }
 
 function handleDestinationChange(val) {

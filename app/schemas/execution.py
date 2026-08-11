@@ -1,65 +1,44 @@
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
-class BackupOperationType(str, Enum):
-    RUN_BACKUP = "RUN_BACKUP"
-    RESTORE = "RESTORE"
-    CANCEL = "CANCEL"
+class ExecutionStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
-class BackupConfiguration(BaseModel):
-    destination_url: str
-    parameters: Dict[str, Any] = Field(default_factory=dict)
+class ExecutionCreate(BaseModel):
+    app_name: str
+    job_id: Optional[str] = None
+    backend_type: str = "duplicati"
+    destination_path: Optional[str] = None
 
 
-class BackupExecutionReference(BaseModel):
-    execution_id: str
-    task_id: str
-    backend: str
+class ExecutionUpdate(BaseModel):
+    status: Optional[ExecutionStatus] = None
+    progress_percentage: Optional[int] = Field(default=None, ge=0, le=100)
+    end_time: Optional[datetime] = None
+    error_message: Optional[str] = None
+    execution_reference: Optional[str] = None
 
 
-class BackupManifest(BaseModel):
-    application: str
-    sources: List[str] = Field(default_factory=list)
-    excluded_sources: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
-    estimated_size: int = 0
+class ExecutionResponse(BaseModel):
+    id: str
+    app_name: str
+    job_id: Optional[str]
+    backend_type: str
+    destination_path: Optional[str]
+    status: ExecutionStatus
+    progress_percentage: int
+    start_time: datetime
+    end_time: Optional[datetime]
+    error_message: Optional[str]
+    execution_reference: Optional[str]
 
-
-class BackupExecutionApiRequest(BaseModel):
-    application: str
-    backend_name: str
-    destination_url: str
-    backup_id: Optional[str] = None
-    sources: List[str] = Field(default_factory=list)
-    excluded_sources: List[str] = Field(default_factory=list)
-
-
-class BackupCancelApiRequest(BaseModel):
-    application: str
-    backend_name: str
-    execution_reference: BackupExecutionReference
-
-
-class BackupResult(BaseModel):
-    success: bool
-    backend: str
-    application: str
-    operation: BackupOperationType
-    execution_reference: Optional[BackupExecutionReference] = None
-    errors: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class BackupResultResponse(BaseModel):
-    success: bool
-    backend: str
-    application: str
-    operation: str
-    execution_reference: Optional[Dict[str, Any]] = None
-    errors: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    class Config:
+        from_attributes = True

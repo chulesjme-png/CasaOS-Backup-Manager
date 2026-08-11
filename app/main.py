@@ -6,6 +6,9 @@ from app.config.settings import APP_DESCRIPTION, APP_NAME, APP_VERSION
 from app.config.template import templates
 from app.database.connection import init_db
 
+# Importación de modelos para asegurar que SQLAlchemy cree todas las tablas (incluida ExecutionRecordModel)
+import app.models.execution  # noqa: F401
+
 # Importación de Routers
 from app.routers.dashboard import router as dashboard_router
 from app.routers.api_v1 import router as api_v1_router
@@ -23,7 +26,7 @@ from app.services.scheduler_service import start_scheduler, stop_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Inicializa las tablas de SQLite al arrancar
+    # Inicializa las tablas de SQLite en la base de datos al arrancar
     init_db()
     
     # Registrar backends por defecto al iniciar la app
