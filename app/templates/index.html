@@ -94,7 +94,7 @@
                             </div>
                         </div>
                         <div class="col-md-5 col-lg-5 text-md-end">
-                            <button class="btn btn-primary btn-md fw-bold px-3 py-2 shadow-sm w-100" onclick="triggerFullBackup()">
+                            <button class="btn btn-primary btn-md fw-bold px-3 py-2 shadow-sm w-100" onclick="triggerFullBackup(this)">
                                 📦 Copiar Sistema Completo
                             </button>
                         </div>
@@ -383,7 +383,7 @@ function showToast(msg, isError = false) {
     toastEl.className = `toast align-items-center text-white border-0 shadow-lg ${isError ? 'bg-danger' : 'bg-primary'}`;
     toastBody.innerText = msg;
     
-    const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+    const toast = bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 3500 });
     toast.show();
 }
 
@@ -400,7 +400,7 @@ async function triggerAppBackup(appName, btn) {
     
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '⏳ Enviando...';
+        btn.innerHTML = '⏳ 0%';
     }
 
     try {
@@ -419,28 +419,24 @@ async function triggerAppBackup(appName, btn) {
         }
 
         const data = await response.json();
-        showToast(`⚡ Tarea en segundo plano iniciada para ${appName}`);
+        showToast(`⚡ Iniciando copia de ${appName}...`);
 
-        startPolling(data.id, btn, appName);
+        startPolling(data.id, btn, appName, false);
 
     } catch (error) {
         console.error('Error al iniciar la ejecución:', error);
         showToast(`❌ Error al lanzar la copia de ${appName}: ${error.message}`, true);
         
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '⚡ Copiar Ahora';
-        }
+        resetButton(btn, false);
     }
 }
 
-async function triggerFullBackup() {
-    const btn = event ? event.currentTarget : null;
+async function triggerFullBackup(btn) {
     const destinationPath = getSelectedDestination();
 
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '⏳ Preparando copia completa...';
+        btn.innerHTML = '🔄 Copiando... 0%';
     }
 
     try {
@@ -467,16 +463,14 @@ async function triggerFullBackup() {
         console.error('Error en Disaster Recovery:', error);
         showToast(`❌ Error al iniciar la copia del sistema: ${error.message}`, true);
         
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '📦 Copiar Sistema Completo';
-        }
+        resetButton(btn, true);
     }
 }
 
 function startPolling(executionId, btn, nameLabel, isFullBackup = false) {
     if (activePolls[executionId]) return;
 
+    // Polling cada 500 ms para reflejar de inmediato los porcentajes intermedios
     activePolls[executionId] = setInterval(async () => {
         try {
             const res = await fetch(`/api/v1/executions/${executionId}`);
@@ -511,7 +505,7 @@ function startPolling(executionId, btn, nameLabel, isFullBackup = false) {
         } catch (err) {
             console.error('Error durante el polling:', err);
         }
-    }, 1500);
+    }, 500);
 }
 
 function resetButton(btn, isFullBackup = false) {
