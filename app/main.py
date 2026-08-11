@@ -34,11 +34,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Resolución dinámica de rutas absolutas para plantillas y estáticos
-# Subimos un nivel en el árbol de directorios para apuntar a /app en lugar de /app/app
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Directorio del módulo actual (/app/app)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# Aseguramos que el directorio estático existe para evitar errores en FastAPI
+os.makedirs(STATIC_DIR, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
