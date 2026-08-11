@@ -53,10 +53,10 @@
                     <label class="block text-sm font-medium text-slate-700 mb-1">Aplicación / Perfil</label>
                     <select id="app_name" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" required>
                         <option value="system_disaster_recovery">Sistema Completo (Disaster Recovery)</option>
-                        <option value="immich-postgres">Immich (PostgreSQL)</option>
-                        <option value="nextcloud">Nextcloud</option>
-                        <option value="navidrome">Navidrome</option>
-                        <option value="plex">Plex</option>
+                        <option value="immich-postgres">Immich (Base de Datos PostgreSQL)</option>
+                        <option value="nextcloud">Nextcloud (Archivos y Configuración)</option>
+                        <option value="navidrome">Navidrome (Servidor de Música)</option>
+                        <option value="plex">Plex Media Server</option>
                     </select>
                 </div>
 
@@ -81,6 +81,20 @@
 
     <!-- JAVASCRIPT -->
     <script>
+        // Diccionario de traducción de identificadores técnicos a nombres amigables
+        const APP_NAMES_MAP = {
+            'system_disaster_recovery': 'Copia del Sistema Completo (Disaster Recovery)',
+            'immich-postgres': 'Immich (Base de Datos PostgreSQL)',
+            'immich-server': 'Immich Server',
+            'nextcloud': 'Nextcloud',
+            'navidrome': 'Navidrome',
+            'plex': 'Plex Media Server'
+        };
+
+        function getFriendlyAppName(rawName) {
+            return APP_NAMES_MAP[rawName] || rawName;
+        }
+
         async function loadSchedules() {
             try {
                 const res = await fetch('/api/v1/schedules');
@@ -98,7 +112,7 @@
                 container.innerHTML = data.map(item => `
                     <div class="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition">
                         <div>
-                            <span class="font-bold text-slate-800 text-base">${item.app_name}</span>
+                            <span class="font-bold text-slate-800 text-base">${getFriendlyAppName(item.app_name)}</span>
                             <div class="text-xs text-slate-500 font-mono mt-1">
                                 Regla Cron: <span class="bg-slate-200 px-1.5 py-0.5 rounded">${item.cron_expression}</span>
                             </div>
