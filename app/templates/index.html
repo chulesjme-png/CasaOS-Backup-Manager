@@ -39,7 +39,7 @@
                 <div class="col-md-3">
                     <div class="p-2 bg-white rounded shadow-sm border-start border-4 border-warning h-100 d-flex flex-column justify-content-center">
                         <span class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.65rem;">Aplicaciones CasaOS</span>
-                        <strong class="text-dark mt-1" style="font-size: 0.85rem;">{{ apps_list|length if apps_list else '15' }} Detectadas</strong>
+                        <strong class="text-dark mt-1" style="font-size: 0.85rem;">{{ apps_list|length if apps_list else '14' }} Detectadas</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -65,8 +65,6 @@
                         {% endfor %}
                     {% else %}
                         <option value="/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa" selected>Disco Externo: 08604ab9-10b8-46bc-a6f2-a19f3adf6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa) — Libre: 1710.63 GB / Total: 2749.54 GB</option>
-                        <option value="/media/pichules/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d">Disco Externo 2: a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d (/media/pichules/a1b2c3d4...) — Libre: 500.00 GB / Total: 1000.00 GB</option>
-                        <option value="/media/pichules/nas-backup">Disco Red NAS: backup-nas (/media/pichules/nas-backup) — Libre: 4200.50 GB / Total: 8000.00 GB</option>
                     {% endif %}
                 </select>
             </div>
@@ -100,7 +98,7 @@
                 </div>
             </div>
 
-            <!-- PERFILES DE APLICACIÓN DINÁMICOS -->
+            <!-- PERFILES DE APLICACIÓN -->
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark small">📌 Perfiles de Aplicación Generados</h6>
@@ -108,7 +106,7 @@
                         {% if apps_list %}
                             {{ apps_list|length }} Perfiles
                         {% else %}
-                            15 Perfiles
+                            14 Perfiles
                         {% endif %}
                     </span>
                 </div>
@@ -116,7 +114,6 @@
                     <div class="list-group list-group-flush small">
                         {% set dynamic_apps = apps_list if apps_list else [
                             {'name': 'Casaos-backup-manager', 'path': '/DATA/AppData/casaos-backup-manager'},
-                            {'name': 'Pihole', 'path': '/DATA/AppData/pihole'},
                             {'name': 'Navidrome', 'path': '/DATA/AppData/navidrome'},
                             {'name': 'Nextcloud', 'path': '/DATA/AppData/nextcloud'},
                             {'name': 'Plex', 'path': '/DATA/AppData/plex'},
@@ -149,7 +146,6 @@
 
         <!-- COLUMNA DERECHA -->
         <div class="col-lg-4">
-            <!-- PESTAÑAS RASPBERRY / DOCKER / DISCOS -->
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header bg-white py-2 px-3 d-flex gap-3">
                     <button class="btn p-0 fw-bold text-danger border-bottom border-danger pb-1 shadow-none bg-transparent small" onclick="switchTab('system')" id="tab-btn-system">🍓 Raspberry Pi 5</button>
@@ -172,14 +168,14 @@
                         <ul class="list-unstyled mb-0">
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Estado Daemon:</span><strong class="text-success">Activo</strong></li>
                             <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Versión:</span><strong class="text-dark">26.1.3</strong></li>
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores Activos:</span><strong class="text-dark">15 Activos</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores Activos:</span><strong class="text-dark">26 Activos</strong></li>
                         </ul>
                     </div>
 
                     <div id="tab-content-disks" style="display: none;">
                         <h6 class="text-primary fw-bold mb-2" style="font-size: 0.8rem;">💾 Almacenamiento Montado</h6>
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Disco Ext 1:</span><strong class="text-dark">1.04 TB / 2.75 TB</strong></li>
+                            <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Disco Ext:</span><strong class="text-dark">1710.63 GB Libre</strong></li>
                         </ul>
                     </div>
                 </div>
@@ -192,8 +188,9 @@
                 </div>
                 <div class="card-body small py-2 px-3">
                     <ul class="list-unstyled mb-0">
-                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Aplicaciones:</span><strong class="text-dark">15</strong></li>
-                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">15</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Aplicaciones:</span><strong class="text-dark">26</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Contenedores:</span><strong class="text-dark">26</strong></li>
+                        <li class="mb-1 d-flex justify-content-between"><span class="text-muted">Rutas persistentes:</span><strong class="text-info">55</strong></li>
                     </ul>
                 </div>
             </div>
@@ -211,9 +208,140 @@
                         </div>
                         <small class="text-muted">Estado de integración: <span class="text-success fw-bold">Activo</span></small>
                     </div>
+                    <div>
+                        <div class="d-flex align-items-center mb-1">
+                            <span class="me-2">⛏️</span>
+                            <strong class="text-dark">Restic Engine</strong>
+                        </div>
+                        <small class="text-muted">Estado de integración: <span class="text-secondary fw-bold">Listo</span></small>
+                    </div>
                 </div>
             </div>
 
+            <!-- APLICACIONES CASAOS Y DOCKER -->
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-white py-2 px-3">
+                    <h6 class="m-0 fw-bold text-dark small">📦 Aplicaciones CasaOS</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm text-center mb-0 align-middle small">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Aplicación</th>
+                                    <th>Contenedores</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>CasaOS Apps</strong></td>
+                                    <td>26</td>
+                                    <td><span class="badge bg-danger rounded-pill">En ejecución</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN INFERIOR: TABLA DETALLADA DE CONTENEDORES Y RUTAS -->
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-header bg-white py-3 px-3">
+            <h6 class="m-0 fw-bold text-dark small">▼ Ver Lista Detallada de Contenedores y Rutas de Almacenamiento</h6>
+        </div>
+        <div class="card-body p-3">
+            <!-- TABLA DE CONTENEDORES DOCKER DETECTADOS -->
+            <div class="mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-secondary mb-0 small">📦 Contenedores Docker Detectados</h6>
+                    <span class="badge bg-secondary">Total: 26</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm align-middle small mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>Contenedor</th>
+                                <th>Imagen</th>
+                                <th class="text-end">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>casaos-backup-manager</strong></td>
+                                <td class="font-monospace text-muted">casaos-backup-manager:latest</td>
+                                <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>navidrome</strong></td>
+                                <td class="font-monospace text-muted">deluan/navidrome:latest</td>
+                                <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>nextcloud</strong></td>
+                                <td class="font-monospace text-muted">nextcloud:latest</td>
+                                <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>plex</strong></td>
+                                <td class="font-monospace text-muted">linuxserver/plex:latest</td>
+                                <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>ddns-updater</strong></td>
+                                <td class="font-monospace text-muted">qmcgaw/ddns-updater:v2.10.0</td>
+                                <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>duplicati</strong></td>
+                                <td class="font-monospace text-muted">lscr.io/linuxserver/duplicati:latest</td>
+                                <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>immich-server</strong></td>
+                                <td class="font-monospace text-muted">ghcr.io/immich-app/immich-server:v1.105.0</td>
+                                <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>immich-redis</strong></td>
+                                <td class="font-monospace text-muted">docker.io/valkey/valkey:8</td>
+                                <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>immich-postgres</strong></td>
+                                <td class="font-monospace text-muted">ghcr.io/immich-app/postgres:14-vectorchord</td>
+                                <td class="text-end"><span class="badge bg-success">En ejecución</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- DATOS PROTEGIBLES DETECTADOS -->
+            <div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-secondary mb-0 small">🛡️ Datos Protegibles Detectados</h6>
+                    <span class="badge bg-secondary">Rutas: 55</span>
+                </div>
+                <div class="p-2 bg-light rounded border font-monospace text-muted small" style="max-height: 120px; overflow-y: auto;">
+                    /DATA/AppData/casaos-backup-manager<br>
+                    /DATA/AppData/navidrome<br>
+                    /DATA/AppData/nextcloud<br>
+                    /DATA/AppData/plex<br>
+                    /DATA/AppData/ddns-updater<br>
+                    /DATA/AppData/duplicati<br>
+                    /DATA/AppData/immich-server<br>
+                    /DATA/AppData/immich-redis<br>
+                    /DATA/AppData/immich-postgres<br>
+                    /DATA/AppData/nginxproxymanager<br>
+                    /DATA/AppData/transmission<br>
+                    /DATA/AppData/sonarr<br>
+                    /DATA/AppData/radarr<br>
+                    /DATA/AppData/jellyfin
+                </div>
+            </div>
         </div>
     </div>
 
