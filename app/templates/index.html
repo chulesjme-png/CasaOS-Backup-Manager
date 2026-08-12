@@ -9,6 +9,12 @@
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans antialiased min-h-screen">
 
+    <!-- Notificación Flotante (Toast) -->
+    <div id="toast" class="hidden fixed bottom-5 right-5 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl z-50 flex items-center space-x-3 border border-slate-700">
+        <span id="toast-icon" class="text-xl">ℹ️</span>
+        <span id="toast-message" class="text-sm font-medium">Notificación</span>
+    </div>
+
     <!-- Header Principal -->
     <header class="bg-white border-b border-gray-200 px-8 py-3 shadow-sm">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
@@ -28,15 +34,15 @@
                     <span>🔍</span>
                     <span>Escanear</span>
                 </button>
-                <button class="flex items-center space-x-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition">
+                <button onclick="openModal('modal-schedules')" class="flex items-center space-x-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition">
                     <span>📅</span>
                     <span>Programación</span>
                 </button>
-                <button class="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-400 text-slate-900 rounded-lg text-sm font-bold shadow-sm hover:bg-amber-500 transition">
+                <button onclick="openModal('modal-restore')" class="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-400 text-slate-900 rounded-lg text-sm font-bold shadow-sm hover:bg-amber-500 transition">
                     <span>🔄</span>
                     <span>Restaurar Copias</span>
                 </button>
-                <button class="flex items-center space-x-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition">
+                <button onclick="openModal('modal-config')" class="flex items-center space-x-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition">
                     <span>⚙️</span>
                     <span>Configuración</span>
                 </button>
@@ -79,17 +85,17 @@
             </div>
         </div>
 
-        <!-- Barra de Selector de Destino Activo -->
+        <!-- Selector de Destino Activo -->
         <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex items-center justify-between">
             <div class="flex items-center space-x-3 w-full">
                 <span class="text-gray-600 font-bold text-sm whitespace-nowrap flex items-center space-x-2">
                     <span>💾</span>
                     <span>Destino Activo de Copias:</span>
                 </span>
-                <select class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm font-medium rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                <select id="active-destination" class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm font-medium rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
                     {% for dest in destinations %}
                     <option value="{{ dest.path }}">
-                        {{ dest.name }} ({{ dest.path }}) — Libre: {{ dest.free_gb }} GB
+                        {{ dest.name }} ({{ dest.path }}) — Libre: {{ dest.free_gb }} GB / Total: {{ dest.total_gb }} GB
                     </option>
                     {% endfor %}
                 </select>
@@ -127,14 +133,14 @@
                             </div>
                         </div>
 
-                        <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-3 rounded-xl shadow transition flex items-center space-x-2 whitespace-nowrap">
+                        <button onclick="runFullBackup()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-3 rounded-xl shadow transition flex items-center space-x-2 whitespace-nowrap active:scale-95">
                             <span>📦</span>
                             <span>Copiar Sistema Completo</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Lista de Perfiles de Aplicación Generados -->
+                <!-- Lista de Perfiles de Aplicación -->
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
                     <div class="flex justify-between items-center border-b border-gray-100 pb-3">
                         <div class="flex items-center space-x-2">
@@ -163,14 +169,10 @@
                                 </div>
                             </div>
 
-                            <button class="border border-blue-500 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1">
+                            <button onclick="runAppBackup('{{ app.name }}')" class="border border-blue-500 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 active:scale-95">
                                 <span>⚡</span>
                                 <span>Copiar Ahora</span>
                             </button>
-                        </div>
-                        {% else %}
-                        <div class="py-8 text-center text-gray-400 text-sm">
-                            No se encontraron perfiles de aplicación.
                         </div>
                         {% endfor %}
                     </div>
@@ -178,31 +180,32 @@
 
             </div>
 
-            <!-- Columna Derecha: Sistema host y estado de motores -->
+            <!-- Columna Derecha: Pestañas Interactivas -->
             <div class="space-y-6">
 
-                <!-- Tarjeta de Especificaciones Hardware -->
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-                    <div class="flex items-center justify-between border-b border-gray-100 pb-3 text-sm font-bold text-gray-600">
-                        <span class="text-blue-600 border-b-2 border-blue-600 pb-1 flex items-center space-x-1">
+                    <!-- Cabecera de Pestañas -->
+                    <div class="flex items-center space-x-4 border-b border-gray-100 pb-3 text-sm font-bold">
+                        <button id="tab-btn-rpi" onclick="switchTab('rpi')" class="text-blue-600 border-b-2 border-blue-600 pb-1 flex items-center space-x-1">
                             <span>🍓</span>
                             <span>Raspberry Pi 5</span>
-                        </span>
-                        <span class="text-gray-400 hover:text-gray-600 cursor-pointer flex items-center space-x-1">
+                        </button>
+                        <button id="tab-btn-docker" onclick="switchTab('docker')" class="text-gray-400 hover:text-gray-600 pb-1 flex items-center space-x-1">
                             <span>🐳</span>
                             <span>Docker</span>
-                        </span>
-                        <span class="text-gray-400 hover:text-gray-600 cursor-pointer flex items-center space-x-1">
+                        </button>
+                        <button id="tab-btn-discos" onclick="switchTab('discos')" class="text-gray-400 hover:text-gray-600 pb-1 flex items-center space-x-1">
                             <span>💾</span>
                             <span>Discos</span>
-                        </span>
+                        </button>
                     </div>
 
-                    <div class="space-y-3 text-xs">
+                    <!-- Contenido Pestaña 1: Raspberry Pi -->
+                    <div id="tab-content-rpi" class="space-y-3 text-xs">
                         <div class="flex items-center justify-between">
                             <span class="text-gray-500 font-bold flex items-center space-x-1">
                                 <span>🖥️</span>
-                                <span>Sistema</span>
+                                <span>Sistema Host</span>
                             </span>
                         </div>
                         <div class="flex justify-between text-gray-700">
@@ -217,6 +220,43 @@
                             <span class="text-gray-400">RAM:</span>
                             <span class="font-semibold">{{ system.ram }}</span>
                         </div>
+                    </div>
+
+                    <!-- Contenido Pestaña 2: Docker -->
+                    <div id="tab-content-docker" class="hidden space-y-2 text-xs">
+                        <div class="flex justify-between items-center text-gray-500 font-bold border-b pb-1">
+                            <span>Contenedor</span>
+                            <span>Estado</span>
+                        </div>
+                        <div class="max-h-48 overflow-y-auto divide-y divide-gray-100">
+                            {% for c in docker_containers %}
+                            <div class="py-1.5 flex justify-between items-center">
+                                <span class="font-semibold text-gray-800">{{ c.name }}</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    {{ c.status }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Contenido Pestaña 3: Discos -->
+                    <div id="tab-content-discos" class="hidden space-y-3 text-xs">
+                        <div class="flex justify-between items-center text-gray-500 font-bold border-b pb-1">
+                            <span>Unidad</span>
+                            <span>Espacio</span>
+                        </div>
+                        {% for d in destinations %}
+                        <div class="space-y-1">
+                            <div class="flex justify-between font-semibold text-gray-800">
+                                <span>{{ d.name }}</span>
+                                <span>{{ d.free_gb }} GB libre</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                <div class="bg-blue-600 h-1.5 rounded-full" style="width: {{ d.used_percent if d.used_percent else 20 }}%"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
 
@@ -261,6 +301,111 @@
         </div>
 
     </main>
+
+    <!-- Modales de Navegación -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 flex justify-center items-center p-4">
+        
+        <!-- Modal Programación -->
+        <div id="modal-schedules" class="hidden bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
+                <span>📅</span> <span>Programación de Tareas</span>
+            </h3>
+            <p class="text-sm text-gray-600">Configura ejecuciones periódicas automatizadas (Diarias, Semanales).</p>
+            <div class="pt-4 flex justify-end">
+                <button onclick="closeModals()" class="px-4 py-2 bg-gray-200 text-gray-800 font-bold text-xs rounded-lg hover:bg-gray-300">Cerrar</button>
+            </div>
+        </div>
+
+        <!-- Modal Restauración -->
+        <div id="modal-restore" class="hidden bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
+                <span>🔄</span> <span>Restaurar Copias de Seguridad</span>
+            </h3>
+            <p class="text-sm text-gray-600">Selecciona un punto de restauración anterior para recuperar aplicaciones o el sistema completo.</p>
+            <div class="pt-4 flex justify-end">
+                <button onclick="closeModals()" class="px-4 py-2 bg-gray-200 text-gray-800 font-bold text-xs rounded-lg hover:bg-gray-300">Cerrar</button>
+            </div>
+        </div>
+
+        <!-- Modal Configuración -->
+        <div id="modal-config" class="hidden bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
+                <span>⚙️</span> <span>Configuración del Sistema</span>
+            </h3>
+            <p class="text-sm text-gray-600">Ajustes del motor Duplicati, credenciales y rutas por defecto.</p>
+            <div class="pt-4 flex justify-end">
+                <button onclick="closeModals()" class="px-4 py-2 bg-gray-200 text-gray-800 font-bold text-xs rounded-lg hover:bg-gray-300">Cerrar</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script de Control Interactivo -->
+    <script>
+        // Cambio de Pestañas (RPi / Docker / Discos)
+        function switchTab(tabName) {
+            const tabs = ['rpi', 'docker', 'discos'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const content = document.getElementById(`tab-content-${t}`);
+                if (t === tabName) {
+                    btn.className = "text-blue-600 border-b-2 border-blue-600 pb-1 flex items-center space-x-1";
+                    content.classList.remove('hidden');
+                } else {
+                    btn.className = "text-gray-400 hover:text-gray-600 pb-1 flex items-center space-x-1";
+                    content.classList.add('hidden');
+                }
+            });
+        }
+
+        // Mostrar Toast de Notificación
+        function showToast(message, icon = "🚀") {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = message;
+            document.getElementById('toast-icon').innerText = icon;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 4000);
+        }
+
+        // Ejecutar Copia Completa
+        async function runFullBackup() {
+            showToast("Iniciando Copia de Seguridad Completa...", "📦");
+            try {
+                const res = await fetch('/api/v1/backups/run-full', { method: 'POST' });
+                const data = await res.json();
+                showToast(data.message, "✅");
+            } catch (e) {
+                showToast("Error al solicitar la copia completa", "❌");
+            }
+        }
+
+        // Ejecutar Copia de App Individual
+        async function runAppBackup(appName) {
+            showToast(`Iniciando copia para ${appName}...`, "⚡");
+            try {
+                const res = await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
+                const data = await res.json();
+                showToast(data.message, "✅");
+            } catch (e) {
+                showToast(`Error al copiar ${appName}`, "❌");
+            }
+        }
+
+        // Modales
+        function openModal(modalId) {
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            ['modal-schedules', 'modal-restore', 'modal-config'].forEach(m => {
+                document.getElementById(m).classList.add('hidden');
+            });
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+
+        function closeModals() {
+            document.getElementById('modal-overlay').classList.add('hidden');
+        }
+    </script>
 
 </body>
 </html>
