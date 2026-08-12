@@ -1,71 +1,60 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CasaOS Backup Manager</title>
-    
-    <!-- CSS de Bootstrap 5 para el Layout en Grilla / Columnas -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Estilos propios de la app -->
+    <title>{% block title %}CasaOS Backup Manager{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
-
-    <style>
-        body {
-            background-color: #f8f9fa;
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-        .main-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px 15px;
-        }
-        .card {
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-        .card-header {
-            border-bottom: 1px solid #f0f0f0;
-        }
-        details summary {
-            user-select: none;
-        }
-
-        /* Estilos personalizados para Pestañas de Telemetría (Tabs) */
-        .nav-tabs .nav-link {
-            color: #6c757d;
-            border: none;
-            border-bottom: 2px solid transparent;
-            font-weight: 600;
-            transition: all 0.2s ease-in-out;
-        }
-        .nav-tabs .nav-link.active {
-            color: #0d6efd !important;
-            background-color: transparent !important;
-            border-bottom: 2px solid #0d6efd !important;
-        }
-        .nav-tabs .nav-link:hover {
-            border-color: transparent;
-            color: #0d6efd;
-        }
-    </style>
+    {% block extra_head %}{% endblock %}
 </head>
+<body class="bg-light">
+    <!-- Navbar principal -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center fw-bold" href="/">
+                <img src="/static/img/logo-horizontal.svg" alt="Logo" height="30" class="me-2" onerror="this.onerror=null; this.src='/static/img/logo-icon.svg';">
+                CasaOS Backup Manager
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.url.path == '/' %}active{% endif %}" href="/">
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/schedules' in request.url.path %}active{% endif %}" href="/schedules">
+                            <i class="bi bi-calendar-check me-1"></i> Programaciones
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/restore' in request.url.path %}active{% endif %}" href="/restore">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Restauración
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/docs" target="_blank">
+                            <i class="bi bi-code-slash me-1"></i> API Docs
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
 
-<body>
-
-    <!-- Contenedor principal -->
-    <main class="main-container">
-        {% block content %}
-        {% endblock %}
+    <!-- Contenido principal -->
+    <main class="container pb-5">
+        {% block content %}{% endblock %}
     </main>
 
-    <!-- JS de Bootstrap 5 -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Scripts de la aplicación -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/app.js"></script>
+    {% block extra_scripts %}{% endblock %}
 </body>
-
 </html>
