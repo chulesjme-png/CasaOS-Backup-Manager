@@ -338,7 +338,7 @@
             </form>
         </div>
 
-        <!-- Modal 2: RESTAURAR COPIAS (PASO 2 COMPLETO) -->
+        <!-- Modal 2: RESTAURAR COPIAS -->
         <div id="modal-restore" class="hidden bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6 space-y-5">
             <div class="flex justify-between items-center border-b pb-3">
                 <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
@@ -360,15 +360,41 @@
             </div>
         </div>
 
-        <!-- Modal 3: Configuración -->
-        <div id="modal-config" class="hidden bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
-                <span>⚙️</span> <span>Configuración del Sistema</span>
-            </h3>
-            <p class="text-sm text-gray-600">Ajustes del motor Duplicati, credenciales y rutas por defecto.</p>
-            <div class="pt-4 flex justify-end">
-                <button onclick="closeModals()" class="px-4 py-2 bg-gray-200 text-gray-800 font-bold text-xs rounded-lg hover:bg-gray-300">Cerrar</button>
+        <!-- Modal 3: CONFIGURACIÓN DEL SISTEMA (PASO 3 COMPLETO) -->
+        <div id="modal-config" class="hidden bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-5">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
+                    <span>⚙️</span> <span>Configuración del Sistema</span>
+                </h3>
+                <button onclick="closeModals()" class="text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
             </div>
+
+            <form id="config-form" onsubmit="saveConfig(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">URL de Servidor Duplicati</label>
+                    <input type="text" id="cfg-duplicati-url" value="{{ config.duplicati_url }}" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-mono" placeholder="http://localhost:8200">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Contraseña API Duplicati (Opcional)</label>
+                    <input type="password" id="cfg-duplicati-pass" value="{{ config.duplicati_pass }}" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="••••••••">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Ruta por Defecto de Almacenamiento</label>
+                    <input type="text" id="cfg-default-path" value="{{ config.default_backup_path }}" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-mono">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Días de Retención de Copias</label>
+                    <input type="number" id="cfg-retention" value="{{ config.retention_days }}" min="1" max="365" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-semibold">
+                </div>
+
+                <div class="pt-4 flex justify-end space-x-3 border-t">
+                    <button type="button" onclick="closeModals()" class="px-4 py-2 bg-gray-200 text-gray-800 font-bold text-xs rounded-lg hover:bg-gray-300">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow">Guardar Ajustes</button>
+                </div>
+            </form>
         </div>
 
     </div>
@@ -457,7 +483,6 @@
             }
         }
 
-        // FUNCIONES PASO 2: RESTAURAR COPIAS
         async function openRestoreModal() {
             openModal('modal-restore');
             const container = document.getElementById('snapshots-container');
@@ -509,6 +534,32 @@
                 showToast(data.message, "✅");
             } catch (e) {
                 showToast("Error al ejecutar la restauración", "❌");
+            }
+        }
+
+        // FUNCIONES PASO 3: GUARDAR CONFIGURACIÓN
+        async function saveConfig(event) {
+            event.preventDefault();
+            const payload = {
+                duplicati_url: document.getElementById('cfg-duplicati-url').value,
+                duplicati_pass: document.getElementById('cfg-duplicati-pass').value,
+                default_backup_path: document.getElementById('cfg-default-path').value,
+                retention_days: parseInt(document.getElementById('cfg-retention').value) || 30,
+                enable_notifications: false,
+                webhook_url: ""
+            };
+
+            try {
+                const res = await fetch('/api/v1/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                closeModals();
+                showToast(data.message, "⚙️");
+            } catch (e) {
+                showToast("Error al guardar la configuración", "❌");
             }
         }
     </script>

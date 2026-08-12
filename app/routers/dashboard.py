@@ -12,6 +12,7 @@ import docker
 from app.database.session import get_db
 from app.schemas.schedule import ScheduleCreate
 from app.schemas.restore import RestoreRequest
+from app.schemas.config import SystemConfig
 
 router = APIRouter()
 
@@ -28,13 +29,22 @@ SYSTEM_IGNORED_PREFIXES = (
     "/proc",
 )
 
-# Almacenamiento en memoria para la configuración de programación
+# Almacenamiento en memoria para programación y configuración
 CURRENT_SCHEDULE = {
     "frequency": "daily",
     "time": "03:00",
     "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
     "backup_type": "full",
     "enabled": True
+}
+
+CURRENT_CONFIG = {
+    "duplicati_url": "http://localhost:8200",
+    "duplicati_pass": "",
+    "default_backup_path": "/mnt/backups",
+    "retention_days": 30,
+    "enable_notifications": False,
+    "webhook_url": ""
 }
 
 
@@ -196,7 +206,8 @@ async def render_dashboard(
         "destinations": destinations,
         "system": system_stats,
         "docker_containers": docker_info,
-        "schedule": CURRENT_SCHEDULE
+        "schedule": CURRENT_SCHEDULE,
+        "config": CURRENT_CONFIG
     }
 
     return templates.TemplateResponse("index.html", context)
@@ -224,7 +235,6 @@ async def save_schedule(data: ScheduleCreate):
 
 @router.get("/api/v1/backups/snapshots")
 async def list_snapshots():
-    """Devuelve los puntos de restauración disponibles."""
     snapshots = [
         {
             "id": "snap-001",
@@ -253,10 +263,27 @@ async def list_snapshots():
 
 @router.post("/api/v1/backups/restore")
 async def execute_restore(data: RestoreRequest):
-    """Ejecuta el proceso de restauración del punto seleccionado."""
     return JSONResponse({
         "status": "success",
         "message": f"Restauración iniciada para la copia '{data.snapshot_id}' con éxito."
+    })
+
+
+# --- API PASO 3: CONFIGURACIÓN DEL SISTEMA ---
+
+@router.get("/api/v1/config")
+async def get_config():
+    return JSONResponse(CURRENT_CONFIG)
+
+
+@router.post("/api/v1/config")
+async def save_config(data: SystemConfig):
+    global CURRENT_CONFIG
+    CURRENT_CONFIG = data.dict()
+    return JSONResponse({
+        "status": "success",
+        "message": "Configuración del sistema guardada correctamente.",
+        "config": CURRENT_CONFIG
     })
 
 
