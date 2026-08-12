@@ -1,93 +1,146 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - CasaOS Backup Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg">
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans antialiased min-h-screen">
 
-{% block title %}Dashboard - CasaOS Backup Manager{% endblock %}
-
-{% block content %}
-<div class="container-fluid py-3">
-    <!-- Fila de Resumen de Métricas -->
-    <div class="row g-3 mb-4">
-        <div class="col-12 col-sm-6 col-xl-3">
-            {% include "components/summary_card.html" with context %}
+    <!-- Barra de Navegación -->
+    <nav class="bg-slate-900 text-white px-8 py-4 shadow-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <img src="/static/img/logo-icon.svg" alt="Logo" class="h-8 w-8" onerror="this.style.display='none'">
+                <span class="text-xl font-bold tracking-tight">CasaOS Backup Manager</span>
+            </div>
+            <div class="flex items-center space-x-6 text-sm font-medium text-slate-300">
+                <a href="/" class="text-white flex items-center space-x-1 hover:text-blue-400">
+                    <span>🏠 Dashboard</span>
+                </a>
+                <a href="#" class="hover:text-blue-400 flex items-center space-x-1">
+                    <span>📋 Programaciones</span>
+                </a>
+                <a href="#" class="hover:text-blue-400 flex items-center space-x-1">
+                    <span>🔄 Restauración</span>
+                </a>
+                <a href="/docs" target="_blank" class="hover:text-blue-400 flex items-center space-x-1">
+                    <span>⚡ API Docs</span>
+                </a>
+            </div>
         </div>
-    </div>
+    </nav>
 
-    <!-- Fila Principal: Tabla de Datos Protegibles y Acciones -->
-    <div class="row g-4">
-        <div class="col-12 col-lg-8">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0 fw-bold">
-                        <i class="bi bi-shield-check text-primary me-2"></i>Datos y Aplicaciones Protegibles
-                    </h5>
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadProtectableData()">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Refrescar
+    <!-- Contenido Principal -->
+    <main class="max-w-7xl mx-auto px-8 py-8 space-y-8">
+
+        <!-- Métricas Rápidas -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-sm space-y-3">
+            <div class="flex justify-between items-center text-sm">
+                <span class="text-gray-500 font-medium">Aplicaciones:</span>
+                <span class="font-bold text-gray-900">{{ summary.apps }}</span>
+            </div>
+            <div class="flex justify-between items-center text-sm">
+                <span class="text-gray-500 font-medium">Contenedores:</span>
+                <span class="font-bold text-gray-900">{{ summary.containers }}</span>
+            </div>
+            <div class="flex justify-between items-center text-sm">
+                <span class="text-gray-500 font-medium">Rutas persistentes:</span>
+                <span class="font-bold text-blue-600">{{ summary.persistent_routes }}</span>
+            </div>
+        </div>
+
+        <!-- Grid Principal (Tabla de Rutas + Acciones) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+
+            <!-- Columna Izquierda: Tabla de Datos Protegibles -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-lg">🛡️</span>
+                        <h2 class="text-lg font-bold text-gray-900">Datos y Aplicaciones Protegibles</h2>
+                    </div>
+                    <button onclick="window.location.reload()" class="px-3 py-1.5 border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 transition">
+                        🔄 Refrescar
                     </button>
                 </div>
-                <div class="card-body p-0">
-                    {% include "components/protectable_data_table.html" with context %}
-                </div>
-            </div>
-        </div>
 
-        <div class="col-12 col-lg-4">
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3">
-                    <h5 class="card-title mb-0 fw-bold">
-                        <i class="bi bi-lightning-charge text-warning me-2"></i>Acciones Rápidas
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-primary text-start p-3" data-bs-toggle="modal" data-bs-target="#newBackendModal">
-                            <i class="bi bi-hdd-network-fill me-2 fs-5"></i>
-                            <strong>Añadir Destino</strong>
-                            <div class="small opacity-75">Configura Duplicati o almacenamiento local</div>
-                        </button>
-                        <a href="/schedules" class="btn btn-outline-secondary text-start p-3">
-                            <i class="bi bi-calendar-plus me-2 fs-5"></i>
-                            <strong>Nueva Programación</strong>
-                            <div class="small text-muted">Añade tareas periódicas automatizadas</div>
-                        </a>
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-red-500">🛡️</span>
+                            <span class="text-sm font-semibold text-blue-600">Datos Protegibles Detectados</span>
+                        </div>
+                        <span class="bg-slate-800 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
+                            Rutas: {{ protectable_items|length }}
+                        </span>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Modal para Registrar Nuevo Backend -->
-<div class="modal fade" id="newBackendModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title fw-bold"><i class="bi bi-hdd-network me-2"></i>Nuevo Destino de Respaldo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <div class="overflow-x-auto border border-gray-100 rounded-lg">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-600 text-xs font-semibold border-b border-gray-200">
+                                    <th class="py-3 px-4">Contenedor</th>
+                                    <th class="py-3 px-4">Ruta en Host (Raspberry Pi)</th>
+                                    <th class="py-3 px-4">Ruta Interna</th>
+                                    <th class="py-3 px-4">Tipo / Hook</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 text-gray-700">
+                                {% for item in protectable_items %}
+                                <tr class="hover:bg-gray-50 transition">
+                                    <td class="py-3 px-4 font-semibold text-gray-900">{{ item.container }}</td>
+                                    <td class="py-3 px-4 font-mono text-xs text-blue-700 break-all">{{ item.host_path }}</td>
+                                    <td class="py-3 px-4 font-mono text-xs text-gray-500 break-all">{{ item.container_path }}</td>
+                                    <td class="py-3 px-4">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                                            {{ item.type }} / {{ item.hook }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="py-8 text-center text-gray-400">
+                                        No hay datos de rutas protegibles escaneadas.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-            <form id="backendForm" onsubmit="submitBackend(event)">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Nombre del Destino</label>
-                        <input type="text" id="backendName" class="form-control" placeholder="Ej. Servidor NAS Duplicati" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Tipo de Conector</label>
-                        <select id="backendType" class="form-select">
-                            <option value="duplicati">Duplicati Engine</option>
-                            <option value="local">Directorio Local / Montaje NFS</option>
-                            <option value="s3">Almacenamiento Cloud S3</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">URL / Ruta de Destino</label>
-                        <input type="text" id="backendUrl" class="form-control" placeholder="http://duplicati:8200 o /mnt/backups" required>
+
+            <!-- Columna Derecha: Acciones Rápidas -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+                <div class="flex items-center space-x-2 border-b border-gray-100 pb-3">
+                    <span class="text-yellow-500">⚡</span>
+                    <h3 class="text-lg font-bold text-gray-900">Acciones Rápidas</h3>
+                </div>
+
+                <div class="space-y-3">
+                    <a href="/api/v1/backends/" class="block w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl transition text-left shadow-sm">
+                        <div class="font-bold flex items-center space-x-2">
+                            <span>⚓</span>
+                            <span>Añadir Destino</span>
+                        </div>
+                        <p class="text-xs text-blue-100 mt-1">Configura Duplicati o almacenamiento local</p>
+                    </a>
+
+                    <div class="block w-full border border-gray-200 p-4 rounded-xl text-left bg-gray-50 opacity-75">
+                        <div class="font-bold text-gray-700 flex items-center space-x-2">
+                            <span>📅</span>
+                            <span>Nueva Programación</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Añade tareas periódicas automatizadas</p>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar Destino</button>
-                </div>
-            </form>
+            </div>
+
         </div>
-    </div>
-</div>
-{% endblock %}
+    </main>
+
+</body>
+</html>
