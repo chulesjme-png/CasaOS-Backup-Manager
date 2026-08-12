@@ -15,66 +15,83 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-# Rutas del sistema a ignorar en el listado de datos protegibles
-SYSTEM_IGNORED_PATHS = {
+# Rutas del sistema a excluir del listado de datos respaldables
+SYSTEM_IGNORED_PREFIXES = (
     "/var/run/docker.sock",
     "/etc/localtime",
     "/etc/timezone",
-    "/dev/urandom",
+    "/dev/",
     "/sys",
-    "/proc"
-}
+    "/proc",
+)
 
 
 def scan_docker_and_casaos():
     """
-    Escanea exhaustivamente los contenedores Docker y el sistema de archivos de CasaOS
-    para identificar aplicaciones, volúmenes y rutas persistentes protegibles.
+    Escanea exhaustivamente los contenedores Docker e inspecciona sus montajes de forma aislada.
     """
     protectable_items: List[Dict[str, Any]] = []
     detected_apps = set()
-    running_containers = 0
+    running_containers_count = 0
 
-    # 1. Escaneo vía Docker SDK
+    # 1. Escaneo e inspección vía Docker API
     try:
         client = docker.DockerClient(base_url="unix://var/run/docker.sock")
         containers = client.containers.list(all=True)
-        running_containers = len([c for c in containers if c.status == "running"])
 
         for container in containers:
-            name = container.name
-            if name == "casaos-backup-manager":
-                continue
+            try:
+                # Contar contenedores en ejecución
+                if container.status == "running":
+                    running_containers_count += 1
 
-            labels = container.labels or {}
-            # Nombre de la aplicación (Label CasaOS -> Proyecto Compose -> Nombre Contenedor)
-            app_name = (
-                labels.get("io.casaos.app") 
-                or labels.get("com.docker.compose.project") 
-                or name
-            )
-            detected_apps.add(app_name)
+                name = container.name or ""
+                if name in ["casaos-backup-manager", "casaos-backup"]:
+                    continue
 
-            # Extracción flexible de montajes (Soporta atributo de SDK y diccionario raw)
-            raw_mounts = getattr(container, "mounts", []) or container.attrs.get("Mounts", [])
+                # Inspección detallada para obtener Labels y Mounts completos
+                try:
+                    info = client.api.inspect_container(container.id)
+                except Exception:
+                    info = container.attrs or {}
 
-            for mount in raw_mounts:
-                if isinstance(mount, dict):
-                    host_path = mount.get("Source", "")
-                    container_path = mount.get("Destination", "")
-                    mount_type = mount.get("Type", "bind")
-                else:
-                    host_path = getattr(mount, "source", "")
-                    container_path = getattr(mount, "destination", "")
-                    mount_type = getattr(mount, "type", "bind")
+                config = info.get("Config") or {}
+                labels = config.get("Labels") or {}
+                if not isinstance(labels, dict):
+                    labels = {}
 
-                if host_path and container_path:
-                    # Descartar conectores de sistema
-                    if any(host_path.startswith(path) for path in SYSTEM_IGNORED_PATHS):
+                # Determinar nombre de la aplicación
+                app_name = (
+                    labels.get("io.casaos.app")
+                    or labels.get("com.docker.compose.project")
+                    or name
+                )
+                if app_name:
+                    detected_apps.add(app_name)
+
+                # Procesar puntos de montaje
+                mounts = info.get("Mounts") or []
+                for m in mounts:
+                    if not isinstance(m, dict):
                         continue
 
-                    # Evitar duplicados exactos
-                    if not any(item["container"] == app_name and item["host_path"] == host_path for item in protectable_items):
+                    host_path = str(m.get("Source") or "").strip()
+                    container_path = str(m.get("Destination") or "").strip()
+                    mount_type = str(m.get("Type") or "bind").strip()
+
+                    if not host_path or not container_path:
+                        continue
+
+                    # Omitir conectores/archivos del sistema
+                    if any(host_path.startswith(prefix) for prefix in SYSTEM_IGNORED_PREFIXES):
+                        continue
+
+                    # Evitar duplicados
+                    already_added = any(
+                        item["container"] == app_name and item["host_path"] == host_path
+                        for item in protectable_items
+                    )
+                    if not already_added:
                         protectable_items.append({
                             "container": app_name,
                             "host_path": host_path,
@@ -83,12 +100,15 @@ def scan_docker_and_casaos():
                             "hook": "Docker Mount"
                         })
 
-    except Exception as e:
-        print(f"[Docker Scan Error] Error escaneando Docker: {e}")
+            except Exception as inner_err:
+                print(f"[Docker Scan] Error analizando contenedor {getattr(container, 'name', 'desconocido')}: {inner_err}")
 
-    # 2. Escaneo complementario de carpetas AppData en disco (/DATA/AppData)
-    appdata_paths = ["/DATA/AppData", "/DATA/appdata", "/var/lib/casaos/apps"]
-    for base_path in appdata_paths:
+    except Exception as e:
+        print(f"[Docker Scan Error] Error al conectar con el socket de Docker: {e}")
+
+    # 2. Escaneo complementario directo en carpetas AppData de CasaOS
+    appdata_dirs = ["/DATA/AppData", "/DATA/appdata", "/var/lib/casaos/apps"]
+    for base_path in appdata_dirs:
         if os.path.exists(base_path) and os.path.isdir(base_path):
             try:
                 for entry in os.listdir(base_path):
@@ -104,9 +124,9 @@ def scan_docker_and_casaos():
                                 "hook": "CasaOS Storage"
                             })
             except Exception as e:
-                print(f"[Storage Scan Error] Error leyendo {base_path}: {e}")
+                print(f"[Storage Scan Error] Error al leer {base_path}: {e}")
 
-    return len(detected_apps), running_containers, protectable_items
+    return len(detected_apps), running_containers_count, protectable_items
 
 
 @router.get("/", response_class=HTMLResponse)
