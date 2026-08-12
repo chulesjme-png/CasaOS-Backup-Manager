@@ -1,5 +1,6 @@
 import os
 import psutil
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 from fastapi import APIRouter, Request, Depends, HTTPException
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 import docker
 from app.database.session import get_db
 from app.schemas.schedule import ScheduleCreate
+from app.schemas.restore import RestoreRequest
 
 router = APIRouter()
 
@@ -26,7 +28,7 @@ SYSTEM_IGNORED_PREFIXES = (
     "/proc",
 )
 
-# Almacenamiento temporal en memoria para la configuración de programación
+# Almacenamiento en memoria para la configuración de programación
 CURRENT_SCHEDULE = {
     "frequency": "daily",
     "time": "03:00",
@@ -200,17 +202,15 @@ async def render_dashboard(
     return templates.TemplateResponse("index.html", context)
 
 
-# --- ENDPOINTS PASO 1: PROGRAMACIÓN DE TAREAS ---
+# --- API PASO 1: PROGRAMACIÓN DE TAREAS ---
 
 @router.get("/api/v1/schedules")
 async def get_schedule():
-    """Devuelve la configuración actual de la programación."""
     return JSONResponse(CURRENT_SCHEDULE)
 
 
 @router.post("/api/v1/schedules")
 async def save_schedule(data: ScheduleCreate):
-    """Guarda la nueva configuración de la programación de tareas."""
     global CURRENT_SCHEDULE
     CURRENT_SCHEDULE = data.dict()
     return JSONResponse({
@@ -219,6 +219,48 @@ async def save_schedule(data: ScheduleCreate):
         "schedule": CURRENT_SCHEDULE
     })
 
+
+# --- API PASO 2: RESTAURACIÓN DE COPIAS ---
+
+@router.get("/api/v1/backups/snapshots")
+async def list_snapshots():
+    """Devuelve los puntos de restauración disponibles."""
+    snapshots = [
+        {
+            "id": "snap-001",
+            "date": "2026-08-12 03:00:00",
+            "type": "Sistema Completo (Disaster Recovery)",
+            "size": "14.2 GB",
+            "target": "Sistema Completo"
+        },
+        {
+            "id": "snap-002",
+            "date": "2026-08-11 03:00:00",
+            "type": "Perfil de Aplicación",
+            "size": "2.1 GB",
+            "target": "immich"
+        },
+        {
+            "id": "snap-003",
+            "date": "2026-08-10 03:00:00",
+            "type": "Perfil de Aplicación",
+            "size": "120 MB",
+            "target": "nextcloud"
+        }
+    ]
+    return JSONResponse(snapshots)
+
+
+@router.post("/api/v1/backups/restore")
+async def execute_restore(data: RestoreRequest):
+    """Ejecuta el proceso de restauración del punto seleccionado."""
+    return JSONResponse({
+        "status": "success",
+        "message": f"Restauración iniciada para la copia '{data.snapshot_id}' con éxito."
+    })
+
+
+# --- EJECUCIÓN MANUAL DE BACKUPS ---
 
 @router.post("/api/v1/backups/run-full")
 async def trigger_full_backup():

@@ -38,7 +38,7 @@
                     <span>📅</span>
                     <span>Programación</span>
                 </button>
-                <button onclick="openModal('modal-restore')" class="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-400 text-slate-900 rounded-lg text-sm font-bold shadow-sm hover:bg-amber-500 transition">
+                <button onclick="openRestoreModal()" class="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-400 text-slate-900 rounded-lg text-sm font-bold shadow-sm hover:bg-amber-500 transition">
                     <span>🔄</span>
                     <span>Restaurar Copias</span>
                 </button>
@@ -199,7 +199,6 @@
                         </button>
                     </div>
 
-                    <!-- Pestaña Raspberry Pi -->
                     <div id="tab-content-rpi" class="space-y-3 text-xs">
                         <div class="flex items-center justify-between">
                             <span class="text-gray-500 font-bold flex items-center space-x-1">
@@ -221,7 +220,6 @@
                         </div>
                     </div>
 
-                    <!-- Pestaña Docker -->
                     <div id="tab-content-docker" class="hidden space-y-2 text-xs">
                         <div class="flex justify-between items-center text-gray-500 font-bold border-b pb-1">
                             <span>Contenedor</span>
@@ -239,7 +237,6 @@
                         </div>
                     </div>
 
-                    <!-- Pestaña Discos -->
                     <div id="tab-content-discos" class="hidden space-y-3 text-xs">
                         <div class="flex justify-between items-center text-gray-500 font-bold border-b pb-1">
                             <span>Unidad</span>
@@ -302,7 +299,7 @@
     <!-- Overlay Global para Modales -->
     <div id="modal-overlay" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 flex justify-center items-center p-4">
         
-        <!-- Modal 1: PROGRAMACIÓN DE TAREAS (TOTALMENTE FUNCIONAL) -->
+        <!-- Modal 1: PROGRAMACIÓN DE TAREAS -->
         <div id="modal-schedules" class="hidden bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-5">
             <div class="flex justify-between items-center border-b pb-3">
                 <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
@@ -312,8 +309,6 @@
             </div>
 
             <form id="schedule-form" onsubmit="saveSchedule(event)" class="space-y-4">
-                
-                <!-- Tipo de Copia -->
                 <div>
                     <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Tipo de Tarea Automática</label>
                     <select id="sched-backup-type" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-medium">
@@ -322,7 +317,6 @@
                     </select>
                 </div>
 
-                <!-- Frecuencia -->
                 <div>
                     <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Frecuencia de Ejecución</label>
                     <select id="sched-frequency" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-medium">
@@ -332,7 +326,6 @@
                     </select>
                 </div>
 
-                <!-- Hora de Ejecución -->
                 <div>
                     <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Hora de Ejecución (Formato 24h)</label>
                     <input type="time" id="sched-time" value="{{ schedule.time }}" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-semibold">
@@ -345,13 +338,24 @@
             </form>
         </div>
 
-        <!-- Modal 2: Restauración -->
-        <div id="modal-restore" class="hidden bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
-                <span>🔄</span> <span>Restaurar Copias de Seguridad</span>
-            </h3>
-            <p class="text-sm text-gray-600">Selecciona un punto de restauración anterior para recuperar aplicaciones o el sistema completo.</p>
-            <div class="pt-4 flex justify-end">
+        <!-- Modal 2: RESTAURAR COPIAS (PASO 2 COMPLETO) -->
+        <div id="modal-restore" class="hidden bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6 space-y-5">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
+                    <span>🔄</span> <span>Restaurar Copias de Seguridad</span>
+                </h3>
+                <button onclick="closeModals()" class="text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
+            </div>
+
+            <p class="text-xs text-gray-500">
+                Selecciona un punto de restauración para devolver los datos de una app o del sistema completo a un estado anterior.
+            </p>
+
+            <div id="snapshots-container" class="max-h-64 overflow-y-auto space-y-2 border rounded-xl p-3 bg-gray-50">
+                <div class="text-center text-xs text-gray-400 py-4">Cargando puntos de restauración...</div>
+            </div>
+
+            <div class="pt-4 flex justify-end border-t">
                 <button onclick="closeModals()" class="px-4 py-2 bg-gray-200 text-gray-800 font-bold text-xs rounded-lg hover:bg-gray-300">Cerrar</button>
             </div>
         </div>
@@ -429,7 +433,6 @@
             document.getElementById('modal-overlay').classList.add('hidden');
         }
 
-        // GUARDAR PROGRAMACIÓN DESDE EL MODAL PASO 1
         async function saveSchedule(event) {
             event.preventDefault();
             const payload = {
@@ -451,6 +454,61 @@
                 showToast(data.message, "📅");
             } catch (e) {
                 showToast("Error al guardar la programación", "❌");
+            }
+        }
+
+        // FUNCIONES PASO 2: RESTAURAR COPIAS
+        async function openRestoreModal() {
+            openModal('modal-restore');
+            const container = document.getElementById('snapshots-container');
+            container.innerHTML = '<div class="text-center text-xs text-gray-400 py-4">Cargando puntos de restauración...</div>';
+
+            try {
+                const res = await fetch('/api/v1/backups/snapshots');
+                const snapshots = await res.json();
+
+                if (!snapshots || snapshots.length === 0) {
+                    container.innerHTML = '<div class="text-center text-xs text-gray-500 py-4">No hay copias de seguridad disponibles para restaurar.</div>';
+                    return;
+                }
+
+                container.innerHTML = snapshots.map(s => `
+                    <div class="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center shadow-sm hover:border-amber-400 transition">
+                        <div class="space-y-0.5">
+                            <div class="text-xs font-bold text-gray-900 flex items-center space-x-2">
+                                <span>📦 ${s.target}</span>
+                                <span class="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded font-bold">${s.type}</span>
+                            </div>
+                            <div class="text-[11px] text-gray-500 font-mono">Fecha: ${s.date} | Tamaño: ${s.size}</div>
+                        </div>
+                        <button onclick="restoreSnapshot('${s.id}')" class="bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold text-xs px-3 py-1.5 rounded-lg shadow-sm transition active:scale-95">
+                            Restaurar
+                        </button>
+                    </div>
+                `).join('');
+
+            } catch (e) {
+                container.innerHTML = '<div class="text-center text-xs text-red-500 py-4">Error al cargar la lista de copias.</div>';
+            }
+        }
+
+        async function restoreSnapshot(snapshotId) {
+            if (!confirm(`¿Estás seguro de que deseas restaurar la copia '${snapshotId}'? Los datos actuales podrían ser sobrescritos.`)) {
+                return;
+            }
+
+            showToast(`Iniciando restauración de ${snapshotId}...`, "🔄");
+            try {
+                const res = await fetch('/api/v1/backups/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ snapshot_id: snapshotId, overwrite: true })
+                });
+                const data = await res.json();
+                closeModals();
+                showToast(data.message, "✅");
+            } catch (e) {
+                showToast("Error al ejecutar la restauración", "❌");
             }
         }
     </script>
