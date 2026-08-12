@@ -15,12 +15,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-# Rutas del sistema a excluir del listado de datos respaldables
 SYSTEM_IGNORED_PREFIXES = (
     "/var/run/docker.sock",
     "/etc/localtime",
     "/etc/timezone",
-    "/dev/",
+    "/dev",
     "/sys",
     "/proc",
 )
@@ -28,70 +27,92 @@ SYSTEM_IGNORED_PREFIXES = (
 
 def scan_docker_and_casaos():
     """
-    Escanea exhaustivamente los contenedores Docker e inspecciona sus montajes de forma aislada.
+    Escanea los contenedores Docker activos e inspecciona sus volúmenes y etiquetas.
     """
     protectable_items: List[Dict[str, Any]] = []
     detected_apps = set()
     running_containers_count = 0
 
-    # 1. Escaneo e inspección vía Docker API
     try:
         client = docker.DockerClient(base_url="unix://var/run/docker.sock")
         containers = client.containers.list(all=True)
 
         for container in containers:
             try:
-                # Contar contenedores en ejecución
-                if container.status == "running":
+                status = getattr(container, "status", "unknown")
+                if status == "running":
                     running_containers_count += 1
 
-                name = container.name or ""
-                if name in ["casaos-backup-manager", "casaos-backup"]:
+                name = getattr(container, "name", "") or ""
+                if not name or name in ["casaos-backup-manager", "casaos-backup"]:
                     continue
 
-                # Inspección detallada para obtener Labels y Mounts completos
+                # Cargar metadatos completos del contenedor
                 try:
-                    info = client.api.inspect_container(container.id)
-                except Exception:
-                    info = container.attrs or {}
+                    container.reload()
+                except Exception as reload_err:
+                    print(f"[Dashboard] Warning al recargar {name}: {reload_err}")
 
-                config = info.get("Config") or {}
-                labels = config.get("Labels") or {}
+                attrs = getattr(container, "attrs", {}) or {}
+                if not isinstance(attrs, dict):
+                    attrs = {}
+
+                # Extraer etiquetas (Labels)
+                labels = getattr(container, "labels", {}) or {}
                 if not isinstance(labels, dict):
-                    labels = {}
+                    config = attrs.get("Config")
+                    labels = config.get("Labels") if isinstance(config, dict) else {}
+                    if not isinstance(labels, dict):
+                        labels = {}
 
-                # Determinar nombre de la aplicación
+                # Nombre de la aplicación (CasaOS label -> Compose project -> Nombre contenedor)
                 app_name = (
                     labels.get("io.casaos.app")
                     or labels.get("com.docker.compose.project")
+                    or labels.get("com.docker.compose.service")
                     or name
                 )
+                app_name = str(app_name).strip()
                 if app_name:
                     detected_apps.add(app_name)
 
-                # Procesar puntos de montaje
-                mounts = info.get("Mounts") or []
-                for m in mounts:
-                    if not isinstance(m, dict):
-                        continue
+                # Extraer Puntos de Montaje (Mounts y Binds)
+                mounts_to_process = []
 
-                    host_path = str(m.get("Source") or "").strip()
-                    container_path = str(m.get("Destination") or "").strip()
-                    mount_type = str(m.get("Type") or "bind").strip()
+                # Metodo 1: 'Mounts' (Inspección estándar)
+                raw_mounts = attrs.get("Mounts")
+                if isinstance(raw_mounts, list):
+                    for m in raw_mounts:
+                        if isinstance(m, dict):
+                            src = str(m.get("Source") or "").strip()
+                            dst = str(m.get("Destination") or "").strip()
+                            m_type = str(m.get("Type") or "bind").strip()
+                            if src and dst:
+                                mounts_to_process.append((src, dst, m_type))
 
-                    if not host_path or not container_path:
-                        continue
+                # Metodo 2: 'HostConfig.Binds' (Formato host:container)
+                host_config = attrs.get("HostConfig")
+                if isinstance(host_config, dict):
+                    binds = host_config.get("Binds")
+                    if isinstance(binds, list):
+                        for b in binds:
+                            if isinstance(b, str) and ":" in b:
+                                parts = b.split(":")
+                                if len(parts) >= 2:
+                                    src, dst = parts[0].strip(), parts[1].strip()
+                                    if src and dst and not any(item[0] == src and item[1] == dst for item in mounts_to_process):
+                                        mounts_to_process.append((src, dst, "bind"))
 
-                    # Omitir conectores/archivos del sistema
+                # Registrar rutas válidas omitiendo archivos del sistema
+                for host_path, container_path, mount_type in mounts_to_process:
                     if any(host_path.startswith(prefix) for prefix in SYSTEM_IGNORED_PREFIXES):
                         continue
 
-                    # Evitar duplicados
-                    already_added = any(
+                    already_exists = any(
                         item["container"] == app_name and item["host_path"] == host_path
                         for item in protectable_items
                     )
-                    if not already_added:
+                    if not already_exists:
                         protectable_items.append({
                             "container": app_name,
                             "host_path": host_path,
@@ -101,12 +122,12 @@ def scan_docker_and_casaos():
                         })
 
             except Exception as inner_err:
-                print(f"[Docker Scan] Error analizando contenedor {getattr(container, 'name', 'desconocido')}: {inner_err}")
+                print(f"[Dashboard] Error procesando contenedor '{getattr(container, 'name', 'desconocido')}': {inner_err}")
 
     except Exception as e:
-        print(f"[Docker Scan Error] Error al conectar con el socket de Docker: {e}")
+        print(f"[Dashboard Error] Error general de Docker SDK: {e}")
 
-    # 2. Escaneo complementario directo en carpetas AppData de CasaOS
+    # Escaneo complementario de carpetas de almacenamiento de CasaOS (/DATA/AppData)
     appdata_dirs = ["/DATA/AppData", "/DATA/appdata", "/var/lib/casaos/apps"]
     for base_path in appdata_dirs:
         if os.path.exists(base_path) and os.path.isdir(base_path):
@@ -124,7 +145,9 @@ def scan_docker_and_casaos():
                                 "hook": "CasaOS Storage"
                             })
             except Exception as e:
-                print(f"[Storage Scan Error] Error al leer {base_path}: {e}")
+                print(f"[Dashboard Error] Error leyendo {base_path}: {e}")
+
+    print(f"[Dashboard Scan Result] Apps: {len(detected_apps)} | Running Containers: {running_containers_count} | Protectable Routes: {len(protectable_items)}")
 
     return len(detected_apps), running_containers_count, protectable_items
 
@@ -139,8 +162,12 @@ async def render_dashboard(
 
     summary = {
         "apps": apps_count,
+        "applications": apps_count,
         "containers": containers_count,
         "persistent_routes": routes_count,
+        "routes": routes_count,
+        "destinations": 0,
+        "schedules": 0,
         "status": "Activo"
     }
 
