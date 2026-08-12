@@ -5,27 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restauración - CasaOS Backup Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
         <div class="container">
-            <a class="navbar-brand" href="/">🚀 CasaOS Backup Manager</a>
+            <a class="navbar-brand fw-bold" href="/">🚀 CasaOS Backup Manager</a>
             <div class="navbar-nav">
-                <a class="nav-link" href="/">Dashboard</a>
-                <a class="nav-link" href="/schedules">Programaciones</a>
-                <a class="nav-link active" href="/restore">Restauración</a>
+                <a class="nav-link" href="/"><i class="bi bi-speedometer2 me-1"></i> Dashboard</a>
+                <a class="nav-link" href="/schedules"><i class="bi bi-calendar-check me-1"></i> Programaciones</a>
+                <a class="nav-link active" href="/restore"><i class="bi bi-arrow-counterclockwise me-1"></i> Restauración</a>
             </div>
         </div>
     </nav>
 
     <div class="container">
-        <div class="row">
-            <div class="col-12">
-                <div class="card shadow-sm mb-4">
-                    <div class="card-body">
-                        <h2 class="card-title">Restauración de Respaldos</h2>
-                        <p class="card-text">Selecciona un punto de restauración anterior para recuperar tus datos en CasaOS.</p>
-                        <span class="badge bg-warning text-dark">Zona de Recuperación</span>
+        <div class="mb-4">
+            <h3 class="fw-bold mb-1">Zona de Recuperación</h3>
+            <p class="text-muted mb-0">Restaura tus copias de seguridad anteriores en el sistema CasaOS.</p>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h5 class="card-title mb-0 fw-bold"><i class="bi bi-archive me-2 text-warning"></i>Puntos de Restauración Disponibles</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Selecciona un archivo de respaldo o punto de control para volver a un estado anterior.</p>
+                <div class="alert alert-warning border-0 d-flex align-items-center mb-0">
+                    <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+                    <div>
+                        <strong>Atención:</strong> La restauración sobreescribirá los archivos o datos existentes en el directorio de destino configurado.
                     </div>
                 </div>
             </div>
