@@ -10,7 +10,6 @@ router = APIRouter()
 @router.get("/", response_model=List[Dict[str, Any]])
 async def list_executions(db: Session = Depends(get_db)):
     """Lista el historial de ejecuciones de respaldos."""
-    # Retorna lista vacía o lógica de consulta DB existente
     return []
 
 @router.post("/run", response_model=Dict[str, Any])
@@ -20,7 +19,6 @@ async def run_execution(
 ) -> Dict[str, Any]:
     """Inicia una ejecución de respaldo manual o programada."""
     try:
-        # Si el servicio está instanciado, ejecuta la lógica
         if service and hasattr(service, "build"):
             service.build()
             

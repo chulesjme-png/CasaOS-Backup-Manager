@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-# Importación de enrutadores del proyecto
 from app.routers import (
     api_backends,
     api_schedules,
