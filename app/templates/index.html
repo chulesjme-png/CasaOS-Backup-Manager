@@ -3,90 +3,52 @@
 {% block title %}Dashboard - CasaOS Backup Manager{% endblock %}
 
 {% block content %}
-<!-- Tarjetas de métricas -->
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card shadow-sm border-0 border-start border-4 border-primary">
-            <div class="card-body d-flex align-items-center justify-content-between">
-                <div>
-                    <h6 class="text-muted fw-normal mb-1">Destinos Configurados</h6>
-                    <h3 class="mb-0 fw-bold" id="total-backends">0</h3>
-                </div>
-                <div class="fs-1 text-primary"><i class="bi bi-hdd-network"></i></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card shadow-sm border-0 border-start border-4 border-success">
-            <div class="card-body d-flex align-items-center justify-content-between">
-                <div>
-                    <h6 class="text-muted fw-normal mb-1">Tareas Programadas</h6>
-                    <h3 class="mb-0 fw-bold" id="total-schedules">0</h3>
-                </div>
-                <div class="fs-1 text-success"><i class="bi bi-clock-history"></i></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card shadow-sm border-0 border-start border-4 border-info">
-            <div class="card-body d-flex align-items-center justify-content-between">
-                <div>
-                    <h6 class="text-muted fw-normal mb-1">Estado del Motor</h6>
-                    <h3 class="mb-0 fw-bold fs-5 text-success"><i class="bi bi-check-circle-fill me-1"></i> Activo</h3>
-                </div>
-                <div class="fs-1 text-info"><i class="bi bi-cpu"></i></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4">
-    <!-- Tabla de ejecuciones -->
-    <div class="col-lg-8">
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0 fw-bold"><i class="bi bi-list-task me-2 text-primary"></i>Últimas Ejecuciones</h5>
-                <button class="btn btn-sm btn-outline-secondary" onclick="loadDashboardData()"><i class="bi bi-arrow-clockwise me-1"></i>Actualizar</button>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>ID</th>
-                            <th>Origen</th>
-                            <th>Estado</th>
-                            <th>Fecha</th>
-                            <th>Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody id="executions-table">
-                        <tr>
-                            <td colspan="5" class="text-center py-4 text-muted">Cargando ejecuciones...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+<div class="container-fluid py-3">
+    <!-- Fila de Resumen de Métricas -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-sm-6 col-xl-3">
+            {% include "components/summary_card.html" with context %}
         </div>
     </div>
 
-    <!-- Acciones Rápidas -->
-    <div class="col-lg-4">
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white py-3">
-                <h5 class="card-title mb-0 fw-bold"><i class="bi bi-lightning-charge me-2 text-warning"></i>Acciones Rápidas</h5>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <button class="btn btn-primary text-start p-3" data-bs-toggle="modal" data-bs-target="#newBackendModal">
-                        <i class="bi bi-plus-circle-fill me-2 fs-5"></i>
-                        <strong>Añadir Destino de Respaldo</strong>
-                        <div class="small opacity-75">Configura Duplicati, Rclone o carpeta local</div>
+    <!-- Fila Principal: Tabla de Datos Protegibles y Acciones -->
+    <div class="row g-4">
+        <div class="col-12 col-lg-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0 fw-bold">
+                        <i class="bi bi-shield-check text-primary me-2"></i>Datos y Aplicaciones Protegibles
+                    </h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadProtectableData()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refrescar
                     </button>
-                    <a href="/schedules" class="btn btn-outline-secondary text-start p-3">
-                        <i class="bi bi-calendar-plus me-2 fs-5"></i>
-                        <strong>Nueva Programación</strong>
-                        <div class="small text-muted">Configura una tarea automatizada</div>
-                    </a>
+                </div>
+                <div class="card-body p-0">
+                    {% include "components/protectable_data_table.html" with context %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="card-title mb-0 fw-bold">
+                        <i class="bi bi-lightning-charge text-warning me-2"></i>Acciones Rápidas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary text-start p-3" data-bs-toggle="modal" data-bs-target="#newBackendModal">
+                            <i class="bi bi-hdd-network-fill me-2 fs-5"></i>
+                            <strong>Añadir Destino</strong>
+                            <div class="small opacity-75">Configura Duplicati o almacenamiento local</div>
+                        </button>
+                        <a href="/schedules" class="btn btn-outline-secondary text-start p-3">
+                            <i class="bi bi-calendar-plus me-2 fs-5"></i>
+                            <strong>Nueva Programación</strong>
+                            <div class="small text-muted">Añade tareas periódicas automatizadas</div>
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -94,11 +56,11 @@
 </div>
 
 <!-- Modal para Registrar Nuevo Backend -->
-<div class="modal fade" id="newBackendModal" tabindex="-1" aria-labelledby="newBackendModalLabel" aria-hidden="true">
+<div class="modal fade" id="newBackendModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title fw-bold" id="newBackendModalLabel"><i class="bi bi-hdd-network me-2"></i>Nuevo Destino de Respaldo</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-hdd-network me-2"></i>Nuevo Destino de Respaldo</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="backendForm" onsubmit="submitBackend(event)">
@@ -112,7 +74,7 @@
                         <select id="backendType" class="form-select">
                             <option value="duplicati">Duplicati Engine</option>
                             <option value="local">Directorio Local / Montaje NFS</option>
-                            <option value="s3">Almacenamiento S3 / Cloud</option>
+                            <option value="s3">Almacenamiento Cloud S3</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -128,32 +90,4 @@
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-    async function submitBackend(event) {
-        event.preventDefault();
-        const payload = {
-            name: document.getElementById('backendName').value,
-            type: document.getElementById('backendType').value,
-            url: document.getElementById('backendUrl').value
-        };
-
-        const res = await fetch('/api/backends/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-            alert('✅ Destino registrado correctamente');
-            bootstrap.Modal.getInstance(document.getElementById('newBackendModal')).hide();
-            document.getElementById('backendForm').reset();
-            loadDashboardData();
-        } else {
-            alert('❌ Error al guardar el destino');
-        }
-    }
-</script>
 {% endblock %}
