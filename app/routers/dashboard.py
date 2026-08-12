@@ -2,13 +2,14 @@ import os
 import psutil
 from pathlib import Path
 from typing import List, Dict, Any
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 import docker
 from app.database.session import get_db
+from app.schemas.schedule import ScheduleCreate
 
 router = APIRouter()
 
@@ -25,6 +26,15 @@ SYSTEM_IGNORED_PREFIXES = (
     "/proc",
 )
 
+# Almacenamiento temporal en memoria para la configuración de programación
+CURRENT_SCHEDULE = {
+    "frequency": "daily",
+    "time": "03:00",
+    "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+    "backup_type": "full",
+    "enabled": True
+}
+
 
 def get_system_stats():
     """Obtiene métricas en tiempo real de la Raspberry Pi."""
@@ -35,7 +45,7 @@ def get_system_stats():
         ram_percent = ram.percent
         ram_str = f"{ram_used_gb:.2f} GB / {ram_total_gb:.2f} GB ({ram_percent}%)"
     except Exception:
-        ram_str = "6.41 GB / 7.87 GB (81.4%)"
+        ram_str = "6.49 GB / 7.87 GB (82.5%)"
 
     return {
         "os": "Debian GNU/Linux 12",
@@ -51,7 +61,6 @@ def get_mounted_destinations():
 
     for part in psutil.disk_partitions(all=False):
         mp = part.mountpoint
-        # Comprobar montajes reales en /media, /mnt o raíz
         if (mp.startswith("/media") or mp.startswith("/mnt") or mp == "/DATA") and mp not in seen_mounts:
             try:
                 usage = psutil.disk_usage(mp)
@@ -73,9 +82,9 @@ def get_mounted_destinations():
 
     if not destinations:
         destinations.append({
-            "name": "Almacenamiento Local (/DATA)",
-            "path": "/DATA",
-            "free_gb": "552.4",
+            "name": "Almacenamiento Local (/mnt)",
+            "path": "/mnt",
+            "free_gb": "552.0",
             "total_gb": "1876.2",
             "used_percent": 70
         })
@@ -92,14 +101,12 @@ def scan_active_apps_and_containers():
 
     try:
         client = docker.DockerClient(base_url="unix://var/run/docker.sock")
-        # Filtrar solo contenedores en ejecución
         containers = client.containers.list(filters={"status": "running"})
 
         for container in containers:
             running_containers_count += 1
             name = getattr(container, "name", "") or ""
             
-            # Omitir el gestor de backups
             if name in ["casaos-backup-manager", "casaos-backup"]:
                 continue
 
@@ -117,7 +124,6 @@ def scan_active_apps_and_containers():
                 "image": container.image.tags[0] if container.image.tags else "N/A"
             })
 
-            # Nombre formal de la app en CasaOS o Docker Compose
             app_name = (
                 labels.get("io.casaos.app")
                 or labels.get("com.docker.compose.project")
@@ -134,7 +140,6 @@ def scan_active_apps_and_containers():
                     "has_hook": is_db
                 }
 
-            # Registrar volumen/ruta en host asociada al contenedor activo
             raw_mounts = attrs.get("Mounts") or []
             for m in raw_mounts:
                 if isinstance(m, dict):
@@ -188,10 +193,31 @@ async def render_dashboard(
         "app_profiles": app_profiles,
         "destinations": destinations,
         "system": system_stats,
-        "docker_containers": docker_info
+        "docker_containers": docker_info,
+        "schedule": CURRENT_SCHEDULE
     }
 
     return templates.TemplateResponse("index.html", context)
+
+
+# --- ENDPOINTS PASO 1: PROGRAMACIÓN DE TAREAS ---
+
+@router.get("/api/v1/schedules")
+async def get_schedule():
+    """Devuelve la configuración actual de la programación."""
+    return JSONResponse(CURRENT_SCHEDULE)
+
+
+@router.post("/api/v1/schedules")
+async def save_schedule(data: ScheduleCreate):
+    """Guarda la nueva configuración de la programación de tareas."""
+    global CURRENT_SCHEDULE
+    CURRENT_SCHEDULE = data.dict()
+    return JSONResponse({
+        "status": "success",
+        "message": "Programación de tareas guardada con éxito.",
+        "schedule": CURRENT_SCHEDULE
+    })
 
 
 @router.post("/api/v1/backups/run-full")

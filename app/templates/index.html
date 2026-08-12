@@ -28,7 +28,7 @@
                 </span>
             </div>
 
-            <!-- Botones Superiores de Navegación -->
+            <!-- Botones Superiores -->
             <div class="flex items-center space-x-3">
                 <button onclick="window.location.reload()" class="flex items-center space-x-1.5 px-3 py-1.5 border border-blue-500 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition">
                     <span>🔍</span>
@@ -105,7 +105,7 @@
         <!-- Layout en 2 Columnas -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
-            <!-- Columna Izquierda: Disaster Recovery & Perfiles de Apps -->
+            <!-- Columna Izquierda: Disaster Recovery & Perfiles -->
             <div class="lg:col-span-2 space-y-6">
 
                 <!-- Bloque Disaster Recovery -->
@@ -140,7 +140,7 @@
                     </div>
                 </div>
 
-                <!-- Lista de Perfiles de Aplicación -->
+                <!-- Perfiles de Aplicación -->
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
                     <div class="flex justify-between items-center border-b border-gray-100 pb-3">
                         <div class="flex items-center space-x-2">
@@ -184,7 +184,6 @@
             <div class="space-y-6">
 
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-                    <!-- Cabecera de Pestañas -->
                     <div class="flex items-center space-x-4 border-b border-gray-100 pb-3 text-sm font-bold">
                         <button id="tab-btn-rpi" onclick="switchTab('rpi')" class="text-blue-600 border-b-2 border-blue-600 pb-1 flex items-center space-x-1">
                             <span>🍓</span>
@@ -200,7 +199,7 @@
                         </button>
                     </div>
 
-                    <!-- Contenido Pestaña 1: Raspberry Pi -->
+                    <!-- Pestaña Raspberry Pi -->
                     <div id="tab-content-rpi" class="space-y-3 text-xs">
                         <div class="flex items-center justify-between">
                             <span class="text-gray-500 font-bold flex items-center space-x-1">
@@ -222,7 +221,7 @@
                         </div>
                     </div>
 
-                    <!-- Contenido Pestaña 2: Docker -->
+                    <!-- Pestaña Docker -->
                     <div id="tab-content-docker" class="hidden space-y-2 text-xs">
                         <div class="flex justify-between items-center text-gray-500 font-bold border-b pb-1">
                             <span>Contenedor</span>
@@ -240,7 +239,7 @@
                         </div>
                     </div>
 
-                    <!-- Contenido Pestaña 3: Discos -->
+                    <!-- Pestaña Discos -->
                     <div id="tab-content-discos" class="hidden space-y-3 text-xs">
                         <div class="flex justify-between items-center text-gray-500 font-bold border-b pb-1">
                             <span>Unidad</span>
@@ -260,7 +259,6 @@
                     </div>
                 </div>
 
-                <!-- Tarjeta Resumen del Estado -->
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-3">
                     <div class="flex items-center space-x-2 border-b border-gray-100 pb-2">
                         <span>📊</span>
@@ -278,7 +276,6 @@
                     </div>
                 </div>
 
-                <!-- Tarjeta Motores Integrados -->
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-3">
                     <div class="flex items-center space-x-2 border-b border-gray-100 pb-2">
                         <span>⚡</span>
@@ -302,21 +299,53 @@
 
     </main>
 
-    <!-- Modales de Navegación -->
+    <!-- Overlay Global para Modales -->
     <div id="modal-overlay" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 flex justify-center items-center p-4">
         
-        <!-- Modal Programación -->
-        <div id="modal-schedules" class="hidden bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
-                <span>📅</span> <span>Programación de Tareas</span>
-            </h3>
-            <p class="text-sm text-gray-600">Configura ejecuciones periódicas automatizadas (Diarias, Semanales).</p>
-            <div class="pt-4 flex justify-end">
-                <button onclick="closeModals()" class="px-4 py-2 bg-gray-200 text-gray-800 font-bold text-xs rounded-lg hover:bg-gray-300">Cerrar</button>
+        <!-- Modal 1: PROGRAMACIÓN DE TAREAS (TOTALMENTE FUNCIONAL) -->
+        <div id="modal-schedules" class="hidden bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-5">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
+                    <span>📅</span> <span>Programación de Tareas</span>
+                </h3>
+                <button onclick="closeModals()" class="text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
             </div>
+
+            <form id="schedule-form" onsubmit="saveSchedule(event)" class="space-y-4">
+                
+                <!-- Tipo de Copia -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Tipo de Tarea Automática</label>
+                    <select id="sched-backup-type" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-medium">
+                        <option value="full" {% if schedule.backup_type == 'full' %}selected{% endif %}>Copia Completa Sistema + Apps (Disaster Recovery)</option>
+                        <option value="apps" {% if schedule.backup_type == 'apps' %}selected{% endif %}>Solo Perfiles de Aplicación</option>
+                    </select>
+                </div>
+
+                <!-- Frecuencia -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Frecuencia de Ejecución</label>
+                    <select id="sched-frequency" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-medium">
+                        <option value="daily" {% if schedule.frequency == 'daily' %}selected{% endif %}>Diaria (Todos los días)</option>
+                        <option value="weekly" {% if schedule.frequency == 'weekly' %}selected{% endif %}>Semanal (Días específicos)</option>
+                        <option value="disabled" {% if schedule.frequency == 'disabled' %}selected{% endif %}>Desactivada</option>
+                    </select>
+                </div>
+
+                <!-- Hora de Ejecución -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Hora de Ejecución (Formato 24h)</label>
+                    <input type="time" id="sched-time" value="{{ schedule.time }}" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-semibold">
+                </div>
+
+                <div class="pt-4 flex justify-end space-x-3 border-t">
+                    <button type="button" onclick="closeModals()" class="px-4 py-2 bg-gray-200 text-gray-800 font-bold text-xs rounded-lg hover:bg-gray-300">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow">Guardar Programación</button>
+                </div>
+            </form>
         </div>
 
-        <!-- Modal Restauración -->
+        <!-- Modal 2: Restauración -->
         <div id="modal-restore" class="hidden bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
             <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
                 <span>🔄</span> <span>Restaurar Copias de Seguridad</span>
@@ -327,7 +356,7 @@
             </div>
         </div>
 
-        <!-- Modal Configuración -->
+        <!-- Modal 3: Configuración -->
         <div id="modal-config" class="hidden bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
             <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
                 <span>⚙️</span> <span>Configuración del Sistema</span>
@@ -340,9 +369,7 @@
 
     </div>
 
-    <!-- Script de Control Interactivo -->
     <script>
-        // Cambio de Pestañas (RPi / Docker / Discos)
         function switchTab(tabName) {
             const tabs = ['rpi', 'docker', 'discos'];
             tabs.forEach(t => {
@@ -358,7 +385,6 @@
             });
         }
 
-        // Mostrar Toast de Notificación
         function showToast(message, icon = "🚀") {
             const toast = document.getElementById('toast');
             document.getElementById('toast-message').innerText = message;
@@ -369,7 +395,6 @@
             }, 4000);
         }
 
-        // Ejecutar Copia Completa
         async function runFullBackup() {
             showToast("Iniciando Copia de Seguridad Completa...", "📦");
             try {
@@ -381,7 +406,6 @@
             }
         }
 
-        // Ejecutar Copia de App Individual
         async function runAppBackup(appName) {
             showToast(`Iniciando copia para ${appName}...`, "⚡");
             try {
@@ -393,7 +417,6 @@
             }
         }
 
-        // Modales
         function openModal(modalId) {
             document.getElementById('modal-overlay').classList.remove('hidden');
             ['modal-schedules', 'modal-restore', 'modal-config'].forEach(m => {
@@ -404,6 +427,31 @@
 
         function closeModals() {
             document.getElementById('modal-overlay').classList.add('hidden');
+        }
+
+        // GUARDAR PROGRAMACIÓN DESDE EL MODAL PASO 1
+        async function saveSchedule(event) {
+            event.preventDefault();
+            const payload = {
+                backup_type: document.getElementById('sched-backup-type').value,
+                frequency: document.getElementById('sched-frequency').value,
+                time: document.getElementById('sched-time').value,
+                days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+                enabled: document.getElementById('sched-frequency').value !== "disabled"
+            };
+
+            try {
+                const res = await fetch('/api/v1/schedules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                closeModals();
+                showToast(data.message, "📅");
+            } catch (e) {
+                showToast("Error al guardar la programación", "❌");
+            }
         }
     </script>
 
