@@ -9,7 +9,6 @@ from app.database.session import get_db
 
 router = APIRouter()
 
-# Ubicación de la carpeta de plantillas (app/templates)
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -22,25 +21,38 @@ async def render_dashboard(
 ):
     """
     Renderiza la vista principal del Dashboard (index.html).
-    Recopila contadores de destinos, programaciones y estado del sistema.
+    Proporciona los datos requeridos por las plantillas y componentes Jinja2.
     """
+    # Estructura requerida por summary_card.html y componentes del dashboard
+    summary = {
+        "containers": 0,
+        "destinations": 0,
+        "schedules": 0,
+        "size": "0 B",
+        "status": "Activo"
+    }
+
+    docker_info = {
+        "containers_running": 0,
+        "total_containers": 0
+    }
+
     total_backends = 0
     total_schedules = 0
     engine_status = "Activo"
     recent_executions: List[Dict[str, Any]] = []
     protectable_items: List[Dict[str, Any]] = []
 
-    # Intento de lectura de métricas de la base de datos con manejo de fallos
     try:
-        # Si tienes modelos SQLAlchemy importados, puedes descomentar la lógica:
-        # total_backends = db.query(Backend).count()
-        # total_schedules = db.query(Schedule).count()
+        # Lógica futura de lectura desde DB/Docker SDK
         pass
     except Exception as err:
-        print(f"[Dashboard Router] Error al obtener datos de la BD: {err}")
+        print(f"[Dashboard Router] Error al consultar métricas: {err}")
 
     context = {
         "request": request,
+        "summary": summary,
+        "docker": docker_info,
         "total_backends": total_backends,
         "total_schedules": total_schedules,
         "engine_status": engine_status,
