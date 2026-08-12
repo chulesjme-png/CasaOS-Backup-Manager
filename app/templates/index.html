@@ -85,20 +85,34 @@
             </div>
         </div>
 
-        <!-- Selector de Destino Activo -->
+        <!-- Selector de Destino Activo (Se guarda de forma persistente) -->
         <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex items-center justify-between">
             <div class="flex items-center space-x-3 w-full">
                 <span class="text-gray-600 font-bold text-sm whitespace-nowrap flex items-center space-x-2">
                     <span>💾</span>
                     <span>Destino Activo de Copias:</span>
                 </span>
-                <select id="active-destination" class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm font-medium rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                <select id="active-destination" onchange="updateActiveDestination(this.value)" class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm font-medium rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
                     {% for dest in destinations %}
-                    <option value="{{ dest.path }}">
+                    <option value="{{ dest.path }}" {% if dest.path == config.default_backup_path %}selected{% endif %}>
                         {{ dest.name }} ({{ dest.path }}) — Libre: {{ dest.free_gb }} GB / Total: {{ dest.total_gb }} GB
                     </option>
                     {% endfor %}
                 </select>
+            </div>
+        </div>
+
+        <!-- Barra de Progresión Animada de Tareas -->
+        <div id="backup-progress-card" class="hidden bg-white rounded-xl border border-blue-200 shadow-sm p-4 space-y-2">
+            <div class="flex justify-between items-center text-xs font-bold">
+                <span id="progress-title" class="text-blue-700 flex items-center space-x-2">
+                    <span class="animate-spin text-base">🌀</span>
+                    <span id="progress-label">Ejecutando copia de seguridad...</span>
+                </span>
+                <span id="progress-percentage" class="text-blue-600 font-mono text-sm">0%</span>
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-200">
+                <div id="progress-bar" class="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
             </div>
         </div>
 
@@ -360,7 +374,7 @@
             </div>
         </div>
 
-        <!-- Modal 3: CONFIGURACIÓN DEL SISTEMA (PASO 3 COMPLETO) -->
+        <!-- Modal 3: CONFIGURACIÓN DEL SISTEMA -->
         <div id="modal-config" class="hidden bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-5">
             <div class="flex justify-between items-center border-b pb-3">
                 <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
@@ -425,24 +439,94 @@
             }, 4000);
         }
 
+        // LÓGICA DE FIJAR DISCO DE DESTINO DE FORMA PERSISTENTE
+        async function updateActiveDestination(newPath) {
+            showToast("Actualizando destino de copias...", "💾");
+            try {
+                const currentConfig = {
+                    duplicati_url: document.getElementById('cfg-duplicati-url')?.value || "{{ config.duplicati_url }}",
+                    duplicati_pass: document.getElementById('cfg-duplicati-pass')?.value || "{{ config.duplicati_pass }}",
+                    default_backup_path: newPath,
+                    retention_days: parseInt(document.getElementById('cfg-retention')?.value) || {{ config.retention_days }},
+                    enable_notifications: false,
+                    webhook_url: ""
+                };
+
+                const res = await fetch('/api/v1/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentConfig)
+                });
+                const data = await res.json();
+                
+                // Actualizar la caja del modal de configuración para mantener la sincronización visual
+                const modalPathInput = document.getElementById('cfg-default-path');
+                if (modalPathInput) modalPathInput.value = newPath;
+
+                showToast(`Destino fijado en: ${newPath}`, "✅");
+            } catch (e) {
+                showToast("Error al fijar el disco de destino", "❌");
+            }
+        }
+
+        // CONTROL VISUAL DE BARRA DE PROGRESO
+        function startProgressBar(taskName) {
+            const card = document.getElementById('backup-progress-card');
+            const label = document.getElementById('progress-label');
+            const percentage = document.getElementById('progress-percentage');
+            const bar = document.getElementById('progress-bar');
+
+            card.classList.remove('hidden');
+            label.innerText = `Ejecutando: ${taskName}`;
+            bar.style.width = '0%';
+            percentage.innerText = '0%';
+
+            let current = 0;
+            const interval = setInterval(() => {
+                if (current < 90) {
+                    current += Math.floor(Math.random() * 8) + 4;
+                    if (current > 90) current = 90;
+                    bar.style.width = `${current}%`;
+                    percentage.innerText = `${current}%`;
+                }
+            }, 300);
+
+            return { interval, bar, percentage, card };
+        }
+
+        function finishProgressBar(tracker) {
+            clearInterval(tracker.interval);
+            tracker.bar.style.width = '100%';
+            tracker.percentage.innerText = '100%';
+            setTimeout(() => {
+                tracker.card.classList.add('hidden');
+            }, 2500);
+        }
+
         async function runFullBackup() {
-            showToast("Iniciando Copia de Seguridad Completa...", "📦");
+            const tracker = startProgressBar("Sistema Completo (Disaster Recovery)");
             try {
                 const res = await fetch('/api/v1/backups/run-full', { method: 'POST' });
                 const data = await res.json();
+                finishProgressBar(tracker);
                 showToast(data.message, "✅");
             } catch (e) {
+                clearInterval(tracker.interval);
+                tracker.card.classList.add('hidden');
                 showToast("Error al solicitar la copia completa", "❌");
             }
         }
 
         async function runAppBackup(appName) {
-            showToast(`Iniciando copia para ${appName}...`, "⚡");
+            const tracker = startProgressBar(`Perfil ${appName}`);
             try {
                 const res = await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
                 const data = await res.json();
+                finishProgressBar(tracker);
                 showToast(data.message, "✅");
             } catch (e) {
+                clearInterval(tracker.interval);
+                tracker.card.classList.add('hidden');
                 showToast(`Error al copiar ${appName}`, "❌");
             }
         }
@@ -537,7 +621,6 @@
             }
         }
 
-        // FUNCIONES PASO 3: GUARDAR CONFIGURACIÓN
         async function saveConfig(event) {
             event.preventDefault();
             const payload = {

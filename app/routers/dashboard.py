@@ -196,6 +196,10 @@ async def render_dashboard(
     destinations = get_mounted_destinations()
     system_stats = get_system_stats()
 
+    # Garantizar que si default_backup_path no está entre los discos detectados, use el primero disponible
+    if destinations and not any(d["path"] == CURRENT_CONFIG["default_backup_path"] for d in destinations):
+        CURRENT_CONFIG["default_backup_path"] = destinations[0]["path"]
+
     context = {
         "request": request,
         "version": "v0.5.0-alpha7",
@@ -291,15 +295,17 @@ async def save_config(data: SystemConfig):
 
 @router.post("/api/v1/backups/run-full")
 async def trigger_full_backup():
+    target_path = CURRENT_CONFIG.get("default_backup_path", "/mnt/backups")
     return JSONResponse({
         "status": "success",
-        "message": "Copia de Seguridad Completa (Disaster Recovery) iniciada correctamente."
+        "message": f"Copia de Seguridad Completa iniciada hacia '{target_path}'."
     })
 
 
 @router.post("/api/v1/backups/run-app/{app_name}")
 async def trigger_app_backup(app_name: str):
+    target_path = CURRENT_CONFIG.get("default_backup_path", "/mnt/backups")
     return JSONResponse({
         "status": "success",
-        "message": f"Copia de seguridad iniciada para el perfil '{app_name}'."
+        "message": f"Copia de seguridad iniciada para '{app_name}' hacia '{target_path}'."
     })
