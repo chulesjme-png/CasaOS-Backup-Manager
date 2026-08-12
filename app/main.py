@@ -1,17 +1,15 @@
 import os
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
 
-# Importar enrutadores existentes del proyecto
 from app.routers import (
     api_backends,
-    api_executions,
-    api_health,
-    api_restore,
     api_schedules,
+    api_executions,
+    api_restore,
+    api_health,
     dashboard,
     executions,
     backups,
@@ -32,14 +30,14 @@ if STATIC_DIR.exists():
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-# Registrar la API v1 con /api
+# Enrutadores API REST (/api)
 app.include_router(api_backends.router, prefix="/api/backends", tags=["Backends"])
 app.include_router(api_schedules.router, prefix="/api/schedules", tags=["Schedules"])
 app.include_router(api_executions.router, prefix="/api/executions", tags=["Executions"])
 app.include_router(api_restore.router, prefix="/api/restore", tags=["Restore"])
 app.include_router(api_health.router, prefix="/api/health", tags=["Health"])
 
-# Registrar enrutadores de vistas HTML
+# Enrutadores de Vistas HTML
 app.include_router(dashboard.router)
 app.include_router(executions.router)
 app.include_router(backups.router)
