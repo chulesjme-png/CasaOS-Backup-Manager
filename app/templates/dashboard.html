@@ -29,7 +29,7 @@
                         <div class="d-flex align-items-center">
                             <div class="flex-grow-1">
                                 <h6 class="text-muted fw-normal mb-1">Destinos Configurados</h6>
-                                <h3 class="mb-0 fw-bold" id="total-backends">-</h3>
+                                <h3 class="mb-0 fw-bold" id="total-backends">0</h3>
                             </div>
                             <div class="fs-1 text-primary"><i class="bi bi-hdd-network"></i></div>
                         </div>
@@ -42,7 +42,7 @@
                         <div class="d-flex align-items-center">
                             <div class="flex-grow-1">
                                 <h6 class="text-muted fw-normal mb-1">Tareas Programadas</h6>
-                                <h3 class="mb-0 fw-bold" id="total-schedules">-</h3>
+                                <h3 class="mb-0 fw-bold" id="total-schedules">0</h3>
                             </div>
                             <div class="fs-1 text-success"><i class="bi bi-clock-history"></i></div>
                         </div>
@@ -142,7 +142,7 @@
                 
                 if (resExecs.ok) {
                     const execs = await resExecs.json();
-                    if (execs.length === 0) {
+                    if (!execs || execs.length === 0) {
                         tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted">No hay registros de ejecuciones aún.</td></tr>`;
                         return;
                     }
