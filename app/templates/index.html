@@ -3,143 +3,263 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - CasaOS Backup Manager</title>
+    <title>CasaOS Backup Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg">
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans antialiased min-h-screen">
 
-    <!-- Barra de Navegación -->
-    <nav class="bg-slate-900 text-white px-8 py-4 shadow-md">
+    <!-- Header Principal -->
+    <header class="bg-white border-b border-gray-200 px-8 py-3 shadow-sm">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <img src="/static/img/logo-icon.svg" alt="Logo" class="h-8 w-8" onerror="this.style.display='none'">
-                <span class="text-xl font-bold tracking-tight">CasaOS Backup Manager</span>
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl font-bold text-blue-600">CasaOS</span>
+                    <span class="text-sm text-gray-500 font-medium leading-tight">Backup<br>Manager</span>
+                </div>
+                <span class="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                    {{ version }}
+                </span>
             </div>
-            <div class="flex items-center space-x-6 text-sm font-medium text-slate-300">
-                <a href="/" class="text-white flex items-center space-x-1 hover:text-blue-400">
-                    <span>🏠 Dashboard</span>
-                </a>
-                <a href="#" class="hover:text-blue-400 flex items-center space-x-1">
-                    <span>📋 Programaciones</span>
-                </a>
-                <a href="#" class="hover:text-blue-400 flex items-center space-x-1">
-                    <span>🔄 Restauración</span>
-                </a>
-                <a href="/docs" target="_blank" class="hover:text-blue-400 flex items-center space-x-1">
-                    <span>⚡ API Docs</span>
-                </a>
+
+            <!-- Botones Superiores de Navegación -->
+            <div class="flex items-center space-x-3">
+                <button onclick="window.location.reload()" class="flex items-center space-x-1.5 px-3 py-1.5 border border-blue-500 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition">
+                    <span>🔍</span>
+                    <span>Escanear</span>
+                </button>
+                <button class="flex items-center space-x-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition">
+                    <span>📅</span>
+                    <span>Programación</span>
+                </button>
+                <button class="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-400 text-slate-900 rounded-lg text-sm font-bold shadow-sm hover:bg-amber-500 transition">
+                    <span>🔄</span>
+                    <span>Restaurar Copias</span>
+                </button>
+                <button class="flex items-center space-x-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition">
+                    <span>⚙️</span>
+                    <span>Configuración</span>
+                </button>
             </div>
         </div>
-    </nav>
+    </header>
 
-    <!-- Contenido Principal -->
-    <main class="max-w-7xl mx-auto px-8 py-8 space-y-8">
+    <!-- Cuerpo del Dashboard -->
+    <main class="max-w-7xl mx-auto px-8 py-6 space-y-6">
 
-        <!-- Métricas Rápidas -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-sm space-y-3">
-            <div class="flex justify-between items-center text-sm">
-                <span class="text-gray-500 font-medium">Aplicaciones:</span>
-                <span class="font-bold text-gray-900">{{ summary.apps }}</span>
+        <!-- Fila Superior: Tarjetas de Estado General -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                <div class="text-xs font-bold text-gray-400 tracking-wider uppercase mb-1">ESTADO GENERAL</div>
+                <div class="flex items-center space-x-2 text-sm font-bold text-gray-800">
+                    <span class="text-emerald-500 text-base">🟢</span>
+                    <span>Sistema Operativo</span>
+                </div>
             </div>
-            <div class="flex justify-between items-center text-sm">
-                <span class="text-gray-500 font-medium">Contenedores:</span>
-                <span class="font-bold text-gray-900">{{ summary.containers }}</span>
+
+            <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                <div class="text-xs font-bold text-gray-400 tracking-wider uppercase mb-1">MOTORES DE BACKUP</div>
+                <div class="text-sm font-bold text-gray-800">
+                    Duplicati (OK)
+                </div>
             </div>
-            <div class="flex justify-between items-center text-sm">
-                <span class="text-gray-500 font-medium">Rutas persistentes:</span>
-                <span class="font-bold text-blue-600">{{ summary.persistent_routes }}</span>
+
+            <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                <div class="text-xs font-bold text-gray-400 tracking-wider uppercase mb-1">APLICACIONES CASAOS</div>
+                <div class="text-sm font-bold text-gray-800">
+                    {{ apps_count }} Detectadas
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                <div class="text-xs font-bold text-gray-400 tracking-wider uppercase mb-1">ALMACENAMIENTO HOST</div>
+                <div class="text-sm font-bold text-gray-800">
+                    /DATA Protegido
+                </div>
             </div>
         </div>
 
-        <!-- Grid Principal (Tabla de Rutas + Acciones) -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <!-- Barra de Selector de Destino Activo -->
+        <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex items-center justify-between">
+            <div class="flex items-center space-x-3 w-full">
+                <span class="text-gray-600 font-bold text-sm whitespace-nowrap flex items-center space-x-2">
+                    <span>💾</span>
+                    <span>Destino Activo de Copias:</span>
+                </span>
+                <select class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm font-medium rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                    {% for dest in destinations %}
+                    <option value="{{ dest.path }}">
+                        {{ dest.name }} ({{ dest.path }}) — Libre: {{ dest.free_gb }} GB
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
 
-            <!-- Columna Izquierda: Tabla de Datos Protegibles -->
-            <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                    <div class="flex items-center space-x-2">
-                        <span class="text-lg">🛡️</span>
-                        <h2 class="text-lg font-bold text-gray-900">Datos y Aplicaciones Protegibles</h2>
+        <!-- Layout en 2 Columnas -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+            <!-- Columna Izquierda: Disaster Recovery & Perfiles de Apps -->
+            <div class="lg:col-span-2 space-y-6">
+
+                <!-- Bloque Disaster Recovery -->
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                    <div class="flex justify-between items-start">
+                        <div class="space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-red-500 text-xl">🛡️</span>
+                                <h2 class="text-lg font-bold text-blue-700">
+                                    Copia de Seguridad de la Raspberry Pi (Disaster Recovery)
+                                </h2>
+                            </div>
+                            <p class="text-xs text-gray-500">
+                                Resguarda la configuración de CasaOS y los datos de todas las apps (<code class="bg-gray-100 text-red-600 px-1 py-0.5 rounded">/DATA/AppData</code>).
+                            </p>
+                            <div class="flex items-center space-x-3 pt-2">
+                                <span class="bg-blue-50 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-blue-200 flex items-center space-x-1">
+                                    <span>🔄</span>
+                                    <span>Incremental (Duplicati)</span>
+                                </span>
+                                <span class="bg-emerald-50 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-200 flex items-center space-x-1">
+                                    <span class="text-emerald-500">🟢</span>
+                                    <span>Listo para resguardo</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-3 rounded-xl shadow transition flex items-center space-x-2 whitespace-nowrap">
+                            <span>📦</span>
+                            <span>Copiar Sistema Completo</span>
+                        </button>
                     </div>
-                    <button onclick="window.location.reload()" class="px-3 py-1.5 border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 transition">
-                        🔄 Refrescar
-                    </button>
                 </div>
 
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-4">
+                <!-- Lista de Perfiles de Aplicación Generados -->
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+                    <div class="flex justify-between items-center border-b border-gray-100 pb-3">
                         <div class="flex items-center space-x-2">
-                            <span class="text-red-500">🛡️</span>
-                            <span class="text-sm font-semibold text-blue-600">Datos Protegibles Detectados</span>
+                            <span class="text-red-500">📌</span>
+                            <h3 class="font-bold text-gray-900 text-base">Perfiles de Aplicación Generados</h3>
                         </div>
-                        <span class="bg-slate-800 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
-                            Rutas: {{ protectable_items|length }}
+                        <span class="bg-blue-600 text-white text-xs px-3 py-1 rounded-full font-bold">
+                            {{ app_profiles|length }} Perfiles
                         </span>
                     </div>
 
-                    <div class="overflow-x-auto border border-gray-100 rounded-lg">
-                        <table class="w-full text-left border-collapse text-sm">
-                            <thead>
-                                <tr class="bg-gray-50 text-gray-600 text-xs font-semibold border-b border-gray-200">
-                                    <th class="py-3 px-4">Contenedor</th>
-                                    <th class="py-3 px-4">Ruta en Host (Raspberry Pi)</th>
-                                    <th class="py-3 px-4">Ruta Interna</th>
-                                    <th class="py-3 px-4">Tipo / Hook</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 text-gray-700">
-                                {% for item in protectable_items %}
-                                <tr class="hover:bg-gray-50 transition">
-                                    <td class="py-3 px-4 font-semibold text-gray-900">{{ item.container }}</td>
-                                    <td class="py-3 px-4 font-mono text-xs text-blue-700 break-all">{{ item.host_path }}</td>
-                                    <td class="py-3 px-4 font-mono text-xs text-gray-500 break-all">{{ item.container_path }}</td>
-                                    <td class="py-3 px-4">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                                            {{ item.type }} / {{ item.hook }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="4" class="py-8 text-center text-gray-400">
-                                        No hay datos de rutas protegibles escaneadas.
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="divide-y divide-gray-100">
+                        {% for app in app_profiles %}
+                        <div class="py-3 flex justify-between items-center hover:bg-gray-50 px-2 rounded-lg transition">
+                            <div class="space-y-1">
+                                <div class="flex items-center space-x-2">
+                                    <span class="font-bold text-gray-900 text-sm">{{ app.name }}</span>
+                                    {% if app.has_hook %}
+                                    <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-300">
+                                        Hook DB
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-xs font-mono text-red-600">
+                                    Rutas: {{ app.route }}
+                                </div>
+                            </div>
+
+                            <button class="border border-blue-500 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1">
+                                <span>⚡</span>
+                                <span>Copiar Ahora</span>
+                            </button>
+                        </div>
+                        {% else %}
+                        <div class="py-8 text-center text-gray-400 text-sm">
+                            No se encontraron perfiles de aplicación.
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
+
             </div>
 
-            <!-- Columna Derecha: Acciones Rápidas -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-                <div class="flex items-center space-x-2 border-b border-gray-100 pb-3">
-                    <span class="text-yellow-500">⚡</span>
-                    <h3 class="text-lg font-bold text-gray-900">Acciones Rápidas</h3>
-                </div>
+            <!-- Columna Derecha: Sistema host y estado de motores -->
+            <div class="space-y-6">
 
-                <div class="space-y-3">
-                    <a href="/api/v1/backends/" class="block w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl transition text-left shadow-sm">
-                        <div class="font-bold flex items-center space-x-2">
-                            <span>⚓</span>
-                            <span>Añadir Destino</span>
-                        </div>
-                        <p class="text-xs text-blue-100 mt-1">Configura Duplicati o almacenamiento local</p>
-                    </a>
+                <!-- Tarjeta de Especificaciones Hardware -->
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+                    <div class="flex items-center justify-between border-b border-gray-100 pb-3 text-sm font-bold text-gray-600">
+                        <span class="text-blue-600 border-b-2 border-blue-600 pb-1 flex items-center space-x-1">
+                            <span>🍓</span>
+                            <span>Raspberry Pi 5</span>
+                        </span>
+                        <span class="text-gray-400 hover:text-gray-600 cursor-pointer flex items-center space-x-1">
+                            <span>🐳</span>
+                            <span>Docker</span>
+                        </span>
+                        <span class="text-gray-400 hover:text-gray-600 cursor-pointer flex items-center space-x-1">
+                            <span>💾</span>
+                            <span>Discos</span>
+                        </span>
+                    </div>
 
-                    <div class="block w-full border border-gray-200 p-4 rounded-xl text-left bg-gray-50 opacity-75">
-                        <div class="font-bold text-gray-700 flex items-center space-x-2">
-                            <span>📅</span>
-                            <span>Nueva Programación</span>
+                    <div class="space-y-3 text-xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-500 font-bold flex items-center space-x-1">
+                                <span>🖥️</span>
+                                <span>Sistema</span>
+                            </span>
                         </div>
-                        <p class="text-xs text-gray-500 mt-1">Añade tareas periódicas automatizadas</p>
+                        <div class="flex justify-between text-gray-700">
+                            <span class="text-gray-400">OS:</span>
+                            <span class="font-semibold">{{ system.os }}</span>
+                        </div>
+                        <div class="flex justify-between text-gray-700">
+                            <span class="text-gray-400">CPU:</span>
+                            <span class="font-semibold">{{ system.cpu }}</span>
+                        </div>
+                        <div class="flex justify-between text-gray-700">
+                            <span class="text-gray-400">RAM:</span>
+                            <span class="font-semibold">{{ system.ram }}</span>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Tarjeta Resumen del Estado -->
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-3">
+                    <div class="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                        <span>📊</span>
+                        <h4 class="font-bold text-gray-900 text-sm">Resumen del Estado</h4>
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 font-medium">Aplicaciones:</span>
+                            <span class="font-bold text-gray-900">{{ apps_count }}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 font-medium">Contenedores:</span>
+                            <span class="font-bold text-gray-900">{{ containers_count }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tarjeta Motores Integrados -->
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-3">
+                    <div class="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                        <span>⚡</span>
+                        <h4 class="font-bold text-gray-900 text-sm">Motores Integrados</h4>
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        <div class="font-bold text-gray-800 flex items-center space-x-1">
+                            <span>🔌</span>
+                            <span>Duplicati Engine</span>
+                        </div>
+                        <div class="flex justify-between text-gray-500">
+                            <span>Estado de integración:</span>
+                            <span class="text-emerald-600 font-bold">Activo</span>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
         </div>
+
     </main>
 
 </body>
