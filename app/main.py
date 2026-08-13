@@ -8,13 +8,11 @@ from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from pydantic import BaseModel
 
-# Asegurar que el sistema reconozca correctamente los archivos SVG
 mimetypes.add_type("image/svg+xml", ".svg")
 
-# Configuración de logs
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("CasaOS-Backup-Manager")
 
@@ -29,14 +27,15 @@ app = FastAPI(
 # -----------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 
-# Buscar la carpeta static (probar tanto app/static como static/)
+# Buscar estáticos
 static_dir = os.path.join(BASE_DIR, "static")
 if not os.path.exists(static_dir):
     static_dir = os.path.join(BASE_DIR.parent, "static")
 
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Configuración de plantillas Jinja2
+# Configurar plantillas
 templates_dir = os.path.join(BASE_DIR, "templates")
 if not os.path.exists(templates_dir):
     templates_dir = os.path.join(BASE_DIR.parent, "templates")
@@ -99,11 +98,11 @@ def get_system_disks() -> List[Dict[str, Any]]:
 
 def get_installed_apps() -> List[Dict[str, Any]]:
     return [
-        {"name": "big-bear-adguard-home", "path": "/DATA/AppData/big-bear-adguard-home/data/work", "has_db_hook": False},
+        {"name": "big-bear-adguard-home", "path": "/DATA/AppData/big-bear-adguard-home/data/conf", "has_db_hook": False},
         {"name": "ddns-updater", "path": "/DATA/AppData/ddns-updater/data", "has_db_hook": False},
-        {"name": "duplicati", "path": "/DATA", "has_db_hook": False},
-        {"name": "immich", "path": "/var/lib/docker/volumes/immich_model_cache/_data", "has_db_hook": False},
-        {"name": "jellyfin", "path": "/opt/vc/lib", "has_db_hook": False},
+        {"name": "duplicati", "path": "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa/Backups", "has_db_hook": False},
+        {"name": "immich", "path": "/DATA/AppData/big-bear-immich/upload", "has_db_hook": False},
+        {"name": "jellyfin", "path": "/media", "has_db_hook": False},
         {"name": "mariadb", "path": "/DATA/AppData/mariadb/config", "has_db_hook": True},
         {"name": "navidrome", "path": "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa/BibliotecaMusica", "has_db_hook": False},
         {"name": "nextcloud", "path": "/DATA/AppData/nextcloud/var/www/html", "has_db_hook": False},
@@ -113,6 +112,25 @@ def get_installed_apps() -> List[Dict[str, Any]]:
         {"name": "transmission", "path": "/DATA/Downloads/watch", "has_db_hook": False},
         {"name": "wg-easy", "path": "/DATA/AppData/wg-easy/wireguard", "has_db_hook": False}
     ]
+
+# -----------------------------------------------------------------------------
+# ENDPOINT DEDICADO PARA SERVIR EL LOGO DIRECTAMENTE
+# -----------------------------------------------------------------------------
+@app.get("/api/v1/logo")
+async def get_logo():
+    possible_paths = [
+        os.path.join(BASE_DIR, "static", "img", "logo-horizontal.svg"),
+        os.path.join(BASE_DIR.parent, "static", "img", "logo-horizontal.svg"),
+        "/app/static/img/logo-horizontal.svg",
+        "/app/app/static/img/logo-horizontal.svg"
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            return FileResponse(path, media_type="image/svg+xml")
+    
+    # SVG fallback inline por si el archivo no existe en el disco
+    svg_fallback = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 40" fill="none"><rect width="30" height="30" y="5" rx="6" fill="#2563EB"/><path d="M10 15L15 20L20 15" stroke="white" stroke-width="2.5" stroke-linecap="round"/><text x="40" y="26" font-family="sans-serif" font-weight="bold" font-size="18" fill="#1E3A8A">CasaOS</text><text x="120" y="26" font-family="sans-serif" font-size="14" fill="#64748B">Backup Manager</text></svg>"""
+    return Response(content=svg_fallback, media_type="image/svg+xml")
 
 # -----------------------------------------------------------------------------
 # VISTAS (ENDPOINTS HTML)

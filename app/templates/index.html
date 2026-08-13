@@ -12,12 +12,11 @@
     <header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <!-- Contenedor del Logo -->
+                <!-- Contenedor del Logo apuntando al endpoint directo -->
                 <div class="h-9 flex items-center">
                     <img id="app-logo" 
-                         src="/static/img/logo-horizontal.svg" 
-                         onerror="this.onerror=null; this.src='{{ url_for('static', path='img/logo-horizontal.svg') }}';"
-                         alt="Logo" 
+                         src="/api/v1/logo" 
+                         alt="CasaOS Backup Manager" 
                          class="h-8 w-auto object-contain block">
                 </div>
                 <span class="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{{ version }}</span>
@@ -178,7 +177,7 @@
                     </div>
                     <div class="flex justify-between text-gray-500">
                         <span>RAM:</span>
-                        <span class="font-medium text-gray-800">6.99 GB / 7.87 GB (88.7%)</span>
+                        <span class="font-medium text-gray-800">7.00 GB / 7.87 GB (88.9%)</span>
                     </div>
                 </div>
             </div>
