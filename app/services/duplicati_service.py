@@ -2,7 +2,7 @@ import os
 import shutil
 import asyncio
 import logging
-import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional, Dict
 from app.core.config import config_manager
@@ -34,20 +34,16 @@ class DuplicatiService:
         destination_folder.mkdir(parents=True, exist_ok=True)
 
         try:
-            # 1. Preparación de destino
             if progress_callback:
                 progress_callback(10, f"Preparando destino en {destination_folder}...")
 
-            # 2. Ejecución de Hooks de Base de Datos
             if progress_callback:
                 progress_callback(25, "Ejecutando DB Hooks si la aplicación los requiere...")
             db_hook_service.execute_pre_backup_hook(app_name, app_path)
 
-            # 3. Comprobación de existencia del directorio origen
             if not os.path.exists(app_path):
                 raise FileNotFoundError(f"El directorio origen {app_path} no existe.")
 
-            # 4. Decisión del motor: Duplicati CLI o TAR
             if self._has_duplicati_cli():
                 if progress_callback:
                     progress_callback(50, "Ejecutando copia incremental con Duplicati CLI...")
@@ -72,7 +68,6 @@ class DuplicatiService:
                     raise RuntimeError("Falló la ejecución de Duplicati CLI.")
 
             else:
-                # Fallback: Creación de paquete TAR.GZ comprimido
                 if progress_callback:
                     progress_callback(50, "Duplicati CLI no hallado. Usando motor TAR.GZ nativo...")
                 
@@ -88,7 +83,6 @@ class DuplicatiService:
                     logger.error(f"[Tar Error] {stderr.decode()}")
                     raise RuntimeError("Falló la compresión TAR.GZ.")
 
-            # 5. Limpieza post-backup de volcados DB
             if progress_callback:
                 progress_callback(90, "Limpiando archivos temporales...")
             db_hook_service.cleanup_hook_files(app_path)
@@ -130,7 +124,6 @@ class DuplicatiService:
             source_dir = "/DATA/AppData"
 
             if not os.path.exists(source_dir):
-                # Fallback para pruebas si /DATA/AppData no existe en host de desarrollo
                 source_dir = "/DATA" if os.path.exists("/DATA") else "."
 
             if progress_callback:
@@ -164,12 +157,12 @@ class DuplicatiService:
 
     async def restore_backup(self, backup_file: str, target_app: str = "all") -> bool:
         """
-        Ejecuta la restauración de un archivo de backup .tar.gz o repositorio de Duplicati.
+        Restaura un backup. Antes de sobrescribir nada, genera un Snapshot de Seguridad
+        del estado actual en /Backups/Snapshots/.
         """
         config = config_manager.config
         target_disk = config.selected_target_disk or "/DATA"
         
-        # Determinar si la ruta pasada es absoluta o relativa al disco destino
         file_path = Path(backup_file)
         if not file_path.is_absolute():
             file_path = Path(target_disk) / backup_file
@@ -179,10 +172,36 @@ class DuplicatiService:
             return False
 
         try:
+            # -------------------------------------------------------------
+            # PASO A: Crear Snapshot de Seguridad (Pre-Restore Safety Snapshot)
+            # -------------------------------------------------------------
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            snapshot_dir = Path(target_disk) / "Backups" / "Snapshots"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+            # Determinar qué directorio vamos a respaldar antes de sobrescribirlo
+            if target_app != "all" and target_app:
+                target_dir = Path("/DATA/AppData") / target_app
+            else:
+                target_dir = Path("/DATA/AppData")
+
+            if target_dir.exists():
+                snapshot_file = snapshot_dir / f"pre_restore_{target_app}_{timestamp}.tar.gz"
+                logger.info(f"[Safety Snapshot] Guardando estado actual previo en {snapshot_file}...")
+                
+                snap_cmd = ["tar", "-czf", str(snapshot_file), "-C", str(target_dir.parent), target_dir.name]
+                proc_snap = await asyncio.create_subprocess_exec(
+                    *snap_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                )
+                await proc_snap.communicate()
+                logger.info(f"[Safety Snapshot] Snapshot guardado con éxito.")
+
+            # -------------------------------------------------------------
+            # PASO B: Ejecutar la Restauración Solicitada
+            # -------------------------------------------------------------
             logger.info(f"[Restore] Restaurando desde {file_path} hacia /DATA/AppData...")
             
             if file_path.suffix in [".gz", ".tgz"] or file_path.name.endswith(".tar.gz"):
-                # Extraer archivo TAR
                 restore_target = "/DATA/AppData" if os.path.exists("/DATA/AppData") else "/DATA"
                 cmd = ["tar", "-xzf", str(file_path), "-C", restore_target]
                 
