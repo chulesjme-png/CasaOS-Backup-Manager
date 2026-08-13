@@ -12,12 +12,17 @@
     <header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <!-- Contenedor del Logo apuntando al endpoint directo -->
+                <!-- LOGO INLINE VECTORIAL DEFINITIVO -->
                 <div class="h-9 flex items-center">
-                    <img id="app-logo" 
-                         src="/api/v1/logo" 
-                         alt="CasaOS Backup Manager" 
-                         class="h-8 w-auto object-contain block">
+                    <svg class="h-8 w-auto" viewBox="0 0 280 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Icono Casa / Backup -->
+                        <rect x="0" y="2" width="32" height="32" rx="8" fill="#2563EB"/>
+                        <path d="M16 8L8 15V25C8 25.5523 8.44772 26 9 26H23C23.5523 26 24 25.5523 24 25V15L16 8Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M13 26V19C13 18.4477 13.4477 18 14 18H18C18.5523 18 19 18.4477 19 19V26" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <!-- Texto del Logo en vectorial -->
+                        <text x="42" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="20" fill="#1E3A8A">CasaOS</text>
+                        <text x="122" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="500" font-size="14" fill="#64748B">Backup Manager</text>
+                    </svg>
                 </div>
                 <span class="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{{ version }}</span>
             </div>
@@ -177,7 +182,7 @@
                     </div>
                     <div class="flex justify-between text-gray-500">
                         <span>RAM:</span>
-                        <span class="font-medium text-gray-800">7.00 GB / 7.87 GB (88.9%)</span>
+                        <span class="font-medium text-gray-800">6.99 GB / 7.87 GB (88.8%)</span>
                     </div>
                 </div>
             </div>
