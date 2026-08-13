@@ -12,9 +12,12 @@
     <header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <!-- Logo Horizontal SVG con Fallback Seguro -->
+                <!-- Logo Horizontal SVG -->
                 <div class="h-10 flex items-center">
-                    <img id="app-logo" src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" class="h-8 w-auto object-contain" onerror="handleLogoError(this)">
+                    <img id="app-logo" 
+                         src="{{ url_for('static', path='img/logo-horizontal.svg') }}" 
+                         alt="CasaOS Backup Manager" 
+                         class="h-8 w-auto object-contain">
                 </div>
                 <span class="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{{ version }}</span>
             </div>
@@ -66,7 +69,7 @@
                 </div>
             </div>
 
-            <!-- Selector de Destino Activo (Persistente Fijo) -->
+            <!-- Selector de Destino Activo (Persistente) -->
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center space-x-3">
                 <span class="text-sm">💾</span>
                 <label for="target-disk-select" class="text-xs font-bold text-gray-700 whitespace-nowrap">Destino Activo de Copias:</label>
@@ -174,7 +177,7 @@
                     </div>
                     <div class="flex justify-between text-gray-500">
                         <span>RAM:</span>
-                        <span class="font-medium text-gray-800">6.92 GB / 7.87 GB (87.9%)</span>
+                        <span class="font-medium text-gray-800">6.96 GB / 7.87 GB (88.3%)</span>
                     </div>
                 </div>
             </div>
@@ -258,7 +261,7 @@
         </div>
     </div>
 
-    <!-- Toast de Notificaciones System-Wide (Esquina Inferior Derecha) -->
+    <!-- Toast de Notificaciones -->
     <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
         <div class="bg-slate-900 border border-slate-800 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3">
             <span id="toast-icon" class="text-lg">✅</span>
@@ -267,21 +270,12 @@
     </div>
 
     <script>
-        // Configuración inicial guardada en servidor
         const serverConfiguredDisk = "{{ config.selected_target_disk or '' }}";
 
-        // Fallback seguro si falla el logo SVG
-        function handleLogoError(img) {
-            img.onerror = null;
-            img.parentElement.innerHTML = `<span class="font-bold text-blue-600 text-base">CasaOS Backup Manager</span>`;
-        }
-
-        // Cargar selección persistente de disco al iniciar la app
+        // Cargar selección de disco
         document.addEventListener('DOMContentLoaded', () => {
             const select = document.getElementById('target-disk-select');
             const savedLocalDisk = localStorage.getItem('selected_target_disk');
-            
-            // Prioridad: 1. Configuración del Servidor -> 2. LocalStorage del Navegador -> 3. Primera opción por defecto
             const diskToSelect = serverConfiguredDisk || savedLocalDisk;
 
             if (diskToSelect && select) {
@@ -294,12 +288,8 @@
             }
         });
 
-        // Guardar cambios en el selector de disco de forma PERMANENTE
         async function onTargetDiskChange(diskPath) {
-            // Persistir en LocalStorage
             localStorage.setItem('selected_target_disk', diskPath);
-
-            // Persistir en el archivo config.json del servidor backend
             try {
                 await fetch('/api/v1/config', {
                     method: 'POST',
@@ -308,11 +298,10 @@
                 });
                 showToast("Disco de destino guardado permanentemente");
             } catch (e) {
-                showToast("Guardado localmente. Error sincronizando servidor.", "⚠️");
+                showToast("Guardado localmente.", "⚠️");
             }
         }
 
-        // Sistema de Toast
         function showToast(message, icon = "✅") {
             const toast = document.getElementById('toast');
             document.getElementById('toast-message').innerText = message;
