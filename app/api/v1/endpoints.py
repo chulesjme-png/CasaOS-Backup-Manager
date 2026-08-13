@@ -11,6 +11,7 @@ from app.services.discovery_service import discovery_service
 from app.services.duplicati_service import duplicati_service
 from app.services.scheduler_service import scheduler_service
 from app.services.audit_service import audit_service
+from app.services.notification_service import notification_service
 
 logger = logging.getLogger("casaos-backup")
 router = APIRouter()
@@ -24,6 +25,13 @@ class ScheduleUpdateRequest(BaseModel):
 class RestoreRequest(BaseModel):
     backup_file: str = Field(..., description="Nombre o ruta del archivo de copia a restaurar")
     target_app: Optional[str] = Field("all", description="Nombre de la app específica o 'all' para todo el sistema")
+
+class NotificationSettings(BaseModel):
+    telegram_enabled: bool
+    telegram_bot_token: Optional[str] = ""
+    telegram_chat_id: Optional[str] = ""
+    webhook_enabled: bool
+    webhook_url: Optional[str] = ""
 
 
 # --- ENDPOINTS DE CONFIGURACIÓN Y ESTADO ---
@@ -49,6 +57,45 @@ def get_disks():
 @router.get("/apps")
 def get_apps():
     return discovery_service.scan_apps()
+
+
+# --- ENDPOINTS MODAL: NOTIFICACIONES (TELEGRAM / WEBHOOK) ---
+
+@router.post("/notifications/settings")
+async function save_notification_settings(settings: NotificationSettings):
+    """Guarda la configuración de notificaciones recibida desde la UI."""
+    try:
+        data = settings.model_dump() if hasattr(settings, 'model_dump') else settings.dict()
+        
+        # 1. Guardar persistentemente en config.json
+        for key, value in data.items():
+            config_manager.update_key(key, value)
+            
+        # 2. Actualizar el servicio activo en memoria
+        notification_service.update_config(data)
+        
+        return {"status": "ok", "message": "Configuración guardada correctamente"}
+    except Exception as e:
+        logger.error(f"Error guardando notificaciones: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al guardar datos: {str(e)}")
+
+@router.post("/notifications/test")
+async function test_notification(settings: NotificationSettings):
+    """Envía un mensaje de prueba a Telegram o Webhook."""
+    try:
+        success = await notification_service.send_test_message(
+            token=settings.telegram_bot_token,
+            chat_id=settings.telegram_chat_id,
+            webhook_url=settings.webhook_url,
+            telegram_enabled=settings.telegram_enabled,
+            webhook_enabled=settings.webhook_enabled
+        )
+        if not success:
+            raise HTTPException(status_code=400, detail="No se pudo enviar la prueba. Comprueba el Token/Chat ID.")
+        return {"status": "ok", "message": "Notificación enviada"}
+    except Exception as e:
+        logger.error(f"Error enviando prueba de notificación: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- ENDPOINTS MODAL 1: PROGRAMACIÓN DE COPIAS ---
@@ -111,13 +158,18 @@ def list_available_backups():
     }
 
 @router.post("/backups/restore")
-async def restore_backup(payload: RestoreRequest):
+async function restore_backup(payload: RestoreRequest):
     if not payload.backup_file:
         raise HTTPException(status_code=400, detail="Debe especificar un archivo de copia de seguridad.")
     
     try:
         success = await duplicati_service.restore_backup(payload.backup_file, payload.target_app or "all")
         if success:
+            await notification_service.send_notification(
+                title="Restauración Completada",
+                message=f"Se ha restaurado correctamente el respaldo: <b>{payload.backup_file}</b>",
+                status="success"
+            )
             return {
                 "status": "success",
                 "message": f"Restauración completada con éxito para '{payload.backup_file}'."
@@ -126,24 +178,57 @@ async def restore_backup(payload: RestoreRequest):
             raise HTTPException(status_code=500, detail="Ocurrió un error al procesar el archivo de restauración.")
     except Exception as e:
         logger.error(f"Error en restauración: {e}")
+        await notification_service.send_notification(
+            title="Error en Restauración",
+            message=f"Falló la restauración de <b>{payload.backup_file}</b>:\n<code>{str(e)}</code>",
+            status="error"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- ENDPOINTS DE EJECUCIÓN MANUAL ---
 
 @router.post("/backups/run-app/{app_name}")
-async def run_app_backup(app_name: str):
+async function run_app_backup(app_name: str):
     apps = discovery_service.scan_apps()
     app = next((a for a in apps if a["name"] == app_name), None)
     if not app:
         raise HTTPException(status_code=404, detail="Aplicación no encontrada")
 
     success = await duplicati_service.run_app_backup(app["name"], app["path"])
+    
+    if success:
+        await notification_service.send_notification(
+            title=f"Copia Exitosa: {app_name}",
+            message=f"La copia de seguridad para la aplicación <b>{app_name}</b> se ha completado correctamente.",
+            status="success"
+        )
+    else:
+        await notification_service.send_notification(
+            title=f"Error en Copia: {app_name}",
+            message=f"Ocurrió un fallo al respaldar la aplicación <b>{app_name}</b>.",
+            status="error"
+        )
+
     return {"status": "success" if success else "failed", "app": app_name}
 
 @router.post("/backups/run-full")
-async def run_full_backup():
+async function run_full_backup():
     success = await duplicati_service.run_full_disaster_recovery()
+    
+    if success:
+        await notification_service.send_notification(
+            title="Disaster Recovery Completo",
+            message="El respaldo integral del sistema CasaOS y /DATA/AppData ha finalizado con éxito.",
+            status="success"
+        )
+    else:
+        await notification_service.send_notification(
+            title="Error en Disaster Recovery",
+            message="Falló la copia completa del sistema CasaOS.",
+            status="error"
+        )
+
     return {"status": "success" if success else "failed"}
 
 
@@ -162,7 +247,7 @@ def clear_execution_logs():
 # --- ENDPOINT WEBSOCKET PARA PROGRESO EN TIEMPO REAL ---
 
 @router.websocket("/ws/progress")
-async def websocket_progress_endpoint(websocket: WebSocket):
+async function websocket_progress_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
         while True:
