@@ -35,9 +35,9 @@
             color: #856404;
             border: 1px solid #ffeeba;
         }
-        /* Scrollbar personalizada para la lista de perfiles */
+        /* Contenedor de scroll para perfiles (~10 aplicaciones visibles) */
         .app-list-scroll {
-            max-height: 520px;
+            max-height: 680px;
             overflow-y: auto;
             padding-right: 6px;
         }
@@ -154,14 +154,14 @@
                     </div>
                 </div>
 
-                <!-- Perfiles de Aplicaciones con Scroll -->
+                <!-- Perfiles de Aplicaciones con Scroll para ~10 items -->
                 <div class="card p-4 shadow-sm border-0 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN GENERADOS</h6>
                         <span class="badge bg-primary rounded-pill">{{ apps|length }} Perfiles</span>
                     </div>
 
-                    <!-- Contenedor con scroll limitado a ~10 perfiles -->
+                    <!-- Contenedor con scroll ampliado -->
                     <div class="app-list-scroll">
                         <div class="list-group list-group-flush">
                             {% for app in apps %}
@@ -188,7 +188,7 @@
 
             </div>
 
-            <!-- Columna Derecha (4 cols): Widget Lateral alineado con Disaster Recovery -->
+            <!-- Columna Derecha (4 cols): Widget Lateral alineado a la misma altura -->
             <div class="col-lg-4">
                 
                 <!-- Widget con Pestañas Interactivas -->
@@ -247,15 +247,17 @@
                                     <span class="text-muted">Estado Docker Daemon:</span>
                                     <span class="badge bg-success rounded-pill">Activo</span>
                                 </div>
-                                <div class="mt-2 text-muted" style="max-height: 130px; overflow-y: auto;">
-                                    {% for app in apps[:6] %}
+                                <div class="mt-2 text-muted" style="max-height: 220px; overflow-y: auto;">
+                                    {% for app in apps[:10] %}
                                     <div class="d-flex align-items-center justify-content-between py-1 border-bottom">
                                         <span>📦 {{ app.name }}</span>
-                                        <span class="badge bg-light text-dark border">running</span>
+                                        <span class="badge {% if app.status == 'running' %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} border">
+                                            {{ app.status or 'running' }}
+                                        </span>
                                     </div>
                                     {% endfor %}
-                                    {% if apps|length > 6 %}
-                                    <div class="text-center pt-2 text-primary small">+ {{ apps|length - 6 }} aplicaciones más</div>
+                                    {% if apps|length > 10 %}
+                                    <div class="text-center pt-2 text-primary small">+ {{ apps|length - 10 }} aplicaciones más</div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -263,7 +265,7 @@
 
                         <!-- Pestaña 3: Discos Físicos Reales -->
                         <div id="tab-content-disks" class="host-tab-pane d-none">
-                            <div class="small" style="max-height: 200px; overflow-y: auto;">
+                            <div class="small" style="max-height: 220px; overflow-y: auto;">
                                 {% for disk in disks %}
                                 <div class="py-2 border-bottom">
                                     <div class="d-flex justify-content-between fw-semibold">
