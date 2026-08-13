@@ -6,34 +6,34 @@
     <title>CasaOS Backup Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans antialiased min-h-screen flex flex-col">
+<body class="bg-[#f4f5f7] text-gray-800 font-sans antialiased min-h-screen flex flex-col">
 
     <!-- Header Principal -->
     <header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <!-- LOGO SVG REAL (+30% MÁS GRANDE) -->
-                <div class="h-9 flex items-center">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <!-- LOGO NOTABLEMENTE MÁS GRANDE (h-11 / 44px) -->
+                <div class="h-11 flex items-center">
                     <img src="/static/img/logo-horizontal.svg" 
                          alt="CasaOS Backup Manager" 
-                         class="h-9 w-auto object-contain block"
+                         class="h-11 w-auto object-contain block"
                          onerror="this.onerror=null; this.src='/static/logo-horizontal.svg';">
                 </div>
-                <span class="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{{ version }}</span>
+                <span class="text-xs font-mono bg-gray-100 text-gray-600 px-2.5 py-1 rounded-md border border-gray-200 font-medium">{{ version }}</span>
             </div>
 
             <!-- Botones de Cabecera -->
-            <div class="flex items-center space-x-2">
-                <button onclick="triggerScan()" class="px-3 py-1.5 text-xs font-medium bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg shadow-sm flex items-center gap-1.5">
+            <div class="flex items-center space-x-2.5">
+                <button onclick="triggerScan()" class="px-3.5 py-2 text-xs font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg shadow-sm flex items-center gap-1.5 transition">
                     🔍 Escanear
                 </button>
-                <button onclick="openModal('modal-schedule')" class="px-3 py-1.5 text-xs font-medium bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg shadow-sm flex items-center gap-1.5">
+                <button onclick="openModal('modal-schedule')" class="px-3.5 py-2 text-xs font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg shadow-sm flex items-center gap-1.5 transition">
                     📅 Programación
                 </button>
-                <button onclick="openModal('modal-restore')" class="px-3 py-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-sm flex items-center gap-1.5 font-semibold">
+                <button onclick="openModal('modal-restore')" class="px-3.5 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-sm flex items-center gap-1.5 transition">
                     📦 Restaurar Copias
                 </button>
-                <button onclick="openModal('modal-config')" class="px-3 py-1.5 text-xs font-medium bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg shadow-sm flex items-center gap-1.5">
+                <button onclick="openModal('modal-config')" class="px-3.5 py-2 text-xs font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg shadow-sm flex items-center gap-1.5 transition">
                     ⚙️ Configuración
                 </button>
             </div>
@@ -44,37 +44,36 @@
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         <!-- Columna Izquierda / Central -->
-        <div class="lg:col-span-2 space-y-5">
+        <div class="lg:col-span-2 space-y-6">
 
             <!-- Tarjetas de Estado Superior -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">ESTADO GENERAL</p>
-                    <p class="text-xs font-bold text-gray-800 mt-2 flex items-center gap-1.5">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm">
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">ESTADO GENERAL</p>
+                    <p class="text-xs font-bold text-gray-800 mt-2 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm"></span>
                         Sistema Operativo
                     </p>
                 </div>
-                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">MOTORES DE BACKUP</p>
+                <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm">
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MOTORES DE BACKUP</p>
                     <p class="text-xs font-bold text-gray-800 mt-2">Duplicati (OK)</p>
                 </div>
-                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">APLICACIONES CASAOS</p>
+                <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm">
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">APLICACIONES CASAOS</p>
                     <p class="text-xs font-bold text-gray-800 mt-2">{{ apps|length }} Detectadas</p>
                 </div>
-                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">ALMACENAMIENTO HOST</p>
+                <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm">
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">ALMACENAMIENTO HOST</p>
                     <p class="text-xs font-bold text-gray-800 mt-2">/DATA Protegido</p>
                 </div>
             </div>
 
-            <!-- Selector de Destino Activo (Formato Captura 2) -->
-            <div class="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm flex items-center justify-between gap-3">
-                <label for="target-disk-select" class="text-xs font-bold text-gray-700 whitespace-nowrap flex items-center gap-2">
-                    <span>💾 Destino Activo de Copias:</span>
-                </label>
-                <select id="target-disk-select" onchange="onTargetDiskChange(this.value)" class="bg-gray-50 border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-1.5 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono">
+            <!-- Selector de Destino Activo (Diseño Fiel a la Captura Target) -->
+            <div class="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-sm flex items-center gap-3">
+                <span class="text-base">💾</span>
+                <label for="target-disk-select" class="text-xs font-bold text-gray-700 whitespace-nowrap">Destino Activo de Copias:</label>
+                <select id="target-disk-select" onchange="onTargetDiskChange(this.value)" class="bg-gray-50 border border-gray-300 text-gray-800 text-xs rounded-xl px-3 py-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono">
                     {% for disk in disks %}
                     <option value="{{ disk.path }}">{{ disk.name }} — Libre: {{ disk.free }} / Total: {{ disk.total }}</option>
                     {% endfor %}
@@ -82,23 +81,23 @@
             </div>
 
             <!-- Tarjeta Disaster Recovery -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-3">
-                <div class="flex items-start justify-between">
-                    <div class="flex items-start space-x-3">
-                        <span class="text-2xl">🛡️</span>
+            <div class="bg-white border border-gray-200/80 rounded-2xl p-6 shadow-sm space-y-4">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-start space-x-3.5">
+                        <span class="text-3xl">🛡️</span>
                         <div>
-                            <h2 class="text-sm font-bold text-blue-900 leading-tight">Copia de Seguridad de la Raspberry Pi (Disaster Recovery)</h2>
+                            <h2 class="text-sm font-bold text-blue-900 leading-snug">Copia de Seguridad de la Raspberry Pi (Disaster Recovery)</h2>
                             <p class="text-xs text-gray-500 mt-1">Resguarda la configuración de CasaOS y los datos de todas las apps (<span class="text-red-500 font-mono">/DATA/AppData</span>).</p>
                         </div>
                     </div>
-                    <button onclick="runFullBackup()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition whitespace-nowrap">
+                    <button onclick="runFullBackup()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition whitespace-nowrap flex items-center gap-2">
                         📦 Copiar Sistema Completo
                     </button>
                 </div>
 
                 <div class="flex items-center space-x-2 pt-1">
-                    <span class="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-medium">🔄 Incremental (Duplicati)</span>
-                    <span class="text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">🟢 Listo para resguardo</span>
+                    <span class="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full font-semibold">🔄 Incremental (Duplicati)</span>
+                    <span class="text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full font-semibold">🟢 Listo para resguardo</span>
                 </div>
 
                 <!-- Barra de Progreso Disaster Recovery Integrada -->
@@ -114,28 +113,29 @@
             </div>
 
             <!-- Listado Perfiles de Aplicación Generados -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-xs font-bold text-gray-800 tracking-tight flex items-center gap-1.5">
-                        <span>📌 Perfiles de Aplicación Generados</span>
+            <div class="bg-white border border-gray-200/80 rounded-2xl p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-5">
+                    <h2 class="text-xs font-bold text-gray-800 tracking-wide uppercase flex items-center gap-2">
+                        <span>🚀 Perfiles de Aplicación Generados</span>
                     </h2>
-                    <span class="text-xs font-bold bg-blue-600 text-white px-2.5 py-0.5 rounded-full">{{ apps|length }} Perfiles</span>
+                    <!-- Badge con diseño azul redondeado exacto -->
+                    <span class="text-xs font-bold bg-blue-600 text-white px-3 py-1 rounded-full shadow-sm">{{ apps|length }} Perfiles</span>
                 </div>
 
                 <div class="divide-y divide-gray-100">
                     {% for app in apps %}
-                    <div class="py-3 first:pt-0 last:pb-0">
+                    <div class="py-3.5 first:pt-0 last:pb-0">
                         <div class="flex items-center justify-between">
                             <div>
                                 <div class="flex items-center space-x-2">
-                                    <span class="text-xs font-bold text-gray-800">{{ app.name }}</span>
+                                    <span class="text-xs font-bold text-gray-900">{{ app.name }}</span>
                                     {% if app.has_db_hook %}
-                                    <span class="text-[10px] bg-amber-100 text-amber-800 font-semibold px-1.5 py-0.2 rounded border border-amber-200">Hook DB</span>
+                                    <span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">Hook DB</span>
                                     {% endif %}
                                 </div>
-                                <p class="text-[11px] text-gray-500 font-mono mt-0.5">Rutas: <span class="text-red-500">{{ app.path }}</span></p>
+                                <p class="text-[11px] text-gray-500 font-mono mt-1">Rutas: <span class="text-red-500">{{ app.path }}</span></p>
                             </div>
-                            <button onclick="runAppBackup('{{ app.name }}')" class="px-3 py-1.5 text-xs font-medium bg-white hover:bg-gray-50 text-blue-600 border border-gray-300 rounded-lg shadow-sm transition flex items-center gap-1">
+                            <button onclick="runAppBackup('{{ app.name }}')" class="px-3.5 py-1.5 text-xs font-bold bg-white hover:bg-gray-50 text-blue-600 border border-gray-300 rounded-xl shadow-sm transition flex items-center gap-1.5">
                                 ⚡ Copiar Ahora
                             </button>
                         </div>
@@ -158,50 +158,50 @@
         </div>
 
         <!-- Columna Derecha: Panel Lateral Status -->
-        <div class="space-y-5">
+        <div class="space-y-6">
             <!-- Tabs Sistema Host -->
-            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                <div class="flex border-b border-gray-200 pb-2 mb-3 text-xs font-semibold space-x-4">
-                    <span class="text-blue-600 border-b-2 border-blue-600 pb-2 -mb-2.5 flex items-center gap-1">🍓 Raspberry Pi 5</span>
-                    <span class="text-gray-400 flex items-center gap-1">🐳 Docker</span>
-                    <span class="text-gray-400 flex items-center gap-1">💾 Discos</span>
+            <div class="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-sm">
+                <div class="flex border-b border-gray-200 pb-3 mb-4 text-xs font-bold space-x-4">
+                    <span class="text-blue-600 border-b-2 border-blue-600 pb-3 -mb-3.5 flex items-center gap-1.5">🍓 Raspberry Pi 5</span>
+                    <span class="text-gray-400 hover:text-gray-600 cursor-pointer flex items-center gap-1.5">🐳 Docker</span>
+                    <span class="text-gray-400 hover:text-gray-600 cursor-pointer flex items-center gap-1.5">💾 Discos</span>
                 </div>
-                <div class="space-y-2 text-xs">
-                    <p class="font-bold text-gray-700">🖥️ Sistema Host</p>
+                <div class="space-y-2.5 text-xs">
+                    <p class="font-bold text-gray-800 mb-2">🖥️ Sistema Host</p>
                     <div class="flex justify-between text-gray-500">
                         <span>OS:</span>
-                        <span class="font-medium text-gray-800">Debian GNU/Linux 12</span>
+                        <span class="font-semibold text-gray-800">Debian GNU/Linux 12</span>
                     </div>
                     <div class="flex justify-between text-gray-500">
                         <span>CPU:</span>
-                        <span class="font-medium text-gray-800">ARMv8 (4 Cores @ RPi 5)</span>
+                        <span class="font-semibold text-gray-800">ARMv8 (4 Cores @ RPi 5)</span>
                     </div>
                     <div class="flex justify-between text-gray-500">
                         <span>RAM:</span>
-                        <span class="font-medium text-gray-800">6.99 GB / 7.87 GB (88.8%)</span>
+                        <span class="font-semibold text-gray-800">6.99 GB / 7.87 GB (88.8%)</span>
                     </div>
                 </div>
             </div>
 
             <!-- Resumen del Estado -->
-            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2 text-xs">
-                <p class="font-bold text-gray-700 mb-2 flex items-center gap-1.5">📊 Resumen del Estado</p>
+            <div class="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-sm space-y-3 text-xs">
+                <p class="font-bold text-gray-800 mb-2 flex items-center gap-2">📊 Resumen del Estado</p>
                 <div class="flex justify-between text-gray-600">
                     <span>Aplicaciones:</span>
-                    <span class="font-bold text-gray-800">13</span>
+                    <span class="font-bold text-gray-900">13</span>
                 </div>
                 <div class="flex justify-between text-gray-600">
                     <span>Contenedores:</span>
-                    <span class="font-bold text-gray-800">17</span>
+                    <span class="font-bold text-gray-900">17</span>
                 </div>
             </div>
 
             <!-- Motores Integrados -->
-            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2 text-xs">
-                <p class="font-bold text-gray-700 mb-2 flex items-center gap-1.5">⚡ Motores Integrados</p>
+            <div class="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-sm space-y-3 text-xs">
+                <p class="font-bold text-gray-800 mb-2 flex items-center gap-2">⚡ Motores Integrados</p>
                 <div class="flex items-center justify-between">
-                    <span class="font-medium text-gray-700 flex items-center gap-1">🔌 Duplicati Engine</span>
-                    <span class="text-emerald-600 font-bold">Activo</span>
+                    <span class="font-medium text-gray-700">🔌 Duplicati Engine</span>
+                    <span class="text-emerald-600 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">Activo</span>
                 </div>
             </div>
         </div>
@@ -210,54 +210,54 @@
 
     <!-- Modales -->
     <div id="modal-schedule" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-xl max-w-md w-full p-5 shadow-xl space-y-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h3 class="text-sm font-bold text-gray-800">Programación Automatizada</h3>
             <div class="space-y-3 text-xs">
                 <div>
                     <label class="block text-gray-600 mb-1">Frecuencia</label>
-                    <select id="schedule-freq" class="w-full border border-gray-300 rounded-lg p-2 text-gray-800">
+                    <select id="schedule-freq" class="w-full border border-gray-300 rounded-xl p-2.5 text-gray-800">
                         <option value="daily">Diaria</option>
                         <option value="weekly">Semanal</option>
                     </select>
                 </div>
                 <div>
                     <label class="block text-gray-600 mb-1">Hora</label>
-                    <input type="time" id="schedule-time" value="03:00" class="w-full border border-gray-300 rounded-lg p-2 text-gray-800">
+                    <input type="time" id="schedule-time" value="03:00" class="w-full border border-gray-300 rounded-xl p-2.5 text-gray-800">
                 </div>
             </div>
             <div class="flex justify-end space-x-2 pt-2">
-                <button onclick="closeModal('modal-schedule')" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg">Cancelar</button>
-                <button onclick="saveSchedule()" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg font-semibold">Guardar</button>
+                <button onclick="closeModal('modal-schedule')" class="px-4 py-2 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium">Cancelar</button>
+                <button onclick="saveSchedule()" class="px-4 py-2 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold">Guardar</button>
             </div>
         </div>
     </div>
 
     <div id="modal-config" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-xl max-w-md w-full p-5 shadow-xl space-y-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h3 class="text-sm font-bold text-gray-800">Ajustes de Configuración</h3>
             <div class="space-y-3 text-xs">
                 <div>
                     <label class="block text-gray-600 mb-1">URL Duplicati</label>
-                    <input type="text" id="config-url" value="http://localhost:8200" class="w-full border border-gray-300 rounded-lg p-2 text-gray-800">
+                    <input type="text" id="config-url" value="http://localhost:8200" class="w-full border border-gray-300 rounded-xl p-2.5 text-gray-800">
                 </div>
                 <div>
                     <label class="block text-gray-600 mb-1">Retención (Días)</label>
-                    <input type="number" id="config-retention" value="30" class="w-full border border-gray-300 rounded-lg p-2 text-gray-800">
+                    <input type="number" id="config-retention" value="30" class="w-full border border-gray-300 rounded-xl p-2.5 text-gray-800">
                 </div>
             </div>
             <div class="flex justify-end space-x-2 pt-2">
-                <button onclick="closeModal('modal-config')" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg">Cancelar</button>
-                <button onclick="saveConfig()" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg font-semibold">Guardar</button>
+                <button onclick="closeModal('modal-config')" class="px-4 py-2 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium">Cancelar</button>
+                <button onclick="saveConfig()" class="px-4 py-2 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold">Guardar</button>
             </div>
         </div>
     </div>
 
     <div id="modal-restore" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-xl max-w-lg w-full p-5 shadow-xl space-y-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <h3 class="text-sm font-bold text-gray-800">Restauración de Copias</h3>
             <div id="snapshots-list" class="space-y-2 max-h-60 overflow-y-auto text-xs"></div>
             <div class="flex justify-end pt-2">
-                <button onclick="closeModal('modal-restore')" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg">Cerrar</button>
+                <button onclick="closeModal('modal-restore')" class="px-4 py-2 text-xs bg-gray-100 text-gray-700 rounded-xl">Cerrar</button>
             </div>
         </div>
     </div>
@@ -416,13 +416,13 @@
             list.innerHTML = '';
             data.snapshots.forEach(s => {
                 const item = document.createElement('div');
-                item.className = 'flex items-center justify-between p-2.5 bg-gray-50 border border-gray-200 rounded-lg';
+                item.className = 'flex items-center justify-between p-2.5 bg-gray-50 border border-gray-200 rounded-xl';
                 item.innerHTML = `
                     <div>
                         <p class="font-bold text-gray-800">${s.type}</p>
                         <p class="text-[10px] text-gray-500">${s.date} - ${s.size}</p>
                     </div>
-                    <button onclick="restoreSnapshot('${s.id}')" class="px-2.5 py-1 text-[11px] bg-amber-500 text-white rounded font-medium">Restaurar</button>
+                    <button onclick="restoreSnapshot('${s.id}')" class="px-2.5 py-1 text-[11px] bg-amber-500 text-white rounded-lg font-medium">Restaurar</button>
                 `;
                 list.appendChild(item);
             });
