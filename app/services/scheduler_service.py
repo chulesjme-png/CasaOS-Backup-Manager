@@ -36,6 +36,8 @@ class SchedulerService:
                 trigger = CronTrigger(hour=hour, minute=minute)
             elif config.schedule_frequency == "weekly":
                 trigger = CronTrigger(day_of_week="sun", hour=hour, minute=minute)
+            elif config.schedule_frequency == "monthly":
+                trigger = CronTrigger(day=1, hour=hour, minute=minute)
 
             if trigger:
                 self.scheduler.add_job(
@@ -45,6 +47,8 @@ class SchedulerService:
                     replace_existing=True
                 )
                 logger.info(f"[Scheduler] Backup automático programado ({config.schedule_frequency}) a las {config.schedule_time}")
+            else:
+                logger.info("[Scheduler] Programación deshabilitada o frecuencia no reconocida.")
         except Exception as e:
             logger.error(f"[Scheduler] Error al programar la tarea: {e}")
 

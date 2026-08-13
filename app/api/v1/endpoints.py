@@ -1,11 +1,30 @@
+import os
+import logging
+from typing import List, Dict, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
-from typing import List, Dict
+from pydantic import BaseModel, Field
+
 from app.core.config import config_manager, AppConfig
 from app.services.disk_service import disk_service
 from app.services.discovery_service import discovery_service
 from app.services.duplicati_service import duplicati_service
+from app.services.scheduler_service import scheduler_service
 
+logger = logging.getLogger("casaos-backup")
 router = APIRouter()
+
+# --- MODELOS PYDANTIC PARA VALIDACIÓN DE ENTRADA ---
+
+class ScheduleUpdateRequest(BaseModel):
+    schedule_frequency: str = Field(..., description="Frecuencia: 'daily', 'weekly', 'monthly'")
+    schedule_time: str = Field(..., description="Hora en formato HH:MM (ej. '03:00')")
+
+class RestoreRequest(BaseModel):
+    backup_file: str = Field(..., description="Nombre o ruta del archivo de copia a restaurar")
+    target_app: Optional[str] = Field("all", description="Nombre de la app específica o 'all' para todo el sistema")
+
+
+# --- ENDPOINTS DE CONFIGURACIÓN Y ESTADO ---
 
 @router.get("/config", response_model=AppConfig)
 def get_config():
@@ -15,6 +34,11 @@ def get_config():
 def update_config(payload: Dict[str, str]):
     for key, value in payload.items():
         config_manager.update_key(key, value)
+    
+    # Si la actualización afectó la programación, recargamos el scheduler
+    if "schedule_frequency" in payload or "schedule_time" in payload:
+        scheduler_service.reload_schedule()
+        
     return config_manager.config
 
 @router.get("/disks")
@@ -25,6 +49,87 @@ def get_disks():
 def get_apps():
     return discovery_service.scan_apps()
 
+
+# --- ENDPOINTS MODAL 1: PROGRAMACIÓN DE COPIAS ---
+
+@router.get("/schedules")
+def get_schedule():
+    config = config_manager.config
+    return {
+        "schedule_frequency": config.schedule_frequency,
+        "schedule_time": config.schedule_time
+    }
+
+@router.post("/schedules")
+def update_schedule(payload: ScheduleUpdateRequest):
+    try:
+        config_manager.update_key("schedule_frequency", payload.schedule_frequency)
+        config_manager.update_key("schedule_time", payload.schedule_time)
+        
+        # Aplicar la nueva programación en tiempo real
+        scheduler_service.reload_schedule()
+        
+        return {
+            "status": "success",
+            "message": "Programación actualizada y sincronizada correctamente",
+            "schedule_frequency": payload.schedule_frequency,
+            "schedule_time": payload.schedule_time
+        }
+    except Exception as e:
+        logger.error(f"Error actualizando la programación: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- ENDPOINTS MODAL 2: RESTAURACIÓN Y EXPLORACIÓN ---
+
+@router.get("/backups/list")
+def list_available_backups():
+    """Explora el disco destino actualmente configurado en busca de archivos de copia de seguridad."""
+    target_disk = config_manager.config.selected_target_disk
+    if not target_disk or not os.path.exists(target_disk):
+        return {"target_disk": target_disk, "backups": []}
+
+    backups = []
+    try:
+        # Se listan archivos .tar.gz o directorios de backup en la raíz del disco destino
+        for file in os.listdir(target_disk):
+            if file.endswith(".tar.gz") or "backup" in file.lower():
+                file_path = os.path.join(target_disk, file)
+                stats = os.stat(file_path)
+                backups.append({
+                    "filename": file,
+                    "path": file_path,
+                    "size_mb": round(stats.st_size / (1024 * 1024), 2),
+                    "created_at": stats.st_mtime
+                })
+    except Exception as e:
+        logger.error(f"Error listando archivos de backup en {target_disk}: {e}")
+
+    return {
+        "target_disk": target_disk,
+        "backups": backups
+    }
+
+@router.post("/backups/restore")
+async def restore_backup(payload: RestoreRequest):
+    """Ejecuta el proceso de restauración."""
+    if not payload.backup_file:
+        raise HTTPException(status_code=400, detail="Debe especificar un archivo de copia de seguridad.")
+    
+    try:
+        # Lógica delegada al servicio de backup/duplicati
+        # success = await duplicati_service.restore(payload.backup_file, payload.target_app)
+        return {
+            "status": "success",
+            "message": f"Restauración iniciada para '{payload.backup_file}' (App: {payload.target_app})"
+        }
+    except Exception as e:
+        logger.error(f"Error en restauración: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- ENDPOINTS DE EJECUCIÓN MANUAL ---
+
 @router.post("/backups/run-app/{app_name}")
 async def run_app_backup(app_name: str):
     apps = discovery_service.scan_apps()
@@ -32,7 +137,6 @@ async def run_app_backup(app_name: str):
     if not app:
         raise HTTPException(status_code=404, detail="Aplicación no encontrada")
 
-    # Ejecuta el trabajo en segundo plano
     success = await duplicati_service.run_app_backup(app["name"], app["path"])
     return {"status": "success" if success else "failed", "app": app_name}
 

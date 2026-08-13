@@ -318,16 +318,16 @@
                     <p class="text-muted small">Configura la frecuencia de backups automáticos del sistema (APScheduler).</p>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Frecuencia Automatizada</label>
-                        <select class="form-select">
+                        <select class="form-select" id="scheduleFrequencySelect">
                             <option value="daily">Diariamente (03:00 AM)</option>
-                            <option value="weekly" selected>Semanalmente (Domingos a las 03:00 AM)</option>
+                            <option value="weekly">Semanalmente (Domingos a las 03:00 AM)</option>
                             <option value="monthly">Mensualmente (Día 1 a las 03:00 AM)</option>
                         </select>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Guardar Cambios</button>
+                    <button type="button" class="btn btn-primary" onclick="saveSchedule()" data-bs-dismiss="modal">Guardar Cambios</button>
                 </div>
             </div>
         </div>
@@ -346,14 +346,9 @@
                     <div class="alert alert-warning py-2 small">
                         ⚠️ <strong>Atención:</strong> La restauración sobreescribirá los datos actuales de la aplicación seleccionada.
                     </div>
-                    <div class="list-group list-group-flush border rounded">
-                        <div class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="fw-bold d-block">Backup_System_Full.tar.gz</span>
-                                <span class="text-muted small">Destino activo actual: {{ config.selected_target_disk or '/DATA' }}</span>
-                            </div>
-                            <button class="btn btn-outline-warning btn-sm fw-semibold">Restaurar</button>
-                        </div>
+                    <!-- Contenedor dinámico de backups reales -->
+                    <div class="list-group list-group-flush border rounded" id="restoreBackupsList">
+                        <div class="p-3 text-center text-muted">Buscando copias disponibles...</div>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -378,7 +373,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Disco Destino Configurado</label>
-                        <input type="text" class="form-control" value="{{ config.selected_target_disk }}" readonly>
+                        <input type="text" class="form-control" id="settingsTargetDisk" value="{{ config.selected_target_disk }}" readonly>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -388,11 +383,122 @@
         </div>
     </div>
 
-    <!-- Bootstrap 5 JS Bundle (Requerido para abrir los modales) -->
+    <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- JavaScript para Pestañas y Peticiones API -->
+    <!-- JavaScript Integrado para Interfaz y API -->
     <script>
+        // --- EVENTOS DE CARGA Y MODALES ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const modalSchedulesEl = document.getElementById('modalSchedules');
+            if (modalSchedulesEl) {
+                modalSchedulesEl.addEventListener('show.bs.modal', fetchScheduleData);
+            }
+
+            const modalRestoreEl = document.getElementById('modalRestore');
+            if (modalRestoreEl) {
+                modalRestoreEl.addEventListener('show.bs.modal', fetchAvailableBackups);
+            }
+        });
+
+        // --- LÓGICA MODAL 1: PROGRAMACIÓN ---
+        async function fetchScheduleData() {
+            try {
+                const response = await fetch('/api/v1/schedules');
+                if (response.ok) {
+                    const data = await response.json();
+                    const selectFreq = document.getElementById('scheduleFrequencySelect');
+                    if (selectFreq && data.schedule_frequency) {
+                        selectFreq.value = data.schedule_frequency;
+                    }
+                }
+            } catch (err) {
+                console.error('Error cargando programación:', err);
+            }
+        }
+
+        async function saveSchedule() {
+            const frequency = document.getElementById('scheduleFrequencySelect').value;
+            const time = "03:00"; 
+
+            try {
+                const response = await fetch('/api/v1/schedules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ schedule_frequency: frequency, schedule_time: time })
+                });
+
+                if (response.ok) {
+                    alert('¡Programación de copias guardada y activada con éxito!');
+                } else {
+                    alert('Error al guardar la programación.');
+                }
+            } catch (err) {
+                console.error('Error enviando programación:', err);
+            }
+        }
+
+        // --- LÓGICA MODAL 2: RESTAURAR COPIAS ---
+        async function fetchAvailableBackups() {
+            const listContainer = document.getElementById('restoreBackupsList');
+            if (!listContainer) return;
+
+            listContainer.innerHTML = '<div class="p-3 text-center text-muted">Buscando copias disponibles...</div>';
+
+            try {
+                const response = await fetch('/api/v1/backups/list');
+                const data = await response.json();
+
+                if (!data.backups || data.backups.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="p-3 text-center text-muted">
+                            No se encontraron archivos de backup en el destino activo:<br>
+                            <code>${data.target_disk || 'No configurado'}</code>
+                        </div>`;
+                    return;
+                }
+
+                listContainer.innerHTML = data.backups.map(b => `
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="fw-bold d-block">${b.filename}</span>
+                            <span class="text-muted small">Tamaño: ${b.size_mb} MB</span>
+                        </div>
+                        <button class="btn btn-outline-warning btn-sm fw-semibold" onclick="executeRestore('${b.filename}')">
+                            Restaurar
+                        </button>
+                    </div>
+                `).join('');
+
+            } catch (err) {
+                console.error('Error cargando lista de backups:', err);
+                listContainer.innerHTML = '<div class="p-3 text-center text-danger">Error al explorar copias.</div>';
+            }
+        }
+
+        async function executeRestore(filename) {
+            if (!confirm(`¿Confirms que deseas restaurar la copia "${filename}"?\n\nEsta acción sobreescribirá los datos actuales.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/backups/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ backup_file: filename, target_app: 'all' })
+                });
+
+                if (response.ok) {
+                    alert('Proceso de restauración iniciado en segundo plano.');
+                } else {
+                    alert('Error al iniciar la restauración.');
+                }
+            } catch (err) {
+                console.error('Error en restauración:', err);
+            }
+        }
+
+        // --- DASHBOARD PESTAÑAS Y FUNCIONES GENERALES ---
         function switchHostTab(tabName) {
             document.querySelectorAll('.host-tab-pane').forEach(el => el.classList.add('d-none'));
 
@@ -423,6 +529,9 @@
                 });
                 if (response.ok) {
                     console.log('Disco de destino actualizado:', diskPath);
+                    // Actualizar el valor en el modal de configuración de forma reactiva
+                    const settingsDiskInput = document.getElementById('settingsTargetDisk');
+                    if (settingsDiskInput) settingsDiskInput.value = diskPath;
                 }
             } catch (err) {
                 console.error('Error guardando configuración de disco:', err);
