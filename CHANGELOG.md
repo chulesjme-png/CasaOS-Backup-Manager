@@ -4,6 +4,33 @@ Historial de cambios de CasaOS Backup Manager.
 
 ---
 
+# v0.5.0-beta1 - Audit Log, Real-Time WebSockets & Storage Volume Fixes
+
+Fecha: 13/08/2026
+
+## Added
+
+* **Módulo de Historial y Auditoría:**
+  * Sistema de registro de auditoría con almacenamiento en base de datos SQLite (`history.db`).
+  * Persistencia de las últimas 50 operaciones (respaldos y restauraciones) detallando fecha, objetivo, estado (Éxito/Fallo) y duración exacta en segundos.
+  * Nueva vista modal en la interfaz web para consultar el historial de ejecuciones y botón dedicado para limpiar registros.
+* **Comunicaciones en Tiempo Real (WebSockets):**
+  * Canal WebSocket dedicado (`/api/v1/ws/progress`) para transmisión instantánea del progreso de respaldos (porcentajes y logs).
+  * Notificaciones flotantes y barras de progreso fluidas en el panel sin necesidad de recargar la página.
+* **Database Hooks en Caliente:**
+  * Sistema de pre-procesamiento para bases de datos SQLite (e.g., Sonarr, Plex, Radarr).
+  * Generación segura de volcados SQL (`.backup_dump.sql`) antes de comprimir la aplicación para garantizar consistencia sin detener los contenedores.
+
+## Fixed
+
+* **Propagación de Montajes en Docker:**
+  * Solucionado el problema crítico donde los backups en unidades USB/externas (`/media`) quedaban atrapados en la capa virtual del contenedor.
+  * Añadida propagación de volúmenes `:rshared` y modo `privileged: true` en `docker-compose.yml` para acceso nativo y dinámico al almacenamiento físico.
+* **Permisos de Archivos y Visibilidad SMB/Finder:**
+  * Corrección de generación de archivos `.tar.gz` para asegurar visibilidad en red local y clientes SMB (macOS Finder).
+
+---
+
 # v0.5.0-alpha7 - Brand Identity, Dashboard UI & Backup Engine Integration
 
 Fecha: 07/08/2026
