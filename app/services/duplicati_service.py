@@ -3,7 +3,8 @@ import tarfile
 import logging
 import asyncio
 import docker
-from typing import Optional
+from datetime import datetime
+from typing import Optional, List, Dict, Any
 
 from app.core.ws_manager import ws_manager
 from app.services.notification_service import notification_service
@@ -21,6 +22,7 @@ class BackupRestoreService:
             self.docker_client = None
 
     async def _broadcast_status(self, message: str, percent: int, status: str = "in_progress"):
+        """Notifica el progreso mediante WebSockets a la interfaz gráfica."""
         payload = {
             "type": "restore_progress",
             "message": message,
@@ -30,6 +32,7 @@ class BackupRestoreService:
         await ws_manager.broadcast(payload)
 
     def _find_docker_container(self, app_name: str):
+        """Busca un contenedor activo o detenido por nombre."""
         if not self.docker_client:
             return None
         try:
@@ -41,10 +44,93 @@ class BackupRestoreService:
             logger.error(f"Error al buscar contenedor {app_name}: {e}")
         return None
 
-    async def restore_backup(self, backup_file: str, target_app: str = "all") -> bool:
+    def list_backups(self) -> List[Dict[str, Any]]:
+        """Escanea el disco configurado y devuelve la lista de copias disponibles."""
         target_disk = config_manager.config.selected_target_disk
+        if not target_disk or not os.path.exists(target_disk):
+            logger.error(f"Disco de destino no disponible: {target_disk}")
+            return []
+
+        backups = []
+        try:
+            for root, _, files in os.walk(target_disk):
+                for file in files:
+                    if file.endswith(".tar.gz") or file.endswith(".tgz"):
+                        full_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(full_path, target_disk)
+                        size_mb = round(os.path.getsize(full_path) / (1024 * 1024), 2)
+                        mtime = datetime.fromtimestamp(os.path.getmtime(full_path)).strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        backups.append({
+                            "filename": file,
+                            "path": rel_path,
+                            "full_path": full_path,
+                            "size": f"{size_mb} MB",
+                            "date": mtime
+                        })
+        except Exception as e:
+            logger.error(f"Error listando copias en {target_disk}: {e}")
+            
+        return sorted(backups, key=lambda x: x["date"], reverse=True)
+
+    async def run_app_backup(self, app_name: str, app_path: str) -> bool:
+        """Ejecuta copia de seguridad individual para una aplicación."""
+        target_disk = config_manager.config.selected_target_disk
+        dest_dir = os.path.join(target_disk, "Backups", "Apps", app_name)
+        os.makedirs(dest_dir, exist_ok=True)
         
-        # Corregido: os.path.isabs
+        backup_filename = f"{app_name}_backup.tar.gz"
+        backup_path = os.path.join(dest_dir, backup_filename)
+
+        try:
+            logger.info(f"Iniciando backup para {app_name} desde {app_path}...")
+            with tarfile.open(backup_path, "w:gz") as tar:
+                if os.path.exists(app_path):
+                    tar.add(app_path, arcname=os.path.basename(app_path))
+
+            logger.info(f"Backup exitoso para {app_name}: {backup_path}")
+            audit_service.log_event("BACKUP", app_name, "SUCCESS", f"Guardado en {backup_path}")
+            await notification_service.send_notification(
+                f"Copia Exitosa: {app_name}",
+                f"La copia de seguridad para la aplicación <b>{app_name}</b> se ha completado correctamente."
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error creando backup para {app_name}: {e}")
+            audit_service.log_event("BACKUP", app_name, "FAILED", str(e))
+            return False
+
+    async def run_full_disaster_recovery(self) -> bool:
+        """Ejecuta el respaldo programado Disaster Recovery de todo el sistema."""
+        logger.info("Iniciando tarea de Disaster Recovery...")
+        target_disk = config_manager.config.selected_target_disk
+        dest_dir = os.path.join(target_disk, "Backups", "DisasterRecovery")
+        os.makedirs(dest_dir, exist_ok=True)
+
+        backup_filename = f"DisasterRecovery_Full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.tar.gz"
+        backup_path = os.path.join(dest_dir, backup_filename)
+
+        try:
+            appdata_dir = "/DATA/AppData"
+            if os.path.exists(appdata_dir):
+                with tarfile.open(backup_path, "w:gz") as tar:
+                    tar.add(appdata_dir, arcname="AppData")
+
+            logger.info("Disaster Recovery completado con éxito.")
+            audit_service.log_event("DISASTER_RECOVERY", "ALL", "SUCCESS", f"Guardado en {backup_path}")
+            await notification_service.send_notification(
+                "Disaster Recovery Completado",
+                "El respaldo completo del sistema se ha ejecutado exitosamente."
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error en Disaster Recovery: {e}")
+            audit_service.log_event("DISASTER_RECOVERY", "ALL", "FAILED", str(e))
+            return False
+
+    async def restore_backup(self, backup_file: str, target_app: str = "all") -> bool:
+        """Ejecuta la restauración automatizada '1-Click'."""
+        target_disk = config_manager.config.selected_target_disk
         full_backup_path = backup_file if os.path.isabs(backup_file) else os.path.join(target_disk, backup_file)
 
         if not os.path.exists(full_backup_path):
@@ -97,6 +183,10 @@ class BackupRestoreService:
             logger.info(success_msg)
 
             audit_service.log_event("RESTORE", app_name, "SUCCESS", f"Restaurado desde {backup_file}")
+            await notification_service.send_notification(
+                f"Restauración Completada: {app_name}",
+                f"La aplicación <b>{app_name}</b> se ha restaurado correctamente desde la copia de seguridad."
+            )
             return True
 
         except Exception as e:
