@@ -5,6 +5,7 @@ services:
     build: .
     container_name: casaos-backup-manager
     restart: unless-stopped
+    privileged: true
     ports:
       - "8088:8088"
     volumes:
@@ -12,9 +13,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Acceso a los datos de aplicaciones de CasaOS
       - /DATA:/DATA
-      # Acceso a unidades y discos externos de backup
-      - /media:/media
-      - /mnt:/mnt
+      # Acceso dinámico a unidades y discos externos de backup (con propagación de montajes)
+      - /media:/media:rshared
+      - /mnt:/mnt:rshared
     environment:
       - TZ=Europe/Madrid
       - PYTHONUNBUFFERED=1
