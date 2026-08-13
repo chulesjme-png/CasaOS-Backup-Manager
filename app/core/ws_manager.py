@@ -18,19 +18,18 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
             logger.info(f"[WebSocket] Cliente desconectado. Total activos: {len(self.active_connections)}")
 
-    async def broadcast_progress(self, job_id: str, percentage: int, status_message: str):
-        payload = {
-            "job_id": job_id,
-            "percentage": percentage,
-            "message": status_message
-        }
-        
-        connections = list(self.active_connections)
-        for connection in connections:
+    async def broadcast(self, message: dict):
+        """Envía un mensaje JSON a todos los clientes WebSocket conectados."""
+        disconnected = []
+        for connection in list(self.active_connections):
             try:
-                await connection.send_json(payload)
+                await connection.send_json(message)
             except Exception as e:
-                logger.warning(f"[WebSocket Error] Error emitiendo a cliente: {e}")
-                self.disconnect(connection)
+                logger.warning(f"Error enviando mensaje WebSocket: {e}")
+                disconnected.append(connection)
 
+        for conn in disconnected:
+            self.disconnect(conn)
+
+# Instancia singleton
 ws_manager = ConnectionManager()

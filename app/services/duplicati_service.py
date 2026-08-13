@@ -22,14 +22,20 @@ class BackupRestoreService:
             self.docker_client = None
 
     async def _broadcast_status(self, message: str, percent: int, status: str = "in_progress"):
-        """Notifica el progreso mediante WebSockets a la interfaz gráfica."""
+        """Notifica el progreso mediante WebSockets a la interfaz gráfica de forma segura."""
         payload = {
             "type": "restore_progress",
             "message": message,
             "percent": percent,
             "status": status
         }
-        await ws_manager.broadcast(payload)
+        try:
+            if hasattr(ws_manager, "broadcast"):
+                await ws_manager.broadcast(payload)
+            else:
+                logger.warning("[WebSocket] 'ws_manager' no tiene el método 'broadcast'")
+        except Exception as e:
+            logger.warning(f"[WebSocket] No se pudo emitir estado de restauración: {e}")
 
     def _find_docker_container(self, app_name: str):
         """Busca un contenedor activo o detenido por nombre."""
