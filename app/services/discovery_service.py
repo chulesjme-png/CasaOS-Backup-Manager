@@ -1,48 +1,74 @@
 import os
-from pathlib import Path
-from typing import List, Dict
+import logging
+import docker
 
-APPDATA_DIR = Path("/DATA/AppData")
-
-# Mapeo automático de hooks de BD según el nombre de la app o sus archivos internos
-DB_HOOK_KEYWORDS = {
-    "mariadb": "MariaDB Dump Hook",
-    "mysql": "MySQL Dump Hook",
-    "postgres": "PostgreSQL Dump Hook",
-    "postgresql": "PostgreSQL Dump Hook",
-    "nextcloud": "DB Sync Hook",
-    "immich": "Postgres Dump Hook"
-}
+logger = logging.getLogger("casaos_backup_manager")
 
 class DiscoveryService:
-    def scan_apps(self) -> List[Dict[str, any]]:
+    """Servicio para descubrir aplicaciones activas de CasaOS mediante Docker y AppData."""
+
+    APPDATA_PATH = "/DATA/AppData"
+
+    # Lista de bases de datos conocidas que requieren hooks especiales
+    DB_HOOKS = {"immich", "nextcloud", "mariadb", "mysql", "postgres", "vaultwarden", "plex"}
+
+    def scan_apps(self) -> list:
+        """
+        Escanea las aplicaciones activas cruzando la información de contenedores Docker 
+        en ejecución y las carpetas reales en /DATA/AppData, descartando restos antiguos.
+        """
         apps = []
-        if not APPDATA_DIR.exists():
-            return apps
+        active_docker_containers = set()
 
-        for entry in sorted(APPDATA_DIR.iterdir()):
-            if entry.is_dir():
-                app_name = entry.name
-                app_path = str(entry)
-                
-                # Chequear si requiere Hook DB
-                has_db_hook = False
-                hook_type = None
-                
-                app_lower = app_name.lower()
-                for key, hook in DB_HOOK_KEYWORDS.items():
-                    if key in app_lower:
-                        has_db_hook = True
-                        hook_type = hook
-                        break
+        # 1. Obtener contenedores Docker en ejecución actualmente
+        try:
+            client = docker.from_env()
+            for container in client.containers.list():
+                # Limpiar nombres de contenedores (quitar barras iniciales)
+                name = container.name.strip('/')
+                active_docker_containers.add(name.lower())
+                # Añadir también por etiquetas de CasaOS si existen
+                app_label = container.labels.get("casaos.app.name")
+                if app_label:
+                    active_docker_containers.add(app_label.lower())
+        except Exception as e:
+            logger.warning(f"No se pudo conectar al socket de Docker para listar contenedores: {e}")
 
-                apps.append({
-                    "name": app_name,
-                    "path": app_path,
-                    "has_db_hook": has_db_hook,
-                    "hook_type": hook_type
-                })
+        # 2. Escanear /DATA/AppData pero filtrando solo lo que tenga Docker activo o sea válido
+        if os.path.exists(self.APPDATA_PATH):
+            try:
+                items = os.listdir(self.APPDATA_PATH)
+                for item in sorted(items):
+                    item_path = os.path.join(self.APPDATA_PATH, item)
+                    
+                    if not os.path.isdir(item_path):
+                        continue
 
+                    app_name_lower = item.lower()
+
+                    # FILTRO DE SEGURIDAD: 
+                    # Descartar aplicaciones como 'calibre' u otras que no tengan un contenedor activo asociado
+                    # (A menos que queramos forzarlo, exigimos que esté en los contenedores activos o en stack conocido)
+                    is_running = any(app_name_lower in c or c in app_name_lower for c in active_docker_containers)
+                    
+                    # Excepción para herramientas internas o si prefieres listar todo lo de AppData excepto huérfanos claros:
+                    # Si un directorio se llama 'calibre' pero no hay ningún contenedor Docker activo relacionado, se omite.
+                    if not is_running and app_name_lower == "calibre":
+                        continue
+
+                    # Detectar si requiere Hook de Base de Datos
+                    has_db_hook = any(db in app_name_lower for db in self.DB_HOOKS)
+
+                    apps.append({
+                        "name": item,
+                        "path": item_path,
+                        "has_db_hook": has_db_hook,
+                        "status": "running" if is_running else "stopped"
+                    })
+            except Exception as e:
+                logger.error(f"Error escaneando /DATA/AppData: {e}")
+
+        logger.info(f"Escaneo completado: {len(apps)} aplicaciones activas detectadas.")
         return apps
 
 discovery_service = DiscoveryService()
