@@ -35,6 +35,17 @@ class DuplicatiService:
         self.active_jobs[app_name] = True
         config = config_manager.config
         target_disk = config.selected_target_disk or "/DATA"
+        
+        # Validar ruta de origen primero
+        source_path = Path(app_path)
+        if not source_path.exists():
+            err_msg = f"La ruta de origen '{app_path}' no existe en el sistema."
+            logger.error(f"[{job_id}] {err_msg}")
+            await self._notify(job_id, 0, f"Error: {err_msg}")
+            audit_service.log_execution("backup", app_name, "failed", time.time() - start_time, err_msg)
+            self.active_jobs[app_name] = False
+            return False
+
         destination_folder = Path(target_disk) / "Backups" / "Apps" / app_name
         destination_folder.mkdir(parents=True, exist_ok=True)
 
@@ -45,8 +56,7 @@ class DuplicatiService:
             await self._notify(job_id, 25, "Ejecutando DB Hooks si la aplicación los requiere...")
             db_hook_service.execute_pre_backup_hook(app_name, app_path)
 
-            if not os.path.exists(app_path):
-                raise FileNotFoundError(f"El directorio origen {app_path} no existe.")
+            archive_name = destination_folder / f"{app_name}_backup.tar.gz"
 
             if self._has_duplicati_cli():
                 await self._notify(job_id, 50, "Ejecutando copia incremental con Duplicati CLI...")
@@ -59,21 +69,25 @@ class DuplicatiService:
                     "--compression-extension=zip",
                     "--disable-filetime-check=true"
                 ]
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-                )
-                await proc.communicate()
             else:
                 await self._notify(job_id, 50, "Creando paquete comprimido TAR.GZ...")
-                archive_name = destination_folder / f"{app_name}_backup.tar.gz"
-                cmd = ["tar", "-czf", str(archive_name), "-C", str(Path(app_path).parent), Path(app_path).name]
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-                )
-                await proc.communicate()
+                cmd = ["tar", "-czf", str(archive_name), "-C", str(source_path.parent), source_path.name]
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+
+            if proc.returncode != 0:
+                raise RuntimeError(f"Error en comando de backup ({proc.returncode}): {stderr.decode().strip()}")
 
             await self._notify(job_id, 90, "Limpiando archivos temporales...")
             db_hook_service.cleanup_hook_files(app_path)
+
+            # Verificación física del archivo creado
+            if not self._has_duplicati_cli():
+                if not archive_name.exists() or archive_name.stat().st_size == 0:
+                    raise FileNotFoundError(f"El archivo comprimido {archive_name} no se creó o está vacío.")
 
             duration = time.time() - start_time
             await self._notify(job_id, 100, f"¡Copia de seguridad de {app_name} completada con éxito!")
@@ -83,6 +97,7 @@ class DuplicatiService:
 
         except Exception as e:
             duration = time.time() - start_time
+            logger.error(f"[{job_id}] Fallo en el backup: {str(e)}")
             await self._notify(job_id, 0, f"Error: {str(e)}")
             audit_service.log_execution("backup", app_name, "failed", duration, str(e))
             return False
@@ -114,7 +129,10 @@ class DuplicatiService:
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            await proc.communicate()
+            stdout, stderr = await proc.communicate()
+
+            if proc.returncode != 0:
+                raise RuntimeError(f"Error comprimiendo Disaster Recovery: {stderr.decode().strip()}")
 
             duration = time.time() - start_time
             await self._notify(job_id, 100, "¡Disaster Recovery completado exitosamente!")
@@ -124,6 +142,7 @@ class DuplicatiService:
 
         except Exception as e:
             duration = time.time() - start_time
+            logger.error(f"[{job_id}] Fallo en Disaster Recovery: {str(e)}")
             await self._notify(job_id, 0, f"Error: {str(e)}")
             audit_service.log_execution("backup", "Disaster Recovery Full", "failed", duration, str(e))
             return False
@@ -170,7 +189,10 @@ class DuplicatiService:
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            await proc.communicate()
+            stdout, stderr = await proc.communicate()
+
+            if proc.returncode != 0:
+                raise RuntimeError(f"Error al descomprimir backup: {stderr.decode().strip()}")
 
             duration = time.time() - start_time
             await self._notify(job_id, 100, f"¡Restauración completada con éxito!")
@@ -180,6 +202,7 @@ class DuplicatiService:
 
         except Exception as e:
             duration = time.time() - start_time
+            logger.error(f"[{job_id}] Fallo en restauración: {str(e)}")
             await self._notify(job_id, 0, f"Error durante la restauración: {str(e)}")
             audit_service.log_execution("restore", target_app, "failed", duration, str(e))
             return False
