@@ -35,6 +35,26 @@
             color: #856404;
             border: 1px solid #ffeeba;
         }
+        /* Scrollbar personalizada para la lista de perfiles */
+        .app-list-scroll {
+            max-height: 520px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+        .app-list-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .app-list-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .app-list-scroll::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 10px;
+        }
+        .app-list-scroll::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
     </style>
 </head>
 <body>
@@ -58,61 +78,64 @@
 
     <!-- Main Content Container -->
     <div class="container-fluid px-4 py-4">
+        
+        <!-- SECCIÓN SUPERIOR A ANCHO COMPLETO -->
+        <!-- 1. Métricas Principales -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0">
+                    <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Estado General</span>
+                    <div class="d-flex align-items-center mt-2">
+                        <span class="badge rounded-circle bg-success p-1 me-2"></span>
+                        <span class="fw-bold text-dark">Sistema Operativo</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0">
+                    <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Motores de Backup</span>
+                    <div class="fw-bold text-dark mt-2">Duplicati (OK)</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0">
+                    <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Aplicaciones CasaOS</span>
+                    <div class="fw-bold text-dark mt-2">{{ apps|length }} Detectadas</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0">
+                    <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Almacenamiento Host</span>
+                    <div class="fw-bold text-dark mt-2">/DATA Protegido</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Selector de Destino Activo -->
+        <div class="card p-3 shadow-sm border-0 mb-4">
+            <div class="row align-items-center">
+                <div class="col-md-4 d-flex align-items-center gap-2">
+                    <span class="fs-4">💾</span>
+                    <span class="fw-bold text-dark">Destino Activo de Copias:</span>
+                </div>
+                <div class="col-md-8">
+                    <select class="form-select border-primary-subtle" id="targetDiskSelect" onchange="updateTargetDisk(this.value)">
+                        {% for disk in disks %}
+                        <option value="{{ disk.mountpoint }}" {% if config.selected_target_disk == disk.mountpoint %}selected{% endif %}>
+                            {{ disk.label }} ({{ disk.mountpoint }}) — Libre: {{ disk.free_gb }} GB / Total: {{ disk.total_gb }} GB
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN DIVIDIDA EN DOS COLUMNAS -->
         <div class="row">
             
-            <!-- Columna Izquierda / Panel Principal -->
+            <!-- Columna Izquierda (8 cols): Disaster Recovery & Perfiles -->
             <div class="col-lg-8">
                 
-                <!-- Métricas Principales -->
-                <div class="row g-3 mb-4">
-                    <div class="col-md-3">
-                        <div class="card p-3 shadow-sm border-0">
-                            <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Estado General</span>
-                            <div class="d-flex align-items-center mt-2">
-                                <span class="badge rounded-circle bg-success p-1 me-2"></span>
-                                <span class="fw-bold text-dark">Sistema Operativo</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card p-3 shadow-sm border-0">
-                            <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Motores de Backup</span>
-                            <div class="fw-bold text-dark mt-2">Duplicati (OK)</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card p-3 shadow-sm border-0">
-                            <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Aplicaciones CasaOS</span>
-                            <div class="fw-bold text-dark mt-2">{{ apps|length }} Detectadas</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card p-3 shadow-sm border-0">
-                            <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Almacenamiento Host</span>
-                            <div class="fw-bold text-dark mt-2">/DATA Protegido</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Selector de Destino Activo -->
-                <div class="card p-3 shadow-sm border-0 mb-4">
-                    <div class="row align-items-center">
-                        <div class="col-md-4 d-flex align-items-center gap-2">
-                            <span class="fs-4">💾</span>
-                            <span class="fw-bold text-dark">Destino Activo de Copias:</span>
-                        </div>
-                        <div class="col-md-8">
-                            <select class="form-select border-primary-subtle" id="targetDiskSelect" onchange="updateTargetDisk(this.value)">
-                                {% for disk in disks %}
-                                <option value="{{ disk.mountpoint }}" {% if config.selected_target_disk == disk.mountpoint %}selected{% endif %}>
-                                    {{ disk.label }} ({{ disk.mountpoint }}) — Libre: {{ disk.free_gb }} GB / Total: {{ disk.total_gb }} GB
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Tarjeta Disaster Recovery -->
                 <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
                     <div class="d-flex justify-content-between align-items-center">
@@ -131,38 +154,41 @@
                     </div>
                 </div>
 
-                <!-- Perfiles de Aplicaciones -->
-                <div class="card p-4 shadow-sm border-0">
+                <!-- Perfiles de Aplicaciones con Scroll -->
+                <div class="card p-4 shadow-sm border-0 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN GENERADOS</h6>
                         <span class="badge bg-primary rounded-pill">{{ apps|length }} Perfiles</span>
                     </div>
 
-                    <div class="list-group list-group-flush">
-                        {% for app in apps %}
-                        <div class="list-group-item px-0 py-3 d-flex justify-content-between align-items-center border-bottom">
-                            <div>
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="fw-bold text-dark">{{ app.name }}</span>
-                                    {% if app.has_db_hook %}
-                                    <span class="badge badge-hook small">Hook DB</span>
-                                    {% endif %}
+                    <!-- Contenedor con scroll limitado a ~10 perfiles -->
+                    <div class="app-list-scroll">
+                        <div class="list-group list-group-flush">
+                            {% for app in apps %}
+                            <div class="list-group-item px-0 py-3 d-flex justify-content-between align-items-center border-bottom">
+                                <div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-bold text-dark">{{ app.name }}</span>
+                                        {% if app.has_db_hook %}
+                                        <span class="badge badge-hook small">Hook DB</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        Rutas: <code>{{ app.path }}</code>
+                                    </div>
                                 </div>
-                                <div class="text-muted small mt-1">
-                                    Rutas: <code>{{ app.path }}</code>
-                                </div>
+                                <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('{{ app.name }}')">
+                                    ⚡ Copiar Ahora
+                                </button>
                             </div>
-                            <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('{{ app.name }}')">
-                                ⚡ Copiar Ahora
-                            </button>
+                            {% endfor %}
                         </div>
-                        {% endfor %}
                     </div>
                 </div>
 
             </div>
 
-            <!-- Columna Derecha / Widget Lateral Host, Docker y Discos -->
+            <!-- Columna Derecha (4 cols): Widget Lateral alineado con Disaster Recovery -->
             <div class="col-lg-4">
                 
                 <!-- Widget con Pestañas Interactivas -->
@@ -277,14 +303,11 @@
         </div>
     </div>
 
-    <!-- JavaScript para Lógica de Pestañas y Peticiones API -->
+    <!-- JavaScript para Pestañas y Peticiones API -->
     <script>
-        // Función para cambiar de pestaña en el Widget Lateral
         function switchHostTab(tabName) {
-            // Ocultar todos los paneles
             document.querySelectorAll('.host-tab-pane').forEach(el => el.classList.add('d-none'));
 
-            // Resetear estilos de todos los botones de pestaña
             ['tab-host-btn', 'tab-docker-btn', 'tab-disks-btn'].forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) {
@@ -293,7 +316,6 @@
                 }
             });
 
-            // Mostrar el panel activo
             const activeContent = document.getElementById(`tab-content-${tabName}`);
             const activeBtn = document.getElementById(`tab-${tabName}-btn`);
 
@@ -304,7 +326,6 @@
             }
         }
 
-        // Actualizar el disco activo en la configuración backend
         async function updateTargetDisk(diskPath) {
             try {
                 const response = await fetch('/api/v1/config', {
@@ -320,7 +341,6 @@
             }
         }
 
-        // Iniciar copia de app individual
         async function triggerAppBackup(appName) {
             alert(`Iniciando copia de seguridad para ${appName}...`);
             try {
@@ -330,7 +350,6 @@
             }
         }
 
-        // Iniciar copia completa Disaster Recovery
         async function triggerFullBackup() {
             if (confirm('¿Desea iniciar la copia de seguridad completa del sistema?')) {
                 try {
