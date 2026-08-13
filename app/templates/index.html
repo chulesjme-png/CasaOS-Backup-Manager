@@ -306,6 +306,23 @@
         </div>
     </div>
 
+    <!-- WIDGET FLOTANTE: BARRA DE PROGRESO EN TIEMPO REAL (WEBSOCKET) -->
+    <div id="ws-progress-container" class="card shadow-lg border-0 d-none" style="position: fixed; bottom: 24px; right: 24px; z-index: 1100; min-width: 360px; max-width: 420px; border-radius: 12px; background: #ffffff;">
+        <div class="card-body p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="d-flex align-items-center gap-2">
+                    <div id="ws-job-icon" class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <span id="ws-job-title" class="fw-bold text-dark small text-truncate" style="max-width: 230px;">Procesando Tarea...</span>
+                </div>
+                <span id="ws-progress-percent" class="badge bg-primary rounded-pill">0%</span>
+            </div>
+            <div class="progress mb-2" style="height: 8px; border-radius: 4px; background-color: #e9ecef;">
+                <div id="ws-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div id="ws-progress-message" class="text-muted small text-truncate" style="font-size: 0.8rem;">Iniciando proceso...</div>
+        </div>
+    </div>
+
     <!-- MODAL PROGRAMACIÓN -->
     <div class="modal fade" id="modalSchedules" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -344,7 +361,7 @@
                 <div class="modal-body">
                     <p class="text-muted small">Selecciona una copia disponible en tu destino activo para proceder con la restauración.</p>
                     <div class="alert alert-warning py-2 small">
-                        ⚠️ <strong>Atención:</strong> La restauración sobreescribirá los datos actuales de la aplicación seleccionada.
+                        ⚠️ <strong>Atención:</strong> La restauración creará un <strong>Snapshot de Seguridad</strong> preventivo antes de sobrescribir ningún dato.
                     </div>
                     <!-- Contenedor dinámico de backups reales -->
                     <div class="list-group list-group-flush border rounded" id="restoreBackupsList">
@@ -386,10 +403,102 @@
     <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- JavaScript Integrado para Interfaz y API -->
+    <!-- JavaScript Integrado para Interfaz, API y WebSockets -->
     <script>
+        // --- WEBSOCKET DE PROGRESO EN TIEMPO REAL ---
+        let progressSocket = null;
+        let pingInterval = null;
+
+        function initProgressWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/progress`;
+
+            progressSocket = new WebSocket(wsUrl);
+
+            progressSocket.onopen = () => {
+                console.log("🟢 [WebSocket] Conectado con el servidor.");
+                clearInterval(pingInterval);
+                pingInterval = setInterval(() => {
+                    if (progressSocket.readyState === WebSocket.OPEN) {
+                        progressSocket.send("ping");
+                    }
+                }, 20000);
+            };
+
+            progressSocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data && typeof data.percentage === 'number') {
+                        updateProgressUI(data.job_id, data.percentage, data.message);
+                    }
+                } catch (e) {
+                    // Ignorar pings o respuestas no JSON
+                }
+            };
+
+            progressSocket.onclose = () => {
+                console.warn("🔴 [WebSocket] Conexión cerrada. Reintentando en 3 segundos...");
+                clearInterval(pingInterval);
+                setTimeout(initProgressWebSocket, 3000);
+            };
+        }
+
+        function updateProgressUI(jobId, percentage, message) {
+            const container = document.getElementById('ws-progress-container');
+            const bar = document.getElementById('ws-progress-bar');
+            const percentBadge = document.getElementById('ws-progress-percent');
+            const msgEl = document.getElementById('ws-progress-message');
+            const titleEl = document.getElementById('ws-job-title');
+            const iconEl = document.getElementById('ws-job-icon');
+
+            if (!container) return;
+
+            // Mostrar el widget flotante
+            container.classList.remove('d-none');
+
+            // Formatear Título descriptivo según el tipo de tarea
+            if (jobId.startsWith('backup_')) {
+                const appName = jobId.replace('backup_', '');
+                titleEl.innerText = appName === 'disaster_recovery' ? 'Disaster Recovery (Sistema)' : `Copia de ${appName}`;
+            } else if (jobId.startsWith('restore_')) {
+                titleEl.innerText = `Restauración: ${jobId.replace('restore_', '')}`;
+            } else {
+                titleEl.innerText = 'Ejecutando Tarea';
+            }
+
+            // Actualizar datos de la barra
+            bar.style.width = `${percentage}%`;
+            percentBadge.innerText = `${percentage}%`;
+            msgEl.innerText = message;
+
+            // Estilos dinámicos para Error vs Operación Normal
+            if (message.toLowerCase().includes('error')) {
+                bar.classList.remove('bg-primary', 'progress-bar-striped', 'progress-bar-animated');
+                bar.classList.add('bg-danger');
+                percentBadge.classList.remove('bg-primary');
+                percentBadge.classList.add('bg-danger');
+                if (iconEl) iconEl.className = 'text-danger fw-bold fs-6';
+            } else {
+                bar.classList.remove('bg-danger');
+                bar.classList.add('bg-primary', 'progress-bar-striped', 'progress-bar-animated');
+                percentBadge.classList.remove('bg-danger');
+                percentBadge.classList.add('bg-primary');
+                if (iconEl) iconEl.className = 'spinner-border spinner-border-sm text-primary';
+            }
+
+            // Ocultar suavemente cuando finalice (100%) o falle
+            if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
+                setTimeout(() => {
+                    container.classList.add('d-none');
+                    setTimeout(() => { bar.style.width = '0%'; }, 300);
+                }, 4000);
+            }
+        }
+
         // --- EVENTOS DE CARGA Y MODALES ---
         document.addEventListener('DOMContentLoaded', () => {
+            initProgressWebSocket();
+
             const modalSchedulesEl = document.getElementById('modalSchedules');
             if (modalSchedulesEl) {
                 modalSchedulesEl.addEventListener('show.bs.modal', fetchScheduleData);
@@ -459,9 +568,9 @@
                 }
 
                 listContainer.innerHTML = data.backups.map(b => `
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-2">
                         <div>
-                            <span class="fw-bold d-block">${b.filename}</span>
+                            <span class="fw-bold d-block text-dark">${b.filename}</span>
                             <span class="text-muted small">Tamaño: ${b.size_mb} MB</span>
                         </div>
                         <button class="btn btn-outline-warning btn-sm fw-semibold" onclick="executeRestore('${b.filename}')">
@@ -477,22 +586,21 @@
         }
 
         async function executeRestore(filename) {
-            if (!confirm(`¿Confirms que deseas restaurar la copia "${filename}"?\n\nEsta acción sobreescribirá los datos actuales.`)) {
+            if (!confirm(`¿Confirmas que deseas restaurar la copia "${filename}"?\n\nSe creará un Snapshot de Seguridad previo antes de sobrescribir datos.`)) {
                 return;
             }
 
+            // Cerrar el modal para dar visibilidad al widget de progreso
+            const modalEl = document.getElementById('modalRestore');
+            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) modalInstance.hide();
+
             try {
-                const response = await fetch('/api/v1/backups/restore', {
+                await fetch('/api/v1/backups/restore', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ backup_file: filename, target_app: 'all' })
                 });
-
-                if (response.ok) {
-                    alert('Proceso de restauración iniciado en segundo plano.');
-                } else {
-                    alert('Error al iniciar la restauración.');
-                }
             } catch (err) {
                 console.error('Error en restauración:', err);
             }
@@ -529,7 +637,6 @@
                 });
                 if (response.ok) {
                     console.log('Disco de destino actualizado:', diskPath);
-                    // Actualizar el valor en el modal de configuración de forma reactiva
                     const settingsDiskInput = document.getElementById('settingsTargetDisk');
                     if (settingsDiskInput) settingsDiskInput.value = diskPath;
                 }
@@ -539,20 +646,19 @@
         }
 
         async function triggerAppBackup(appName) {
-            alert(`Iniciando copia de seguridad para ${appName}...`);
             try {
                 await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
             } catch (err) {
-                console.error(err);
+                console.error('Error ejecutando copia de app:', err);
             }
         }
 
         async function triggerFullBackup() {
-            if (confirm('¿Desea iniciar la copia de seguridad completa del sistema?')) {
+            if (confirm('¿Desea iniciar la copia de seguridad completa del sistema (Disaster Recovery)?')) {
                 try {
                     await fetch('/api/v1/backups/run-full', { method: 'POST' });
                 } catch (err) {
-                    console.error(err);
+                    console.error('Error ejecutando backup completo:', err);
                 }
             }
         }

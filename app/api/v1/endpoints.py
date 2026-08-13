@@ -5,6 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.config import config_manager, AppConfig
+from app.core.ws_manager import ws_manager
 from app.services.disk_service import disk_service
 from app.services.discovery_service import discovery_service
 from app.services.duplicati_service import duplicati_service
@@ -148,3 +149,17 @@ async def run_app_backup(app_name: str):
 async def run_full_backup():
     success = await duplicati_service.run_full_disaster_recovery()
     return {"status": "success" if success else "failed"}
+
+
+# --- ENDPOINT WEBSOCKET PARA PROGRESO EN TIEMPO REAL ---
+
+@router.websocket("/ws/progress")
+async def websocket_progress_endpoint(websocket: WebSocket):
+    """Mantiene la conexión WebSocket abierta para enviar eventos de progreso en tiempo real."""
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            # Escucha mensajes del cliente para mantener la conexión activa (ping/pong)
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
