@@ -1,21 +1,23 @@
 import os
 import json
 import logging
-import asyncio
+import mimetypes
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+
+# Asegurar que el sistema reconozca correctamente los archivos SVG
+mimetypes.add_type("image/svg+xml", ".svg")
 
 # Configuración de logs
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("CasaOS-Backup-Manager")
 
-# Definición de la aplicación FastAPI
 app = FastAPI(
     title="CasaOS Backup Manager",
     version="v0.5.0-alpha7",
@@ -23,17 +25,23 @@ app = FastAPI(
 )
 
 # -----------------------------------------------------------------------------
-# RUTAS ABSOLUTAS DINÁMICAS (Resuelve errores de carga de static/templates)
+# RUTAS ABSOLUTAS DINÁMICAS
 # -----------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 
-# Montaje de archivos estáticos
-static_path = os.path.join(BASE_DIR, "static")
-app.mount("/static", StaticFiles(directory=static_path), name="static")
+# Buscar la carpeta static (probar tanto app/static como static/)
+static_dir = os.path.join(BASE_DIR, "static")
+if not os.path.exists(static_dir):
+    static_dir = os.path.join(BASE_DIR.parent, "static")
+
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Configuración de plantillas Jinja2
-templates_path = os.path.join(BASE_DIR, "templates")
-templates = Jinja2Templates(directory=templates_path)
+templates_dir = os.path.join(BASE_DIR, "templates")
+if not os.path.exists(templates_dir):
+    templates_dir = os.path.join(BASE_DIR.parent, "templates")
+
+templates = Jinja2Templates(directory=templates_dir)
 
 # Configuración de persistencia local
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
@@ -71,7 +79,7 @@ class RestoreModel(BaseModel):
     snapshot_id: str
 
 # -----------------------------------------------------------------------------
-# MOCK / DETECCIÓN DE RECURSOS DEL SISTEMA
+# RECURSOS DEL SISTEMA
 # -----------------------------------------------------------------------------
 def get_system_disks() -> List[Dict[str, Any]]:
     return [
