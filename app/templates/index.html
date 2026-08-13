@@ -37,7 +37,6 @@
             color: #856404;
             border: 1px solid #ffeeba;
         }
-        /* Contenedor de scroll para perfiles (~10 aplicaciones visibles) */
         .app-list-scroll {
             max-height: 680px;
             overflow-y: auto;
@@ -71,6 +70,7 @@
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-secondary btn-sm" id="btn-scan" onclick="location.reload()">🔍 Escanear</button>
                 <button class="btn btn-outline-secondary btn-sm" id="btn-schedules" data-bs-toggle="modal" data-bs-target="#modalSchedules">📅 Programación</button>
+                <button class="btn btn-outline-secondary btn-sm" id="btn-logs" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
                 <button class="btn btn-warning btn-sm text-white fw-semibold" id="btn-restore" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
                 <button class="btn btn-outline-secondary btn-sm" id="btn-settings" data-bs-toggle="modal" data-bs-target="#modalSettings">⚙️ Configuración</button>
             </div>
@@ -80,8 +80,7 @@
     <!-- Main Content Container -->
     <div class="container-fluid px-4 py-4">
         
-        <!-- SECCIÓN SUPERIOR A ANCHO COMPLETO -->
-        <!-- 1. Métricas Principales -->
+        <!-- SECCIÓN SUPERIOR -->
         <div class="row g-3 mb-3">
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
@@ -112,7 +111,7 @@
             </div>
         </div>
 
-        <!-- 2. Selector de Destino Activo -->
+        <!-- Selector de Destino Activo -->
         <div class="card p-3 shadow-sm border-0 mb-4">
             <div class="row align-items-center">
                 <div class="col-md-4 d-flex align-items-center gap-2">
@@ -131,12 +130,10 @@
             </div>
         </div>
 
-        <!-- SECCIÓN DIVIDIDA EN DOS COLUMNAS -->
+        <!-- DOS COLUMNAS -->
         <div class="row">
             
-            <!-- Columna Izquierda (8 cols): Disaster Recovery & Perfiles -->
             <div class="col-lg-8">
-                
                 <!-- Tarjeta Disaster Recovery -->
                 <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
                     <div class="d-flex justify-content-between align-items-center">
@@ -155,14 +152,13 @@
                     </div>
                 </div>
 
-                <!-- Perfiles de Aplicaciones con Scroll -->
+                <!-- Perfiles de Aplicaciones -->
                 <div class="card p-4 shadow-sm border-0 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN GENERADOS</h6>
                         <span class="badge bg-primary rounded-pill">{{ apps|length }} Perfiles</span>
                     </div>
 
-                    <!-- Contenedor con scroll ampliado -->
                     <div class="app-list-scroll">
                         <div class="list-group list-group-flush">
                             {% for app in apps %}
@@ -186,13 +182,10 @@
                         </div>
                     </div>
                 </div>
-
             </div>
 
-            <!-- Columna Derecha (4 cols): Widget Lateral -->
+            <!-- Columna Derecha -->
             <div class="col-lg-4">
-                
-                <!-- Widget con Pestañas Interactivas -->
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-white border-bottom-0 pt-3 px-3">
                         <ul class="nav nav-tabs card-header-tabs" id="hostTabs" role="tablist">
@@ -214,8 +207,6 @@
                         </ul>
                     </div>
                     <div class="card-body">
-                        
-                        <!-- Pestaña 1: Raspberry Pi Host -->
                         <div id="tab-content-host" class="host-tab-pane">
                             <div class="small">
                                 <div class="d-flex justify-content-between py-2 border-bottom">
@@ -237,7 +228,6 @@
                             </div>
                         </div>
 
-                        <!-- Pestaña 2: Docker Estado -->
                         <div id="tab-content-docker" class="host-tab-pane d-none">
                             <div class="small">
                                 <div class="d-flex justify-content-between py-2 border-bottom">
@@ -264,7 +254,6 @@
                             </div>
                         </div>
 
-                        <!-- Pestaña 3: Discos Físicos Reales -->
                         <div id="tab-content-disks" class="host-tab-pane d-none">
                             <div class="small" style="max-height: 220px; overflow-y: auto;">
                                 {% for disk in disks %}
@@ -285,11 +274,9 @@
                                 {% endfor %}
                             </div>
                         </div>
-
                     </div>
                 </div>
 
-                <!-- Resumen de Motores Integrados -->
                 <div class="card p-3 shadow-sm border-0">
                     <h6 class="fw-bold text-dark mb-3">⚡ Motores Integrados</h6>
                     <div class="d-flex justify-content-between align-items-center">
@@ -300,13 +287,12 @@
                         <span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>
                     </div>
                 </div>
-
             </div>
 
         </div>
     </div>
 
-    <!-- WIDGET FLOTANTE: BARRA DE PROGRESO EN TIEMPO REAL (WEBSOCKET) -->
+    <!-- WIDGET FLOTANTE PROGRESO -->
     <div id="ws-progress-container" class="card shadow-lg border-0 d-none" style="position: fixed; bottom: 24px; right: 24px; z-index: 1100; min-width: 360px; max-width: 420px; border-radius: 12px; background: #ffffff;">
         <div class="card-body p-3">
             <div class="d-flex align-items-center justify-content-between mb-2">
@@ -350,6 +336,45 @@
         </div>
     </div>
 
+    <!-- MODAL HISTORIAL DE EJECUCIONES -->
+    <div class="modal fade" id="modalLogs" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">📜 Historial de Ejecuciones</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="text-muted small">Registro de las últimas 50 copias y restauraciones realizadas.</span>
+                        <button class="btn btn-outline-danger btn-sm" onclick="clearLogs()">🗑️ Limpiar Historial</button>
+                    </div>
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-hover align-middle small mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Fecha / Hora</th>
+                                    <th>Tipo</th>
+                                    <th>Objetivo</th>
+                                    <th>Estado</th>
+                                    <th>Duración</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logsTableBody">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-3">Cargando historial...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL RESTAURAR COPIAS -->
     <div class="modal fade" id="modalRestore" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -363,7 +388,6 @@
                     <div class="alert alert-warning py-2 small">
                         ⚠️ <strong>Atención:</strong> La restauración creará un <strong>Snapshot de Seguridad</strong> preventivo antes de sobrescribir ningún dato.
                     </div>
-                    <!-- Contenedor dinámico de backups reales -->
                     <div class="list-group list-group-flush border rounded" id="restoreBackupsList">
                         <div class="p-3 text-center text-muted">Buscando copias disponibles...</div>
                     </div>
@@ -403,9 +427,8 @@
     <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- JavaScript Integrado para Interfaz, API y WebSockets -->
     <script>
-        // --- WEBSOCKET DE PROGRESO EN TIEMPO REAL ---
+        // --- WEBSOCKET DE PROGRESO ---
         let progressSocket = null;
         let pingInterval = null;
 
@@ -431,9 +454,7 @@
                     if (data && typeof data.percentage === 'number') {
                         updateProgressUI(data.job_id, data.percentage, data.message);
                     }
-                } catch (e) {
-                    // Ignorar pings o respuestas no JSON
-                }
+                } catch (e) {}
             };
 
             progressSocket.onclose = () => {
@@ -453,10 +474,8 @@
 
             if (!container) return;
 
-            // Mostrar el widget flotante
             container.classList.remove('d-none');
 
-            // Formatear Título descriptivo según el tipo de tarea
             if (jobId.startsWith('backup_')) {
                 const appName = jobId.replace('backup_', '');
                 titleEl.innerText = appName === 'disaster_recovery' ? 'Disaster Recovery (Sistema)' : `Copia de ${appName}`;
@@ -466,12 +485,10 @@
                 titleEl.innerText = 'Ejecutando Tarea';
             }
 
-            // Actualizar datos de la barra
             bar.style.width = `${percentage}%`;
             percentBadge.innerText = `${percentage}%`;
             msgEl.innerText = message;
 
-            // Estilos dinámicos para Error vs Operación Normal
             if (message.toLowerCase().includes('error')) {
                 bar.classList.remove('bg-primary', 'progress-bar-striped', 'progress-bar-animated');
                 bar.classList.add('bg-danger');
@@ -486,7 +503,6 @@
                 if (iconEl) iconEl.className = 'spinner-border spinner-border-sm text-primary';
             }
 
-            // Ocultar suavemente cuando finalice (100%) o falle
             if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
                 setTimeout(() => {
                     container.classList.add('d-none');
@@ -500,17 +516,64 @@
             initProgressWebSocket();
 
             const modalSchedulesEl = document.getElementById('modalSchedules');
-            if (modalSchedulesEl) {
-                modalSchedulesEl.addEventListener('show.bs.modal', fetchScheduleData);
-            }
+            if (modalSchedulesEl) modalSchedulesEl.addEventListener('show.bs.modal', fetchScheduleData);
 
             const modalRestoreEl = document.getElementById('modalRestore');
-            if (modalRestoreEl) {
-                modalRestoreEl.addEventListener('show.bs.modal', fetchAvailableBackups);
-            }
+            if (modalRestoreEl) modalRestoreEl.addEventListener('show.bs.modal', fetchAvailableBackups);
+
+            const modalLogsEl = document.getElementById('modalLogs');
+            if (modalLogsEl) modalLogsEl.addEventListener('show.bs.modal', fetchExecutionLogs);
         });
 
-        // --- LÓGICA MODAL 1: PROGRAMACIÓN ---
+        // --- LÓGICA MODAL HISTORIAL DE LOGS ---
+        async function fetchExecutionLogs() {
+            const tbody = document.getElementById('logsTableBody');
+            if (!tbody) return;
+
+            try {
+                const response = await fetch('/api/v1/logs');
+                const logs = await response.json();
+
+                if (!logs || logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No hay ejecuciones registradas.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = logs.map(log => `
+                    <tr>
+                        <td class="text-nowrap">${log.timestamp}</td>
+                        <td>
+                            <span class="badge ${log.job_type === 'backup' ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-warning-subtle text-warning border border-warning-subtle'}">
+                                ${log.job_type === 'backup' ? '📦 Copia' : '🔄 Restaurar'}
+                            </span>
+                        </td>
+                        <td class="fw-bold">${log.target_name}</td>
+                        <td>
+                            <span class="badge ${log.status === 'success' ? 'bg-success' : 'bg-danger'}">
+                                ${log.status === 'success' ? 'Éxito' : 'Fallo'}
+                            </span>
+                        </td>
+                        <td>${log.duration_seconds}s</td>
+                    </tr>
+                `).join('');
+
+            } catch (err) {
+                console.error('Error cargando historial:', err);
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-3">Error al cargar registros.</td></tr>';
+            }
+        }
+
+        async function clearLogs() {
+            if (!confirm('¿Deseas vaciar el historial de ejecuciones?')) return;
+            try {
+                await fetch('/api/v1/logs', { method: 'DELETE' });
+                fetchExecutionLogs();
+            } catch (err) {
+                console.error('Error limpiando logs:', err);
+            }
+        }
+
+        // --- LÓGICA MODAL PROGRAMACIÓN ---
         async function fetchScheduleData() {
             try {
                 const response = await fetch('/api/v1/schedules');
@@ -547,7 +610,7 @@
             }
         }
 
-        // --- LÓGICA MODAL 2: RESTAURAR COPIAS ---
+        // --- LÓGICA MODAL RESTAURAR ---
         async function fetchAvailableBackups() {
             const listContainer = document.getElementById('restoreBackupsList');
             if (!listContainer) return;
@@ -590,7 +653,6 @@
                 return;
             }
 
-            // Cerrar el modal para dar visibilidad al widget de progreso
             const modalEl = document.getElementById('modalRestore');
             const modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) modalInstance.hide();
@@ -606,7 +668,7 @@
             }
         }
 
-        // --- DASHBOARD PESTAÑAS Y FUNCIONES GENERALES ---
+        // --- FUNCIONES GENERALES ---
         function switchHostTab(tabName) {
             document.querySelectorAll('.host-tab-pane').forEach(el => el.classList.add('d-none'));
 
@@ -636,7 +698,6 @@
                     body: JSON.stringify({ selected_target_disk: diskPath })
                 });
                 if (response.ok) {
-                    console.log('Disco de destino actualizado:', diskPath);
                     const settingsDiskInput = document.getElementById('settingsTargetDisk');
                     if (settingsDiskInput) settingsDiskInput.value = diskPath;
                 }

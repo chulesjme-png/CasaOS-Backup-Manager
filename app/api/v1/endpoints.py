@@ -10,6 +10,7 @@ from app.services.disk_service import disk_service
 from app.services.discovery_service import discovery_service
 from app.services.duplicati_service import duplicati_service
 from app.services.scheduler_service import scheduler_service
+from app.services.audit_service import audit_service
 
 logger = logging.getLogger("casaos-backup")
 router = APIRouter()
@@ -36,7 +37,6 @@ def update_config(payload: Dict[str, str]):
     for key, value in payload.items():
         config_manager.update_key(key, value)
     
-    # Si la actualización afectó la programación, recargamos el scheduler
     if "schedule_frequency" in payload or "schedule_time" in payload:
         scheduler_service.reload_schedule()
         
@@ -67,7 +67,6 @@ def update_schedule(payload: ScheduleUpdateRequest):
         config_manager.update_key("schedule_frequency", payload.schedule_frequency)
         config_manager.update_key("schedule_time", payload.schedule_time)
         
-        # Aplicar la nueva programación en tiempo real
         scheduler_service.reload_schedule()
         
         return {
@@ -85,14 +84,12 @@ def update_schedule(payload: ScheduleUpdateRequest):
 
 @router.get("/backups/list")
 def list_available_backups():
-    """Explora recursivamente el disco destino en busca de archivos de copia de seguridad."""
     target_disk = config_manager.config.selected_target_disk
     if not target_disk or not os.path.exists(target_disk):
         return {"target_disk": target_disk, "backups": []}
 
     backups = []
     try:
-        # Exploración recursiva para detectar backups dentro de subdirectorios
         for root, _, files in os.walk(target_disk):
             for file in files:
                 if file.endswith(".tar.gz") or file.endswith(".zip") or "backup" in file.lower():
@@ -115,7 +112,6 @@ def list_available_backups():
 
 @router.post("/backups/restore")
 async def restore_backup(payload: RestoreRequest):
-    """Ejecuta el proceso de restauración real delegando al servicio."""
     if not payload.backup_file:
         raise HTTPException(status_code=400, detail="Debe especificar un archivo de copia de seguridad.")
     
@@ -151,15 +147,25 @@ async def run_full_backup():
     return {"status": "success" if success else "failed"}
 
 
+# --- ENDPOINTS HISTORIAL DE EJECUCIÓN (AUDIT LOG) ---
+
+@router.get("/logs")
+def get_execution_logs():
+    return audit_service.get_logs(limit=50)
+
+@router.delete("/logs")
+def clear_execution_logs():
+    success = audit_service.clear_logs()
+    return {"status": "success" if success else "failed"}
+
+
 # --- ENDPOINT WEBSOCKET PARA PROGRESO EN TIEMPO REAL ---
 
 @router.websocket("/ws/progress")
 async def websocket_progress_endpoint(websocket: WebSocket):
-    """Mantiene la conexión WebSocket abierta para enviar eventos de progreso en tiempo real."""
     await ws_manager.connect(websocket)
     try:
         while True:
-            # Escucha mensajes del cliente para mantener la conexión activa (ping/pong)
             await websocket.receive_text()
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
