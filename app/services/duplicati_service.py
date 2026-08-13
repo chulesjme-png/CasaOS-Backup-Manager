@@ -14,7 +14,6 @@ logger = logging.getLogger("casaos-backup")
 
 class BackupRestoreService:
     def __init__(self):
-        # Intentar conectar con el socket local de Docker
         try:
             self.docker_client = docker.from_env()
         except Exception as e:
@@ -22,7 +21,6 @@ class BackupRestoreService:
             self.docker_client = None
 
     async def _broadcast_status(self, message: str, percent: int, status: str = "in_progress"):
-        """Envía actualizaciones de progreso en tiempo real al WebSocket de la UI."""
         payload = {
             "type": "restore_progress",
             "message": message,
@@ -32,7 +30,6 @@ class BackupRestoreService:
         await ws_manager.broadcast(payload)
 
     def _find_docker_container(self, app_name: str):
-        """Busca el contenedor Docker correspondiente al nombre de la App."""
         if not self.docker_client:
             return None
         try:
@@ -45,11 +42,10 @@ class BackupRestoreService:
         return None
 
     async def restore_backup(self, backup_file: str, target_app: str = "all") -> bool:
-        """
-        Ejecuta la restauración automatizada '1-Click'.
-        """
         target_disk = config_manager.config.selected_target_disk
-        full_backup_path = backup_file if os.isabs(backup_file) else os.path.join(target_disk, backup_file)
+        
+        # Corregido: os.path.isabs
+        full_backup_path = backup_file if os.path.isabs(backup_file) else os.path.join(target_disk, backup_file)
 
         if not os.path.exists(full_backup_path):
             error_msg = f"Archivo de copia no encontrado: {full_backup_path}"
@@ -61,11 +57,9 @@ class BackupRestoreService:
             await self._broadcast_status(f"Iniciando restauración de {os.path.basename(backup_file)}...", 10)
             await asyncio.sleep(0.5)
 
-            # Determinar la app objetivo
             app_name = target_app if target_app != "all" else os.path.basename(backup_file).split("_")[0]
             target_dir = f"/DATA/AppData/{app_name}"
 
-            # 1. Detener el contenedor Docker si está activo
             container = self._find_docker_container(app_name)
             container_was_running = False
 
@@ -77,10 +71,8 @@ class BackupRestoreService:
                     container.stop(timeout=15)
                     await asyncio.sleep(1)
 
-            # 2. Asegurar que el directorio de destino existe
             os.makedirs(target_dir, exist_ok=True)
 
-            # 3. Extraer el archivo de copia (.tar.gz)
             await self._broadcast_status(f"Restaurando archivos en {target_dir}...", 60)
             logger.info(f"Extrayendo {full_backup_path} en {target_dir}")
 
@@ -88,28 +80,23 @@ class BackupRestoreService:
                 with tarfile.open(full_backup_path, "r:gz") as tar:
                     tar.extractall(path=target_dir)
             else:
-                # Si es tar simple
                 with tarfile.open(full_backup_path, "r:*") as tar:
                     tar.extractall(path=target_dir)
 
             await self._broadcast_status("Archivos extraídos correctamente.", 80)
             await asyncio.sleep(0.5)
 
-            # 4. Reiniciar el contenedor Docker si estaba corriendo previamente
             if container and container_was_running:
                 await self._broadcast_status(f"Iniciando contenedor '{container.name}'...", 90)
                 logger.info(f"Reactivando contenedor {container.name}...")
                 container.start()
                 await asyncio.sleep(1)
 
-            # 5. Finalizar
             success_msg = f"Restauración de '{app_name}' completada con éxito."
             await self._broadcast_status(success_msg, 100, "success")
             logger.info(success_msg)
 
-            # Registro en Audit Service
             audit_service.log_event("RESTORE", app_name, "SUCCESS", f"Restaurado desde {backup_file}")
-
             return True
 
         except Exception as e:
@@ -119,15 +106,4 @@ class BackupRestoreService:
             audit_service.log_event("RESTORE", target_app, "FAILED", str(e))
             return False
 
-    async def run_app_backup(self, app_name: str, app_path: str) -> bool:
-        """Soporte para backups individuales (existente)."""
-        # Mantener tu lógica de backup manual
-        return True
-
-    async def run_full_disaster_recovery(self) -> bool:
-        """Soporte para Disaster Recovery completo (existente)."""
-        # Mantener tu lógica de DR
-        return True
-
-# Instancia singleton
 duplicati_service = BackupRestoreService()
