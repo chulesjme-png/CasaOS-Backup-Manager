@@ -401,7 +401,7 @@
         </div>
     </div>
 
-    <!-- MODAL CONFIGURACIÓN -->
+    <!-- MODAL CONFIGURACIÓN CON SECCIÓN DE NOTIFICACIONES -->
     <div class="modal fade" id="modalSettings" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
@@ -418,9 +418,40 @@
                         <label class="form-label fw-semibold">Disco Destino Configurado</label>
                         <input type="text" class="form-control" id="settingsTargetDisk" value="{{ config.selected_target_disk }}" readonly>
                     </div>
+
+                    <!-- SECCIÓN DE NOTIFICACIONES -->
+                    <div class="border-top pt-3 mt-3">
+                        <h6 class="fw-bold text-dark mb-3">🔔 Notificaciones</h6>
+                        
+                        <!-- Telegram -->
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="telegramEnabled" {% if config.telegram_enabled %}checked{% endif %}>
+                            <label class="form-check-label fw-semibold" for="telegramEnabled">Activar Notificaciones por Telegram</label>
+                        </div>
+                        <div class="mb-2">
+                            <input type="text" class="form-control form-control-sm" id="telegramToken" placeholder="Bot Token (ej: 123456:ABC-DEF...)" value="{{ config.telegram_bot_token or '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <input type="text" class="form-control form-control-sm" id="telegramChatId" placeholder="Chat ID (ej: 987654321)" value="{{ config.telegram_chat_id or '' }}">
+                        </div>
+
+                        <!-- Webhook -->
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="webhookEnabled" {% if config.webhook_enabled %}checked{% endif %}>
+                            <label class="form-check-label fw-semibold" for="webhookEnabled">Activar Webhook (Discord / Slack / Custom)</label>
+                        </div>
+                        <div class="mb-3">
+                            <input type="url" class="form-control form-control-sm" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." value="{{ config.webhook_url or '' }}">
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sendTestNotification()">🧪 Probar Notificación</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveNotificationSettings()">Guardar Notificaciones</button>
                 </div>
             </div>
         </div>
@@ -527,6 +558,57 @@
             if (modalLogsEl) modalLogsEl.addEventListener('show.bs.modal', fetchExecutionLogs);
         });
 
+        // --- LÓGICA DE NOTIFICACIONES ---
+        function getNotificationFormData() {
+            return {
+                telegram_enabled: document.getElementById('telegramEnabled').checked,
+                telegram_bot_token: document.getElementById('telegramToken').value.trim(),
+                telegram_chat_id: document.getElementById('telegramChatId').value.trim(),
+                webhook_enabled: document.getElementById('webhookEnabled').checked,
+                webhook_url: document.getElementById('webhookUrl').value.trim()
+            };
+        }
+
+        async function saveNotificationSettings() {
+            const data = getNotificationFormData();
+            try {
+                const response = await fetch('/api/v1/notifications/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    alert('¡Configuración de notificaciones guardada con éxito!');
+                } else {
+                    alert('Error al guardar la configuración de notificaciones.');
+                }
+            } catch (err) {
+                console.error('Error guardando notificaciones:', err);
+                alert('Ocurrió un error en la solicitud.');
+            }
+        }
+
+        async function sendTestNotification() {
+            const data = getNotificationFormData();
+            try {
+                const response = await fetch('/api/v1/notifications/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    alert('🟢 Notificación de prueba enviada. Por favor comprueba tu canal.');
+                } else {
+                    alert('🔴 Error al enviar la notificación de prueba.');
+                }
+            } catch (err) {
+                console.error('Error probando notificación:', err);
+                alert('Ocurrió un error al intentar enviar la notificación.');
+            }
+        }
+
         // --- LÓGICA MODAL HISTORIAL DE LOGS ---
         async function fetchExecutionLogs() {
             const tbody = document.getElementById('logsTableBody');
@@ -582,9 +664,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.jobs && data.jobs.length > 0) {
-                        // Tomamos el primer trabajo programado como referencia de hora si existe
                         const nextRun = data.jobs[0].next_run_time;
-                        // O simplemente dejamos los valores por defecto del input
                     }
                 }
             } catch (err) {
