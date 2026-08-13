@@ -12,11 +12,11 @@
     <header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <!-- LOGO SVG REAL CARGADO DESDE LA RUTA ESTÁTICA -->
-                <div class="h-8 flex items-center">
+                <!-- LOGO SVG REAL (+30% MÁS GRANDE) -->
+                <div class="h-9 flex items-center">
                     <img src="/static/img/logo-horizontal.svg" 
                          alt="CasaOS Backup Manager" 
-                         class="h-7 w-auto object-contain block"
+                         class="h-9 w-auto object-contain block"
                          onerror="this.onerror=null; this.src='/static/logo-horizontal.svg';">
                 </div>
                 <span class="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{{ version }}</span>
@@ -69,13 +69,14 @@
                 </div>
             </div>
 
-            <!-- Selector de Destino Activo (Persistente) -->
-            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center space-x-3">
-                <span class="text-sm">💾</span>
-                <label for="target-disk-select" class="text-xs font-bold text-gray-700 whitespace-nowrap">Destino Activo de Copias:</label>
-                <select id="target-disk-select" onchange="onTargetDiskChange(this.value)" class="bg-gray-50 border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono">
+            <!-- Selector de Destino Activo (Formato Captura 2) -->
+            <div class="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm flex items-center justify-between gap-3">
+                <label for="target-disk-select" class="text-xs font-bold text-gray-700 whitespace-nowrap flex items-center gap-2">
+                    <span>💾 Destino Activo de Copias:</span>
+                </label>
+                <select id="target-disk-select" onchange="onTargetDiskChange(this.value)" class="bg-gray-50 border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-1.5 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono">
                     {% for disk in disks %}
-                    <option value="{{ disk.path }}">{{ disk.name }} ({{ disk.path }}) — Libre: {{ disk.free }} / Total: {{ disk.total }}</option>
+                    <option value="{{ disk.path }}">{{ disk.name }} — Libre: {{ disk.free }} / Total: {{ disk.total }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -115,7 +116,7 @@
             <!-- Listado Perfiles de Aplicación Generados -->
             <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <h2 class="text-xs font-bold text-gray-800 tracking-tight flex items-center gap-1.5">
                         <span>📌 Perfiles de Aplicación Generados</span>
                     </h2>
                     <span class="text-xs font-bold bg-blue-600 text-white px-2.5 py-0.5 rounded-full">{{ apps|length }} Perfiles</span>
@@ -161,9 +162,9 @@
             <!-- Tabs Sistema Host -->
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                 <div class="flex border-b border-gray-200 pb-2 mb-3 text-xs font-semibold space-x-4">
-                    <span class="text-blue-600 border-b-2 border-blue-600 pb-2 -mb-2.5">🍓 Raspberry Pi 5</span>
-                    <span class="text-gray-400">🐳 Docker</span>
-                    <span class="text-gray-400">💾 Discos</span>
+                    <span class="text-blue-600 border-b-2 border-blue-600 pb-2 -mb-2.5 flex items-center gap-1">🍓 Raspberry Pi 5</span>
+                    <span class="text-gray-400 flex items-center gap-1">🐳 Docker</span>
+                    <span class="text-gray-400 flex items-center gap-1">💾 Discos</span>
                 </div>
                 <div class="space-y-2 text-xs">
                     <p class="font-bold text-gray-700">🖥️ Sistema Host</p>
@@ -184,7 +185,7 @@
 
             <!-- Resumen del Estado -->
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2 text-xs">
-                <p class="font-bold text-gray-700 mb-2">📊 Resumen del Estado</p>
+                <p class="font-bold text-gray-700 mb-2 flex items-center gap-1.5">📊 Resumen del Estado</p>
                 <div class="flex justify-between text-gray-600">
                     <span>Aplicaciones:</span>
                     <span class="font-bold text-gray-800">13</span>
@@ -197,9 +198,9 @@
 
             <!-- Motores Integrados -->
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2 text-xs">
-                <p class="font-bold text-gray-700 mb-2">⚡ Motores Integrados</p>
+                <p class="font-bold text-gray-700 mb-2 flex items-center gap-1.5">⚡ Motores Integrados</p>
                 <div class="flex items-center justify-between">
-                    <span class="font-medium text-gray-700">🔌 Duplicati Engine</span>
+                    <span class="font-medium text-gray-700 flex items-center gap-1">🔌 Duplicati Engine</span>
                     <span class="text-emerald-600 font-bold">Activo</span>
                 </div>
             </div>
