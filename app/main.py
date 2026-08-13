@@ -10,6 +10,7 @@ from app.services.disk_service import disk_service
 from app.services.discovery_service import discovery_service
 from app.services.scheduler_service import scheduler_service
 from app.api.v1.endpoints import router as api_v1_router
+from app.routers import scheduler_router
 
 # Configuración de Logging
 logging.basicConfig(
@@ -31,7 +32,7 @@ async def lifespan(app: FastAPI):
     
     # Apagar el planificador de tareas al detener el contenedor
     logger.info("Deteniendo CasaOS Backup Manager...")
-    scheduler_service.stop()
+    scheduler_service.shutdown()
 
 
 app = FastAPI(
@@ -44,8 +45,9 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-# Incluir rutas API v1
+# Incluir rutas API v1 y Scheduler
 app.include_router(api_v1_router, prefix="/api/v1")
+app.include_router(scheduler_router.router)
 
 
 @app.get("/", response_class=HTMLResponse)

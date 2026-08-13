@@ -318,14 +318,16 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted small">Configura la frecuencia de backups automáticos del sistema (APScheduler).</p>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Frecuencia Automatizada</label>
-                        <select class="form-select" id="scheduleFrequencySelect">
-                            <option value="daily">Diariamente (03:00 AM)</option>
-                            <option value="weekly">Semanalmente (Domingos a las 03:00 AM)</option>
-                            <option value="monthly">Mensualmente (Día 1 a las 03:00 AM)</option>
-                        </select>
+                    <p class="text-muted small">Configura la hora del respaldo automático diario del sistema (APScheduler).</p>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Hora (0-23)</label>
+                            <input type="number" class="form-control" id="scheduleHour" min="0" max="23" value="3">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Minuto (0-59)</label>
+                            <input type="number" class="form-control" id="scheduleMinute" min="0" max="59" value="0">
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -486,7 +488,7 @@
             }
 
             bar.style.width = `${percentage}%`;
-            percentBadge.innerText = `${percentage}%`;
+            percentBadge.innerText =`${percentage}%`;
             msgEl.innerText = message;
 
             if (message.toLowerCase().includes('error')) {
@@ -576,12 +578,13 @@
         // --- LÓGICA MODAL PROGRAMACIÓN ---
         async function fetchScheduleData() {
             try {
-                const response = await fetch('/api/v1/schedules');
+                const response = await fetch('/api/v1/scheduler/');
                 if (response.ok) {
                     const data = await response.json();
-                    const selectFreq = document.getElementById('scheduleFrequencySelect');
-                    if (selectFreq && data.schedule_frequency) {
-                        selectFreq.value = data.schedule_frequency;
+                    if (data.jobs && data.jobs.length > 0) {
+                        // Tomamos el primer trabajo programado como referencia de hora si existe
+                        const nextRun = data.jobs[0].next_run_time;
+                        // O simplemente dejamos los valores por defecto del input
                     }
                 }
             } catch (err) {
@@ -590,18 +593,18 @@
         }
 
         async function saveSchedule() {
-            const frequency = document.getElementById('scheduleFrequencySelect').value;
-            const time = "03:00"; 
+            const hour = parseInt(document.getElementById('scheduleHour').value, 10);
+            const minute = parseInt(document.getElementById('scheduleMinute').value, 10);
 
             try {
-                const response = await fetch('/api/v1/schedules', {
+                const response = await fetch('/api/v1/scheduler/disaster-recovery', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ schedule_frequency: frequency, schedule_time: time })
+                    body: JSON.stringify({ hour: hour, minute: minute })
                 });
 
                 if (response.ok) {
-                    alert('¡Programación de copias guardada y activada con éxito!');
+                    alert(`¡Respaldo automático reprogramado con éxito a las ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}!`);
                 } else {
                     alert('Error al guardar la programación.');
                 }
