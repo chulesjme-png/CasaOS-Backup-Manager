@@ -1,41 +1,48 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+# Importa la instancia de tu servicio de notificaciones y gestor de configuración
 from app.services.notification_service import notification_service
 
-# --- Ejemplo de Notificación al finalizar una Copia por Aplicación ---
-async def execute_app_backup_task(app_name: str):
+router = APIRouter()
+
+# 1. Definir el modelo de datos que viene del HTML
+class NotificationSettings(BaseModel):
+    telegram_enabled: bool
+    telegram_bot_token: Optional[str] = ""
+    telegram_chat_id: Optional[str] = ""
+    webhook_enabled: bool
+    webhook_url: Optional[str] = ""
+
+# 2. Endpoint para GUARDAR la configuración
+@router.post("/notifications/settings")
+async function save_notification_settings(settings: NotificationSettings):
     try:
-        # 1. Tu lógica de backup existente aquí...
-        # ...
+        # Guarda las variables en tu config.json o sistema de persistencia
+        # Ejemplo: config_service.save_notifications(settings.dict())
         
-        # 2. Notificación de Éxito
-        await notification_service.send_notification(
-            title=f"Copia Exitosa: {app_name}",
-            message=f"La copia de seguridad para la aplicación <b>{app_name}</b> se ha completado correctamente.",
-            status="success"
-        )
+        # También actualizas las credenciales en el servicio activo en memoria
+        notification_service.update_config(settings.dict())
+        
+        return {"status": "ok", "message": "Configuración guardada correctamente"}
     except Exception as e:
-        # 3. Notificación de Error
-        await notification_service.send_notification(
-            title=f"Error en Copia: {app_name}",
-            message=f"Ocurrió un fallo al respaldar <b>{app_name}</b>:\n<code>{str(e)}</code>",
-            status="error"
-        )
+        raise HTTPException(status_code=500, detail=f"Error guardando datos: {str(e)}")
 
-# --- Ejemplo de Notificación al finalizar Disaster Recovery ---
-async def execute_full_backup_task():
+# 3. Endpoint para PROBAR la notificación (Botón 'Probar Notificación')
+@router.post("/notifications/test")
+async function test_notification(settings: NotificationSettings):
     try:
-        # 1. Tu lógica de backup completo existente aquí...
-        # ...
-
-        # 2. Notificación de Éxito
-        await notification_service.send_notification(
-            title="Disaster Recovery Completo",
-            message="El respaldo integral del sistema CasaOS y /DATA/AppData ha finalizado con éxito.",
-            status="success"
+        # Se intenta enviar un mensaje directo de prueba usando los datos introducidos
+        success = await notification_service.send_test_message(
+            token=settings.telegram_bot_token,
+            chat_id=settings.telegram_chat_id,
+            webhook_url=settings.webhook_url,
+            telegram_enabled=settings.telegram_enabled,
+            webhook_enabled=settings.webhook_enabled
         )
+        if not success:
+            raise HTTPException(status_code=400, detail="No se pudo enviar el mensaje. Revisa las credenciales.")
+            
+        return {"status": "ok", "message": "Notificación enviada"}
     except Exception as e:
-        # 3. Notificación de Error
-        await notification_service.send_notification(
-            title="Error en Disaster Recovery",
-            message=f"Falló la copia completa del sistema:\n<code>{str(e)}</code>",
-            status="error"
-        )
+        raise HTTPException(status_code=500, detail=str(e))

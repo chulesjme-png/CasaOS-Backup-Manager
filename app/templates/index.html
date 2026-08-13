@@ -519,7 +519,7 @@
             }
 
             bar.style.width = `${percentage}%`;
-            percentBadge.innerText =`${percentage}%`;
+            percentBadge.innerText = `${percentage}%`;
             msgEl.innerText = message;
 
             if (message.toLowerCase().includes('error')) {
@@ -558,7 +558,7 @@
             if (modalLogsEl) modalLogsEl.addEventListener('show.bs.modal', fetchExecutionLogs);
         });
 
-        // --- LÓGICA DE NOTIFICACIONES ---
+        // --- LÓGICA DE NOTIFICACIONES CORREGIDA ---
         function getNotificationFormData() {
             return {
                 telegram_enabled: document.getElementById('telegramEnabled').checked,
@@ -581,7 +581,8 @@
                 if (response.ok) {
                     alert('¡Configuración de notificaciones guardada con éxito!');
                 } else {
-                    alert('Error al guardar la configuración de notificaciones.');
+                    const errData = await response.json().catch(() => ({}));
+                    alert(`🔴 Error al guardar: ${errData.detail || 'Fallo en la API'}`);
                 }
             } catch (err) {
                 console.error('Error guardando notificaciones:', err);
@@ -599,9 +600,10 @@
                 });
 
                 if (response.ok) {
-                    alert('🟢 Notificación de prueba enviada. Por favor comprueba tu canal.');
+                    alert('🟢 Notificación de prueba enviada. Comprueba tu canal de Telegram.');
                 } else {
-                    alert('🔴 Error al enviar la notificación de prueba.');
+                    const errData = await response.json().catch(() => ({}));
+                    alert(`🔴 Error al enviar prueba: ${errData.detail || 'Fallo en la API'}`);
                 }
             } catch (err) {
                 console.error('Error probando notificación:', err);
