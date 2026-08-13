@@ -1,33 +1,20 @@
+version: '3.8'
+
 services:
   casaos-backup-manager:
+    build: .
     container_name: casaos-backup-manager
-    build:
-      context: .
-    image: casaos-backup-manager:latest
-
-    ports:
-      - "8088:8000"
-
-    environment:
-      TZ: Europe/Madrid
-      PYTHONUNBUFFERED: "1"
-      PYTHONPATH: /app
-      HOST_PROC: /host/proc
-      HOST_SYS: /host/sys
-
-    volumes:
-      - .:/app
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/host_root:ro
-      # Lectura de orígenes de datos de CasaOS
-      - /DATA:/DATA:ro
-      - /var/lib/casaos:/var/lib/casaos:ro
-      # Acceso completo de lectura/escritura a todos los discos externos
-      - /media:/media:rw
-      - /mnt:/mnt:rw
-      # Persistencia de configuración interna del gestor
-      - ./data:/data
-
     restart: unless-stopped
+    ports:
+      - "8088:8088"
+    volumes:
+      # Acceso al socket de Docker para ejecutar DB Hooks en contenedores de apps
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Acceso a los datos de aplicaciones de CasaOS
+      - /DATA:/DATA
+      # Acceso a unidades y discos externos de backup
+      - /media:/media
+      - /mnt:/mnt
+    environment:
+      - TZ=Europe/Madrid
+      - PYTHONUNBUFFERED=1

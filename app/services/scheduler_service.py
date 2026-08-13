@@ -1,77 +1,56 @@
 import logging
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from app.database.connection import SessionLocal
+from app.core.config import config_manager
+from app.services.duplicati_service import duplicati_service
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("casaos-backup")
 
-scheduler = BackgroundScheduler()
+class SchedulerService:
+    def __init__(self):
+        self.scheduler = AsyncIOScheduler()
+        self.job_id = "scheduled_disaster_recovery"
 
-def _execute_scheduled_backup(app_name: str, destination_path: str):
-    """Callback invocado automáticamente por APScheduler cuando se cumple la regla cron."""
-    from app.routers.api_executions import run_backup_task
-    from app.models.execution import ExecutionRecordModel
+    def start(self):
+        """Inicia el planificador de fondo y configura la tarea guardada."""
+        if not self.scheduler.running:
+            self.scheduler.start()
+            logger.info("[Scheduler] Planificador de tareas iniciado.")
+            self.reload_schedule()
 
-    logger.info(f"⏰ Ejecutando tarea programada automática para: {app_name}")
-    
-    db = SessionLocal()
-    try:
-        execution = ExecutionRecordModel(
-            app_name=app_name,
-            backend_type="duplicati",
-            destination_path=destination_path,
-            status="PENDING",
-            progress_percentage=0
-        )
-        db.add(execution)
-        db.commit()
-        db.refresh(execution)
+    def reload_schedule(self):
+        """Recarga la programación desde la configuración guardada."""
+        config = config_manager.config
+        
+        # Eliminar trabajo previo si existe
+        if self.scheduler.get_job(self.job_id):
+            self.scheduler.remove_job(self.job_id)
 
-        # Ejecución del worker
-        run_backup_task(
-            execution_id=execution.id,
-            app_name=app_name,
-            destination_path=destination_path,
-            db=db
-        )
-    except Exception as e:
-        logger.error(f"Error al ejecutar backup programado de {app_name}: {e}")
-    finally:
-        db.close()
+        try:
+            time_parts = config.schedule_time.split(":")
+            hour = int(time_parts[0])
+            minute = int(time_parts[1]) if len(time_parts) > 1 else 0
 
+            trigger = None
+            if config.schedule_frequency == "daily":
+                trigger = CronTrigger(hour=hour, minute=minute)
+            elif config.schedule_frequency == "weekly":
+                trigger = CronTrigger(day_of_week="sun", hour=hour, minute=minute)
 
-def start_scheduler():
-    """Inicia el motor APScheduler si no estaba activo."""
-    if not scheduler.running:
-        scheduler.start()
-        logger.info("🚀 APScheduler iniciado correctamente.")
+            if trigger:
+                self.scheduler.add_job(
+                    func=duplicati_service.run_full_disaster_recovery,
+                    trigger=trigger,
+                    id=self.job_id,
+                    replace_existing=True
+                )
+                logger.info(f"[Scheduler] Backup automático programado ({config.schedule_frequency}) a las {config.schedule_time}")
+        except Exception as e:
+            logger.error(f"[Scheduler] Error al programar la tarea: {e}")
 
+    def stop(self):
+        if self.scheduler.running:
+            self.scheduler.shutdown()
+            logger.info("[Scheduler] Planificador detenido.")
 
-def stop_scheduler():
-    """Detiene el motor APScheduler."""
-    if scheduler.running:
-        scheduler.shutdown()
-        logger.info("🛑 APScheduler detenido.")
-
-
-def add_cron_job(job_id: str, app_name: str, cron_expression: str, destination_path: str):
-    """Añade o reemplaza un trabajo Cron en el motor de agendamiento."""
-    try:
-        trigger = CronTrigger.from_crontab(cron_expression)
-        scheduler.add_job(
-            _execute_scheduled_backup,
-            trigger=trigger,
-            id=job_id,
-            args=[app_name, destination_path],
-            replace_existing=True
-        )
-        logger.info(f"📅 Tarea agregada a APScheduler: [{job_id}] {app_name} con regla '{cron_expression}'")
-    except Exception as e:
-        logger.error(f"Error parseando expresión cron '{cron_expression}': {e}")
-
-
-def remove_cron_job(job_id: str):
-    """Elimina un trabajo programado del motor."""
-    if scheduler.get_job(job_id):
-        scheduler.remove_job(job_id)
-        logger.info(f"🗑️ Tarea eliminada de APScheduler: [{job_id}]")
+scheduler_service = SchedulerService()
