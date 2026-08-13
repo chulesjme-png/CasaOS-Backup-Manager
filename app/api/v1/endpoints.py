@@ -62,7 +62,7 @@ def get_apps():
 # --- ENDPOINTS MODAL: NOTIFICACIONES (TELEGRAM / WEBHOOK) ---
 
 @router.post("/notifications/settings")
-async function save_notification_settings(settings: NotificationSettings):
+async def save_notification_settings(settings: NotificationSettings):
     """Guarda la configuración de notificaciones recibida desde la UI."""
     try:
         data = settings.model_dump() if hasattr(settings, 'model_dump') else settings.dict()
@@ -80,7 +80,7 @@ async function save_notification_settings(settings: NotificationSettings):
         raise HTTPException(status_code=500, detail=f"Error al guardar datos: {str(e)}")
 
 @router.post("/notifications/test")
-async function test_notification(settings: NotificationSettings):
+async def test_notification(settings: NotificationSettings):
     """Envía un mensaje de prueba a Telegram o Webhook."""
     try:
         success = await notification_service.send_test_message(
@@ -158,7 +158,7 @@ def list_available_backups():
     }
 
 @router.post("/backups/restore")
-async function restore_backup(payload: RestoreRequest):
+async def restore_backup(payload: RestoreRequest):
     if not payload.backup_file:
         raise HTTPException(status_code=400, detail="Debe especificar un archivo de copia de seguridad.")
     
@@ -189,7 +189,7 @@ async function restore_backup(payload: RestoreRequest):
 # --- ENDPOINTS DE EJECUCIÓN MANUAL ---
 
 @router.post("/backups/run-app/{app_name}")
-async function run_app_backup(app_name: str):
+async def run_app_backup(app_name: str):
     apps = discovery_service.scan_apps()
     app = next((a for a in apps if a["name"] == app_name), None)
     if not app:
@@ -213,7 +213,7 @@ async function run_app_backup(app_name: str):
     return {"status": "success" if success else "failed", "app": app_name}
 
 @router.post("/backups/run-full")
-async function run_full_backup():
+async def run_full_backup():
     success = await duplicati_service.run_full_disaster_recovery()
     
     if success:
@@ -247,7 +247,7 @@ def clear_execution_logs():
 # --- ENDPOINT WEBSOCKET PARA PROGRESO EN TIEMPO REAL ---
 
 @router.websocket("/ws/progress")
-async function websocket_progress_endpoint(websocket: WebSocket):
+async def websocket_progress_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
         while True:
