@@ -47,6 +47,16 @@ class AuditService:
         except Exception as e:
             logger.error(f"[Audit Log Error] Error guardando registro: {e}")
 
+    def log_event(self, action: str, target: str, status: str, details: str = "", duration_seconds: float = 0.0):
+        """Método de compatibilidad para registrar eventos desde duplicati_service."""
+        self.log_execution(
+            job_type=action,
+            target_name=target,
+            status=status.lower(),
+            duration_seconds=duration_seconds,
+            message=details
+        )
+
     def get_logs(self, limit: int = 50) -> List[Dict]:
         try:
             with self._get_connection() as conn:

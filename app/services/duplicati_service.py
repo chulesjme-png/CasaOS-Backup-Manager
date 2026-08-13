@@ -3,6 +3,7 @@ import tarfile
 import logging
 import asyncio
 import docker
+import time
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
@@ -81,6 +82,7 @@ class BackupRestoreService:
 
     async def run_app_backup(self, app_name: str, app_path: str) -> bool:
         """Ejecuta copia de seguridad individual para una aplicación."""
+        start_time = time.time()
         target_disk = config_manager.config.selected_target_disk
         dest_dir = os.path.join(target_disk, "Backups", "Apps", app_name)
         os.makedirs(dest_dir, exist_ok=True)
@@ -94,20 +96,37 @@ class BackupRestoreService:
                 if os.path.exists(app_path):
                     tar.add(app_path, arcname=os.path.basename(app_path))
 
+            duration = time.time() - start_time
             logger.info(f"Backup exitoso para {app_name}: {backup_path}")
-            audit_service.log_event("BACKUP", app_name, "SUCCESS", f"Guardado en {backup_path}")
-            await notification_service.send_notification(
-                f"Copia Exitosa: {app_name}",
-                f"La copia de seguridad para la aplicación <b>{app_name}</b> se ha completado correctamente."
-            )
+
+            # Registros auxiliares protegidos
+            try:
+                audit_service.log_event("BACKUP", app_name, "SUCCESS", f"Guardado en {backup_path}", duration)
+            except Exception as e:
+                logger.warning(f"Error registrando auditoría: {e}")
+
+            try:
+                await notification_service.send_notification(
+                    f"Copia Exitosa: {app_name}",
+                    f"La copia de seguridad para la aplicación <b>{app_name}</b> se ha completado correctamente."
+                )
+            except Exception as e:
+                logger.warning(f"Error enviando notificación: {e}")
+
             return True
+
         except Exception as e:
+            duration = time.time() - start_time
             logger.error(f"Error creando backup para {app_name}: {e}")
-            audit_service.log_event("BACKUP", app_name, "FAILED", str(e))
+            try:
+                audit_service.log_event("BACKUP", app_name, "FAILED", str(e), duration)
+            except Exception:
+                pass
             return False
 
     async def run_full_disaster_recovery(self) -> bool:
         """Ejecuta el respaldo programado Disaster Recovery de todo el sistema."""
+        start_time = time.time()
         logger.info("Iniciando tarea de Disaster Recovery...")
         target_disk = config_manager.config.selected_target_disk
         dest_dir = os.path.join(target_disk, "Backups", "DisasterRecovery")
@@ -122,20 +141,36 @@ class BackupRestoreService:
                 with tarfile.open(backup_path, "w:gz") as tar:
                     tar.add(appdata_dir, arcname="AppData")
 
+            duration = time.time() - start_time
             logger.info("Disaster Recovery completado con éxito.")
-            audit_service.log_event("DISASTER_RECOVERY", "ALL", "SUCCESS", f"Guardado en {backup_path}")
-            await notification_service.send_notification(
-                "Disaster Recovery Completado",
-                "El respaldo completo del sistema se ha ejecutado exitosamente."
-            )
+
+            try:
+                audit_service.log_event("DISASTER_RECOVERY", "ALL", "SUCCESS", f"Guardado en {backup_path}", duration)
+            except Exception as e:
+                logger.warning(f"Error registrando auditoría: {e}")
+
+            try:
+                await notification_service.send_notification(
+                    "Disaster Recovery Completado",
+                    "El respaldo completo del sistema se ha ejecutado exitosamente."
+                )
+            except Exception as e:
+                logger.warning(f"Error enviando notificación: {e}")
+
             return True
+
         except Exception as e:
+            duration = time.time() - start_time
             logger.error(f"Error en Disaster Recovery: {e}")
-            audit_service.log_event("DISASTER_RECOVERY", "ALL", "FAILED", str(e))
+            try:
+                audit_service.log_event("DISASTER_RECOVERY", "ALL", "FAILED", str(e), duration)
+            except Exception:
+                pass
             return False
 
     async def restore_backup(self, backup_file: str, target_app: str = "all") -> bool:
         """Ejecuta la restauración automatizada '1-Click'."""
+        start_time = time.time()
         target_disk = config_manager.config.selected_target_disk
         full_backup_path = backup_file if os.path.isabs(backup_file) else os.path.join(target_disk, backup_file)
 
@@ -188,18 +223,35 @@ class BackupRestoreService:
             await self._broadcast_status(success_msg, 100, "success")
             logger.info(success_msg)
 
-            audit_service.log_event("RESTORE", app_name, "SUCCESS", f"Restaurado desde {backup_file}")
-            await notification_service.send_notification(
-                f"Restauración Completada: {app_name}",
-                f"La aplicación <b>{app_name}</b> se ha restaurado correctamente desde la copia de seguridad."
-            )
+            duration = time.time() - start_time
+
+            # Registros auxiliares protegidos
+            try:
+                audit_service.log_event("RESTORE", app_name, "SUCCESS", f"Restaurado desde {backup_file}", duration)
+            except Exception as e:
+                logger.warning(f"Error registrando auditoría: {e}")
+
+            try:
+                await notification_service.send_notification(
+                    f"Restauración Completada: {app_name}",
+                    f"La aplicación <b>{app_name}</b> se ha restaurado correctamente desde la copia de seguridad."
+                )
+            except Exception as e:
+                logger.warning(f"Error enviando notificación: {e}")
+
             return True
 
         except Exception as e:
+            duration = time.time() - start_time
             err_msg = f"Fallo durante la restauración: {str(e)}"
             logger.error(err_msg)
             await self._broadcast_status(err_msg, 0, "error")
-            audit_service.log_event("RESTORE", target_app, "FAILED", str(e))
+
+            try:
+                audit_service.log_event("RESTORE", target_app, "FAILED", str(e), duration)
+            except Exception:
+                pass
+
             return False
 
 duplicati_service = BackupRestoreService()
