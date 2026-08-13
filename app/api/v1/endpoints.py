@@ -84,24 +84,26 @@ def update_schedule(payload: ScheduleUpdateRequest):
 
 @router.get("/backups/list")
 def list_available_backups():
-    """Explora el disco destino actualmente configurado en busca de archivos de copia de seguridad."""
+    """Explora recursivamente el disco destino en busca de archivos de copia de seguridad."""
     target_disk = config_manager.config.selected_target_disk
     if not target_disk or not os.path.exists(target_disk):
         return {"target_disk": target_disk, "backups": []}
 
     backups = []
     try:
-        # Se listan archivos .tar.gz o directorios de backup en la raíz del disco destino
-        for file in os.listdir(target_disk):
-            if file.endswith(".tar.gz") or "backup" in file.lower():
-                file_path = os.path.join(target_disk, file)
-                stats = os.stat(file_path)
-                backups.append({
-                    "filename": file,
-                    "path": file_path,
-                    "size_mb": round(stats.st_size / (1024 * 1024), 2),
-                    "created_at": stats.st_mtime
-                })
+        # Exploración recursiva para detectar backups dentro de subdirectorios
+        for root, _, files in os.walk(target_disk):
+            for file in files:
+                if file.endswith(".tar.gz") or file.endswith(".zip") or "backup" in file.lower():
+                    file_path = os.path.join(root, file)
+                    stats = os.stat(file_path)
+                    rel_path = os.path.relpath(file_path, target_disk)
+                    backups.append({
+                        "filename": rel_path,
+                        "path": file_path,
+                        "size_mb": round(stats.st_size / (1024 * 1024), 2),
+                        "created_at": stats.st_mtime
+                    })
     except Exception as e:
         logger.error(f"Error listando archivos de backup en {target_disk}: {e}")
 
@@ -112,17 +114,19 @@ def list_available_backups():
 
 @router.post("/backups/restore")
 async def restore_backup(payload: RestoreRequest):
-    """Ejecuta el proceso de restauración."""
+    """Ejecuta el proceso de restauración real delegando al servicio."""
     if not payload.backup_file:
         raise HTTPException(status_code=400, detail="Debe especificar un archivo de copia de seguridad.")
     
     try:
-        # Lógica delegada al servicio de backup/duplicati
-        # success = await duplicati_service.restore(payload.backup_file, payload.target_app)
-        return {
-            "status": "success",
-            "message": f"Restauración iniciada para '{payload.backup_file}' (App: {payload.target_app})"
-        }
+        success = await duplicati_service.restore_backup(payload.backup_file, payload.target_app or "all")
+        if success:
+            return {
+                "status": "success",
+                "message": f"Restauración completada con éxito para '{payload.backup_file}'."
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Ocurrió un error al procesar el archivo de restauración.")
     except Exception as e:
         logger.error(f"Error en restauración: {e}")
         raise HTTPException(status_code=500, detail=str(e))
