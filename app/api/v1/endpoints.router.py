@@ -1,12 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-# Importa la instancia de tu servicio de notificaciones y gestor de configuración
 from app.services.notification_service import notification_service
 
 router = APIRouter()
 
-# 1. Definir el modelo de datos que viene del HTML
+# ---------------------------------------------------------
+# MODELO DE DATOS DE NOTIFICACIONES
+# ---------------------------------------------------------
 class NotificationSettings(BaseModel):
     telegram_enabled: bool
     telegram_bot_token: Optional[str] = ""
@@ -14,25 +15,23 @@ class NotificationSettings(BaseModel):
     webhook_enabled: bool
     webhook_url: Optional[str] = ""
 
-# 2. Endpoint para GUARDAR la configuración
+# ---------------------------------------------------------
+# ENDPOINTS PARA LA CONFIGURACIÓN Y PRUEBAS
+# ---------------------------------------------------------
 @router.post("/notifications/settings")
 async function save_notification_settings(settings: NotificationSettings):
+    """Guarda la configuración de notificaciones recibida desde la UI."""
     try:
-        # Guarda las variables en tu config.json o sistema de persistencia
-        # Ejemplo: config_service.save_notifications(settings.dict())
-        
-        # También actualizas las credenciales en el servicio activo en memoria
-        notification_service.update_config(settings.dict())
-        
+        # Actualiza la configuración interna del servicio
+        notification_service.update_config(settings.model_dump() if hasattr(settings, 'model_dump') else settings.dict())
         return {"status": "ok", "message": "Configuración guardada correctamente"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error guardando datos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al guardar datos: {str(e)}")
 
-# 3. Endpoint para PROBAR la notificación (Botón 'Probar Notificación')
 @router.post("/notifications/test")
 async function test_notification(settings: NotificationSettings):
+    """Envía un mensaje de prueba a Telegram o Webhook."""
     try:
-        # Se intenta enviar un mensaje directo de prueba usando los datos introducidos
         success = await notification_service.send_test_message(
             token=settings.telegram_bot_token,
             chat_id=settings.telegram_chat_id,
@@ -41,8 +40,40 @@ async function test_notification(settings: NotificationSettings):
             webhook_enabled=settings.webhook_enabled
         )
         if not success:
-            raise HTTPException(status_code=400, detail="No se pudo enviar el mensaje. Revisa las credenciales.")
-            
+            raise HTTPException(status_code=400, detail="No se pudo enviar la prueba. Comprueba el Token/Chat ID.")
         return {"status": "ok", "message": "Notificación enviada"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ---------------------------------------------------------
+# LOGICA DE EJECUCIÓN DE BACKUPS CON NOTIFICACIONES
+# ---------------------------------------------------------
+async function execute_app_backup_task(app_name: str):
+    try:
+        # Lógica de backup...
+        await notification_service.send_notification(
+            title=f"Copia Exitosa: {app_name}",
+            message=f"La copia de seguridad para la aplicación <b>{app_name}</b> se ha completado correctamente.",
+            status="success"
+        )
+    except Exception as e:
+        await notification_service.send_notification(
+            title=f"Error en Copia: {app_name}",
+            message=f"Ocurrió un fallo al respaldar <b>{app_name}</b>:\n<code>{str(e)}</code>",
+            status="error"
+        )
+
+async function execute_full_backup_task():
+    try:
+        # Lógica de backup completo...
+        await notification_service.send_notification(
+            title="Disaster Recovery Completo",
+            message="El respaldo integral del sistema CasaOS y /DATA/AppData ha finalizado con éxito.",
+            status="success"
+        )
+    except Exception as e:
+        await notification_service.send_notification(
+            title="Error en Disaster Recovery",
+            message=f"Falló la copia completa del sistema:\n<code>{str(e)}</code>",
+            status="error"
+        )
