@@ -238,13 +238,13 @@
         </div>
     </div>
 
-    <!-- CONTENEDOR DE TOASTS (NOTIFICACIÓN FLOTANTE ELEGANTE) -->
+    <!-- CONTENEDOR DE TOASTS (NOTIFICACIÓN FLOTANTE) -->
     <div class="toast-container position-fixed bottom-0 end-0 p-4" style="z-index: 1100;">
-        <div id="wsToast" class="toast text-bg-primary border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+        <div id="wsToast" class="toast text-bg-primary border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
             <div class="toast-body p-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="d-flex align-items-center gap-2">
-                        <div class="spinner-border spinner-border-sm text-light" role="status"></div>
+                        <div id="ws-spinner" class="spinner-border spinner-border-sm text-light" role="status"></div>
                         <span id="ws-job-title" class="fw-bold text-white small text-truncate" style="max-width: 180px;">Procesando...</span>
                     </div>
                     <span id="ws-progress-percent" class="badge bg-light text-primary rounded-pill">0%</span>
@@ -388,8 +388,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        // WEBSOCKET DE PROGRESO DE COPIAS
         let progressSocket = null;
+        let toastTimeout = null;
 
         function initProgressWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -397,18 +397,12 @@
 
             progressSocket = new WebSocket(wsUrl);
 
-            progressSocket.onopen = () => console.log("🟢 [WebSocket] Conectado.");
-
             progressSocket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     if (data && (data.percentage !== undefined || data.percent !== undefined)) {
                         const pct = data.percentage !== undefined ? data.percentage : data.percent;
-                        
-                        // Actualiza la barra flotante (General)
                         updateFloatingProgressUI(data.job_id || 'backup', pct, data.message || '');
-                        
-                        // Actualiza la barra en línea (Específica de la App o Sistema)
                         updateInlineProgressUI(data.job_id || 'backup', pct, data.message || '');
                     }
                 } catch (e) {}
@@ -417,15 +411,15 @@
             progressSocket.onclose = () => setTimeout(initProgressWebSocket, 3000);
         }
 
-        // USO DEL TOAST DE BOOTSTRAP PARA LA BARRA FLOTANTE
         function updateFloatingProgressUI(jobId, percentage, message) {
             const toastEl = document.getElementById('wsToast');
-            const toast = bootstrap.Toast.getOrCreateInstance(toastEl);
+            const toast = bootstrap.Toast.getOrCreateInstance(toastEl, { autohide: false });
             
             const bar = document.getElementById('ws-progress-bar');
             const percentBadge = document.getElementById('ws-progress-percent');
             const msgEl = document.getElementById('ws-progress-message');
             const titleEl = document.getElementById('ws-job-title');
+            const spinner = document.getElementById('ws-spinner');
 
             toast.show();
             titleEl.innerText = jobId.includes('disaster') ? 'Disaster Recovery' : `Copia: ${jobId.replace('backup_', '')}`;
@@ -434,13 +428,27 @@
             percentBadge.innerText = `${percentage}%`;
             msgEl.innerText = message;
 
+            if (toastTimeout) clearTimeout(toastTimeout);
+
             if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
-                setTimeout(() => toast.hide(), 4000);
+                spinner.classList.add('d-none');
+                if (percentage === 100) {
+                    bar.classList.replace('bg-white', 'bg-success');
+                } else {
+                    bar.classList.replace('bg-white', 'bg-danger');
+                }
+                toastTimeout = setTimeout(() => {
+                    toast.hide();
+                    spinner.classList.remove('d-none');
+                    bar.classList.replace('bg-success', 'bg-white');
+                    bar.classList.replace('bg-danger', 'bg-white');
+                }, 3500);
+            } else {
+                spinner.classList.remove('d-none');
             }
         }
 
         function updateInlineProgressUI(jobId, percentage, message) {
-            // El jobId normalmente es "backup_nombreapp" o "backup_disaster_recovery"
             const suffix = jobId.replace('backup_', ''); 
             const container = document.getElementById(`progress-container-${suffix}`);
             const bar = document.getElementById(`bar-${suffix}`);
@@ -453,7 +461,6 @@
                 pctText.innerText = `${percentage}%`;
                 msgText.innerText = message;
 
-                // Color en caso de error
                 if (percentage === 0 && message.toLowerCase().includes('error')) {
                     bar.classList.replace('bg-primary', 'bg-danger');
                     pctText.classList.replace('text-primary', 'text-danger');
@@ -465,7 +472,6 @@
                 if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
                     setTimeout(() => {
                         container.classList.add('d-none');
-                        // Resetear estilos para futuras ejecuciones
                         bar.classList.remove('bg-success', 'bg-danger');
                         bar.classList.add('bg-primary');
                         pctText.classList.remove('text-success', 'text-danger');
@@ -475,7 +481,7 @@
             }
         }
 
-        // CARGAR HISTORIAL AL ABRIR EL MODAL
+        // CARGAR HISTORIAL CORRECTAMENTE MAPEADO
         document.getElementById('modalLogs').addEventListener('show.bs.modal', async () => {
             const tbody = document.getElementById('logsTableBody');
             tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Buscando registros...</td></tr>';
@@ -484,21 +490,21 @@
                 const logs = await res.json();
                 tbody.innerHTML = '';
                 
-                if (logs.length === 0) {
+                if (!logs || logs.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">El historial está vacío.</td></tr>';
                     return;
                 }
                 
                 logs.forEach(log => {
-                    let fecha = isNaN(log.timestamp) ? log.timestamp : new Date(log.timestamp * 1000).toLocaleString();
-                    let color = log.status.toLowerCase() === 'success' ? 'bg-success' : 'bg-danger';
+                    let fecha = (log.timestamp && !isNaN(log.timestamp)) ? new Date(log.timestamp * 1000).toLocaleString() : (log.timestamp || 'Fecha desconocida');
+                    let statusClass = (log.status && log.status.toLowerCase() === 'success') ? 'bg-success' : 'bg-danger';
                     
                     tbody.innerHTML += `<tr>
                         <td class="text-nowrap">${fecha}</td>
-                        <td class="fw-semibold">${log.type}</td>
-                        <td><code>${log.target}</code></td>
-                        <td><span class="badge ${color}">${log.status}</span></td>
-                        <td>${log.duration || '0'}s</td>
+                        <td class="fw-semibold">${log.type || 'Backup'}</td>
+                        <td><code>${log.target || 'Sistema'}</code></td>
+                        <td><span class="badge ${statusClass}">${log.status || 'success'}</span></td>
+                        <td>${log.duration || '0s'}</td>
                     </tr>`;
                 });
             } catch (err) {
@@ -513,7 +519,7 @@
             }
         }
 
-        // CARGAR COPIAS AL ABRIR EL MODAL RESTAURAR
+        // CARGAR COPIAS DESDE EL DISCO MONTADO
         document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
             const list = document.getElementById('restoreBackupsList');
             list.innerHTML = '<div class="p-4 text-center text-muted">Buscando copias en el disco destino...</div>';
@@ -523,12 +529,12 @@
                 list.innerHTML = '';
                 
                 if (!data.backups || data.backups.length === 0) {
-                    list.innerHTML = '<div class="p-4 text-center text-muted">No se han encontrado copias de seguridad (.tar.gz) en el disco seleccionado.</div>';
+                    list.innerHTML = '<div class="p-4 text-center text-muted">No se han encontrado copias de seguridad en el disco seleccionado.</div>';
                     return;
                 }
                 
                 data.backups.forEach(b => {
-                    let fecha = new Date(b.created_at * 1000).toLocaleString();
+                    let fecha = (b.created_at && !isNaN(b.created_at)) ? new Date(b.created_at * 1000).toLocaleString() : 'Reciente';
                     list.innerHTML += `
                         <div class="list-group-item d-flex justify-content-between align-items-center py-3">
                             <div>
@@ -546,9 +552,9 @@
         });
 
         async function triggerRestore(filename) {
-            if (confirm(`¿Estás seguro de que deseas restaurar la copia: ${filename}?\n\nEsto sobrescribirá los datos actuales.`)) {
+            if (confirm(`¿Estás seguro de que deseas restaurar la copia: ${filename}?`)) {
                 bootstrap.Modal.getInstance(document.getElementById('modalRestore')).hide();
-                updateFloatingProgressUI('Restauración', 10, `Iniciando despliegue de ${filename}...`);
+                updateFloatingProgressUI('Restauración', 10, `Iniciando despliegue...`);
                 try {
                     await fetch('/api/v1/backups/restore', { 
                         method: 'POST', 
@@ -559,7 +565,6 @@
             }
         }
 
-        // GUARDAR NOTIFICACIONES Y FORZAR RECARGA
         async function saveNotificationSettings() {
             const btn = document.getElementById('btnSaveNotif');
             btn.disabled = true;
@@ -584,7 +589,6 @@
                     const modalEl = document.getElementById('modalSettings');
                     const modalInstance = bootstrap.Modal.getInstance(modalEl);
                     if (modalInstance) modalInstance.hide();
-                    
                     window.location.reload();
                 } else {
                     const err = await response.json();
@@ -622,28 +626,19 @@
             }
         }
 
-        // ACCIONES DE COPIA (LLAMADAS ASÍNCRONAS AL BACKEND)
         async function triggerAppBackup(appName) {
-            updateInlineProgressUI(`backup_${appName}`, 5, `Iniciando petición al servidor...`);
+            updateInlineProgressUI(`backup_${appName}`, 5, `Iniciando petición...`);
             try {
-                const res = await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
-                if (!res.ok) throw new Error('Falló la petición HTTP');
-            } catch (err) { 
-                console.error(err);
-                updateInlineProgressUI(`backup_${appName}`, 0, `Error de conexión`);
-            }
+                await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
+            } catch (err) { console.error(err); }
         }
 
         async function triggerFullBackup() {
             if (confirm('¿Iniciar copia de seguridad completa del sistema?')) {
-                updateInlineProgressUI('backup_disaster_recovery', 5, 'Iniciando petición al servidor...');
+                updateInlineProgressUI('backup_disaster_recovery', 5, 'Iniciando petición...');
                 try {
-                    const res = await fetch('/api/v1/backups/run-full', { method: 'POST' });
-                    if (!res.ok) throw new Error('Falló la petición HTTP');
-                } catch (err) { 
-                    console.error(err);
-                    updateInlineProgressUI('backup_disaster_recovery', 0, 'Error de conexión');
-                }
+                    await fetch('/api/v1/backups/run-full', { method: 'POST' });
+                } catch (err) { console.error(err); }
             }
         }
 
