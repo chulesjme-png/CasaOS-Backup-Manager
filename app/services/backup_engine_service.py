@@ -6,6 +6,8 @@ de restauraciones "1-Click" (parada de contenedor, descompresión, arranque y no
 """
 
 import os
+import json
+import asyncio
 import tarfile
 import zipfile
 import logging
@@ -41,6 +43,28 @@ class BackupEngineService:
         except Exception as e:
             logger.warning(f"[BackupEngineService] No se pudo inicializar cliente Docker: {e}")
             self.docker_client = None
+
+    async def _broadcast_ws(self, data: Dict[str, Any]) -> None:
+        """
+        Envia actualizaciones de progreso por WebSocket de forma ultra-segura,
+        soportando tanto broadcast_json como broadcast con texto JSON.
+        """
+        try:
+            if hasattr(ws_manager, "broadcast_json"):
+                fn = getattr(ws_manager, "broadcast_json")
+                if asyncio.iscoroutinefunction(fn):
+                    await fn(data)
+                else:
+                    fn(data)
+            elif hasattr(ws_manager, "broadcast"):
+                fn = getattr(ws_manager, "broadcast")
+                msg = json.dumps(data)
+                if asyncio.iscoroutinefunction(fn):
+                    await fn(msg)
+                else:
+                    fn(msg)
+        except Exception as e:
+            logger.warning(f"[WebSocket] No se pudo transmitir evento de progreso: {e}")
 
     def prepare(
         self,
@@ -82,7 +106,7 @@ class BackupEngineService:
                         if c.status == "running":
                             was_running = True
                             logger.info(f"[Restore] Deteniendo contenedor '{app_name}'...")
-                            await ws_manager.broadcast_json({
+                            await self._broadcast_ws({
                                 "type": "restore_progress",
                                 "app": app_name,
                                 "status": f"Deteniendo contenedor {app_name}..."
@@ -94,7 +118,7 @@ class BackupEngineService:
 
         # --- FASE 2: Descompresión/Restauración ---
         logger.info(f"[Restore] Restaurando archivo {archive_path} en {dest_dir}...")
-        await ws_manager.broadcast_json({
+        await self._broadcast_ws({
             "type": "restore_progress",
             "app": app_name,
             "status": "Descomprimiendo archivos..."
@@ -123,7 +147,7 @@ class BackupEngineService:
         if container_obj and was_running:
             try:
                 logger.info(f"[Restore] Reiniciando contenedor '{app_name}'...")
-                await ws_manager.broadcast_json({
+                await self._broadcast_ws({
                     "type": "restore_progress",
                     "app": app_name,
                     "status": f"Iniciando contenedor {app_name}..."
@@ -136,7 +160,7 @@ class BackupEngineService:
         msg = f"Restauración completada con éxito para '{app_name}' en {dest_dir}"
         logger.info(f"[Restore] {msg}")
 
-        await ws_manager.broadcast_json({
+        await self._broadcast_ws({
             "type": "restore_complete",
             "app": app_name,
             "status": "COMPLETED",
@@ -145,9 +169,13 @@ class BackupEngineService:
 
         if hasattr(notification_service, "send_telegram"):
             try:
-                await notification_service.send_telegram(f"✅ *Restauración Exitosa*\n*App:* `{app_name}`\n*Origen:* `{archive_path.name}`")
-            except Exception:
-                pass
+                res = notification_service.send_telegram(
+                    f"✅ *Restauración Exitosa*\n*App:* `{app_name}`\n*Origen:* `{archive_path.name}`"
+                )
+                if asyncio.iscoroutine(res):
+                    await res
+            except Exception as e:
+                logger.warning(f"[Telegram] Error enviando notificación: {e}")
 
         return {
             "status": "SUCCESS",
