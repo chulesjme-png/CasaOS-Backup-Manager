@@ -1,6 +1,8 @@
 import os
+import time
 import logging
 import asyncio
+from datetime import datetime
 from typing import List, Dict, Optional, Union
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -35,14 +37,49 @@ class NotificationSettings(BaseModel):
     webhook_url: Optional[str] = ""
 
 
+# --- HELPER DE AUDITORÍA Y HISTORIAL ---
+
+def _record_audit_log(job_type: str, target: str, status: str, duration: str):
+    """
+    Registra un evento en el servicio de auditoría de forma agnóstica a su implementación.
+    """
+    now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    log_entry = {
+        "timestamp": now_str,
+        "type": job_type,
+        "target": target,
+        "status": status,  # "success" o "failed"
+        "duration": duration
+    }
+    
+    # Intenta invocar el método de registro disponible en audit_service
+    for method_name in ["add_log", "log_event", "log_action", "log", "record_log"]:
+        if hasattr(audit_service, method_name):
+            try:
+                getattr(audit_service, method_name)(log_entry)
+                logger.info(f"[Audit] Registro añadido al historial: {target} ({status})")
+                return
+            except TypeError:
+                try:
+                    getattr(audit_service, method_name)(
+                        type=job_type, target=target, status=status, duration=duration
+                    )
+                    return
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.warning(f"[Audit] Error registrando auditoría con {method_name}: {e}")
+
+    # Fallback si audit_service almacena una lista 'logs' directamente
+    if hasattr(audit_service, "logs") and isinstance(audit_service.logs, list):
+        audit_service.logs.append(log_entry)
+        logger.info(f"[Audit] Registro guardado en lista de auditoría: {target}")
+
+
 # --- CONFIGURACIÓN & ESTADO ---
 
 @router.get("/config", response_model=AppConfig)
 def get_config():
-    """
-    Devuelve la configuración actual. Si no hay disco seleccionado,
-    resuelve automáticamente el primer disco del sistema disponible.
-    """
     if not config_manager.config.selected_target_disk:
         try:
             disks = disk_service.get_system_disks()
@@ -75,16 +112,11 @@ def get_apps():
     return discovery_service.scan_apps()
 
 
-# --- NOTIFICACIONES (SINCRO Y MANEJO DE TIPOS SEGURO) ---
+# --- NOTIFICACIONES ---
 
 @router.post("/notifications/settings")
 async def save_notification_settings(settings: Union[NotificationSettings, Dict]):
-    """
-    Guarda la configuración de notificaciones y sincroniza el servicio 
-    de forma compatible con diccionarios y modelos Pydantic.
-    """
     try:
-        # 1. Normalización del payload entrante
         if hasattr(settings, 'model_dump'):
             data = settings.model_dump()
         elif hasattr(settings, 'dict'):
@@ -94,17 +126,14 @@ async def save_notification_settings(settings: Union[NotificationSettings, Dict]
         else:
             data = dict(settings)
 
-        # 2. Actualización de valores en ConfigManager
         for key, value in data.items():
             str_value = str(value) if isinstance(value, bool) else (value or "")
             config_manager.update_key(key, str_value)
             if hasattr(config_manager.config, key):
                 setattr(config_manager.config, key, value)
 
-        # 3. Persistencia en disco
         config_manager.save_config()
 
-        # 4. Sincronización con notification_service (Soporte seguro Dict vs AppConfig)
         if hasattr(config_manager.config, "model_dump"):
             cfg_dict = config_manager.config.model_dump()
         elif hasattr(config_manager.config, "dict"):
@@ -115,10 +144,9 @@ async def save_notification_settings(settings: Union[NotificationSettings, Dict]
         try:
             notification_service.update_config(cfg_dict)
         except Exception:
-            # Fallback en caso de que notification_service espere el objeto AppConfig directamente
             notification_service.update_config(config_manager.config)
         
-        logger.info("[Backend] Configuración de notificaciones y alertas guardada con éxito.")
+        logger.info("[Backend] Configuración de notificaciones guardada con éxito.")
         return {"status": "ok", "message": "Configuración guardada correctamente"}
 
     except Exception as e:
@@ -143,9 +171,10 @@ async def test_notification(settings: NotificationSettings):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- TAREAS DE RESPALDO (ASÍNCRONAS Y NO BLOQUEANTES) ---
+# --- TAREAS DE RESPALDO (ASÍNCRONAS CON REGISTRO DE HISTORIAL) ---
 
 async def task_run_app_backup(app_name: str, app_path: str):
+    start_time = time.time()
     await notification_service.send_notification(
         title=f"⏳ Inicio de Copia: {app_name}",
         message=f"Se ha iniciado la copia de seguridad de la aplicación <b>{app_name}</b>.",
@@ -163,6 +192,9 @@ async def task_run_app_backup(app_name: str, app_path: str):
     else:
         success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path)
 
+    elapsed = round(time.time() - start_time, 1)
+    duration_str = f"{elapsed}s"
+
     if success:
         await ws_manager.broadcast({
             "job_id": f"backup_{app_name}",
@@ -171,9 +203,10 @@ async def task_run_app_backup(app_name: str, app_path: str):
         })
         await notification_service.send_notification(
             title=f"✅ Copia Completada: {app_name}",
-            message=f"La aplicación <b>{app_name}</b> se ha respaldado con éxito.",
+            message=f"La aplicación <b>{app_name}</b> se ha respaldado con éxito en {duration_str}.",
             status="success"
         )
+        _record_audit_log(job_type="Backup App", target=app_name, status="success", duration=duration_str)
     else:
         await ws_manager.broadcast({
             "job_id": f"backup_{app_name}",
@@ -185,6 +218,7 @@ async def task_run_app_backup(app_name: str, app_path: str):
             message=f"Ocurrió un fallo al respaldar <b>{app_name}</b>.",
             status="error"
         )
+        _record_audit_log(job_type="Backup App", target=app_name, status="failed", duration=duration_str)
 
 @router.post("/backups/run-app/{app_name}")
 async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
@@ -197,6 +231,7 @@ async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
     return {"status": "started", "message": f"Copia de {app_name} iniciada en segundo plano."}
 
 async def task_run_full_backup():
+    start_time = time.time()
     await notification_service.send_notification(
         title="⏳ Inicio: Disaster Recovery",
         message="Se ha iniciado la copia de seguridad completa del sistema.",
@@ -214,6 +249,9 @@ async def task_run_full_backup():
     else:
         success = await asyncio.to_thread(duplicati_service.run_full_disaster_recovery)
 
+    elapsed = round(time.time() - start_time, 1)
+    duration_str = f"{elapsed}s"
+
     if success:
         await ws_manager.broadcast({
             "job_id": "backup_disaster_recovery",
@@ -222,9 +260,10 @@ async def task_run_full_backup():
         })
         await notification_service.send_notification(
             title="✅ Disaster Recovery Finalizado",
-            message="El respaldo integral del sistema se completó correctamente.",
+            message=f"El respaldo integral del sistema se completó correctamente en {duration_str}.",
             status="success"
         )
+        _record_audit_log(job_type="Disaster Recovery", target="Sistema Completo", status="success", duration=duration_str)
     else:
         await ws_manager.broadcast({
             "job_id": "backup_disaster_recovery",
@@ -236,6 +275,7 @@ async def task_run_full_backup():
             message="Falló el proceso de copia integral.",
             status="error"
         )
+        _record_audit_log(job_type="Disaster Recovery", target="Sistema Completo", status="failed", duration=duration_str)
 
 @router.post("/backups/run-full")
 async def run_full_backup(background_tasks: BackgroundTasks):
@@ -243,7 +283,7 @@ async def run_full_backup(background_tasks: BackgroundTasks):
     return {"status": "started", "message": "Disaster recovery iniciado en segundo plano."}
 
 
-# --- RESTO DE ENDPOINTS ---
+# --- RESTO DE ENDPOINTS & HISTORIAL ---
 
 @router.get("/schedules")
 def get_schedule():
@@ -295,20 +335,32 @@ def get_execution_logs():
     formatted_logs = []
     for l in logs:
         if isinstance(l, dict):
+            ts = l.get("timestamp", l.get("time", 0))
+            if isinstance(ts, (int, float)):
+                ts_str = datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M:%S")
+            else:
+                ts_str = str(ts) if ts else datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
             formatted_logs.append({
-                "timestamp": l.get("timestamp", l.get("time", 0)),
-                "type": l.get("type", l.get("action", l.get("job_type", "Backup"))),
+                "timestamp": ts_str,
+                "type": l.get("type", l.get("action", l.get("job_type", "Backup App"))),
                 "target": l.get("target", l.get("app_name", l.get("name", "Sistema"))),
                 "status": l.get("status", l.get("result", "success")),
-                "duration": l.get("duration", l.get("time_taken", "0s"))
+                "duration": str(l.get("duration", l.get("time_taken", "0s")))
             })
         else:
+            ts = getattr(l, "timestamp", getattr(l, "time", 0))
+            if isinstance(ts, (int, float)):
+                ts_str = datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M:%S")
+            else:
+                ts_str = str(ts) if ts else datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
             formatted_logs.append({
-                "timestamp": getattr(l, "timestamp", 0),
-                "type": getattr(l, "type", "Backup"),
-                "target": getattr(l, "target", "Sistema"),
-                "status": getattr(l, "status", "success"),
-                "duration": getattr(l, "duration", "0s")
+                "timestamp": ts_str,
+                "type": getattr(l, "type", getattr(l, "action", "Backup App")),
+                "target": getattr(l, "target", getattr(l, "app_name", "Sistema")),
+                "status": getattr(l, "status", getattr(l, "result", "success")),
+                "duration": str(getattr(l, "duration", "0s"))
             })
     return formatted_logs
 
