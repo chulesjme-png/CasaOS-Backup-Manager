@@ -289,23 +289,3 @@ async def save_config(data: SystemConfig):
         "message": "Configuración del sistema guardada correctamente.",
         "config": CURRENT_CONFIG
     })
-
-
-# --- EJECUCIÓN MANUAL DE BACKUPS ---
-
-@router.post("/api/v1/backups/run-full")
-async def trigger_full_backup():
-    target_path = CURRENT_CONFIG.get("default_backup_path", "/mnt/backups")
-    return JSONResponse({
-        "status": "success",
-        "message": f"Copia de Seguridad Completa iniciada hacia '{target_path}'."
-    })
-
-
-@router.post("/api/v1/backups/run-app/{app_name}")
-async def trigger_app_backup(app_name: str):
-    target_path = CURRENT_CONFIG.get("default_backup_path", "/mnt/backups")
-    return JSONResponse({
-        "status": "success",
-        "message": f"Copia de seguridad iniciada para '{app_name}' hacia '{target_path}'."
-    })

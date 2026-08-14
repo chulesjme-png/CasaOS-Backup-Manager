@@ -58,7 +58,7 @@ def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     for method_name in candidate_methods:
         if hasattr(audit_service, method_name):
             method = getattr(audit_service, method_name)
-            if callable(method):  # Evita colisión si el atributo es un objeto Logger o propiedad
+            if callable(method):
                 try:
                     try:
                         method(log_entry)
@@ -338,14 +338,12 @@ def list_available_backups():
 @router.get("/logs")
 def get_execution_logs():
     """
-    Obtiene los logs de auditoría y los sincroniza automáticamente con los 
-    archivos de copia reales del almacenamiento host para que el historial
-    refleje siempre el estado de los archivos respaldados.
+    Obtiene los logs de auditoría sin duplicidades 'Sistema'.
     """
     formatted_logs = []
-    seen_keys = set()
+    seen_targets = set()
 
-    # 1. Intentar leer registros explícitos de audit_service
+    # 1. Leer registros explícitos en memoria de audit_service
     raw_logs = []
     try:
         if hasattr(audit_service, "get_logs") and callable(getattr(audit_service, "get_logs")):
@@ -360,16 +358,20 @@ def get_execution_logs():
     for l in raw_logs:
         if isinstance(l, dict):
             ts = l.get("timestamp", l.get("time", ""))
-            target = l.get("target", l.get("app_name", l.get("name", "Sistema")))
+            target = l.get("target", l.get("app_name", l.get("name", "")))
             job_type = l.get("type", l.get("action", l.get("job_type", "Backup App")))
             status = l.get("status", l.get("result", "success"))
-            duration = str(l.get("duration", l.get("time_taken", "N/A")))
+            duration = str(l.get("duration", l.get("time_taken", "Completado")))
         else:
             ts = getattr(l, "timestamp", "")
-            target = getattr(l, "target", getattr(l, "app_name", "Sistema"))
+            target = getattr(l, "target", getattr(l, "app_name", ""))
             job_type = getattr(l, "type", getattr(l, "action", "Backup App"))
             status = getattr(l, "status", "success")
-            duration = str(getattr(l, "duration", "N/A"))
+            duration = str(getattr(l, "duration", "Completado"))
+
+        # Descartar registros vacíos o fantasma con etiqueta 'Sistema'
+        if not target or target.strip().lower() in ["sistema", "none", "n/a"]:
+            continue
 
         if isinstance(ts, (int, float)):
             ts_str = datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M:%S")
@@ -377,57 +379,51 @@ def get_execution_logs():
             ts_str = str(ts) if ts else datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
         key = f"{ts_str}_{target}"
-        seen_keys.add(key)
-        formatted_logs.append({
-            "timestamp": ts_str,
-            "type": job_type,
-            "target": target,
-            "status": status,
-            "duration": duration
-        })
+        if key not in seen_targets:
+            seen_targets.add(key)
+            formatted_logs.append({
+                "timestamp": ts_str,
+                "type": job_type,
+                "target": target,
+                "status": status,
+                "duration": duration
+            })
 
-    # 2. Sincronizar automáticamente con los archivos físicos de backup presentes en disco
+    # 2. Escanear archivos físicos reales del disco sin generar 'Sistema'
     target_disk = config_manager.config.selected_target_disk
     if target_disk and os.path.exists(target_disk):
         try:
-            search_dirs = [target_disk]
-            sub_backup_dir = os.path.join(target_disk, "casaos-backups")
-            if os.path.exists(sub_backup_dir):
-                search_dirs.append(sub_backup_dir)
-
+            search_dirs = [os.path.join(target_disk, "Backups", "Apps")]
             for d in search_dirs:
+                if not os.path.exists(d):
+                    continue
                 for root, _, files in os.walk(d):
                     for file in files:
-                        if file.endswith(".tar.gz") or file.endswith(".zip"):
+                        if file.endswith(".tar.gz"):
                             file_path = os.path.join(root, file)
                             stats = os.stat(file_path)
                             ts_str = datetime.fromtimestamp(stats.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
 
-                            fname_lower = file.lower()
-                            if "disasterrecovery" in fname_lower:
-                                job_type = "Disaster Recovery"
-                                target = "Sistema Completo"
-                            elif "pre_restore" in fname_lower:
-                                job_type = "Pre-Restauración"
-                                target = "Sistema Completo"
+                            # Extraer nombre exacto de la aplicación
+                            if "_backup" in file:
+                                app_target = file.split("_backup")[0]
                             else:
-                                job_type = "Backup App"
-                                target = file.split("_backup")[0].split(".tar")[0]
+                                app_target = os.path.basename(root)
 
-                            key = f"{ts_str}_{target}"
-                            if key not in seen_keys:
-                                seen_keys.add(key)
+                            key = f"{ts_str}_{app_target}"
+                            if key not in seen_targets and app_target.lower() != "sistema":
+                                seen_targets.add(key)
                                 formatted_logs.append({
                                     "timestamp": ts_str,
-                                    "type": job_type,
-                                    "target": target,
+                                    "type": "Backup App",
+                                    "target": app_target,
                                     "status": "success",
                                     "duration": "Completado"
                                 })
         except Exception as e:
             logger.warning(f"[Audit] Error deduciendo historial desde disco: {e}")
 
-    # Ordenar por fecha decreciente (más reciente primero)
+    # Ordenar por fecha decreciente
     formatted_logs.sort(key=lambda x: x["timestamp"], reverse=True)
     return formatted_logs
 
