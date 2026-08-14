@@ -1,11 +1,12 @@
 """
 Servicio principal del Backup Engine.
 
-Orquesta la preparación de backups y la ejecución automatizada 
-de restauraciones "1-Click" (parada de contenedor, descompresión, arranque y notificación).
+Orquesta la preparación de backups, la retención automática de archivos
+y la ejecución automatizada de restauraciones "1-Click" (parada de contenedor, descompresión, arranque y notificación).
 """
 
 import os
+import glob
 import json
 import asyncio
 import tarfile
@@ -43,6 +44,49 @@ class BackupEngineService:
         except Exception as e:
             logger.warning(f"[BackupEngineService] No se pudo inicializar cliente Docker: {e}")
             self.docker_client = None
+
+    @staticmethod
+    def apply_retention_policy(target_dir: str, prefix: str = "", max_copies: int = 3) -> None:
+        """
+        Revisa el directorio `target_dir` y conserva solo las `max_copies` más recientes (por defecto 3).
+        Elimina automáticamente los archivos .tar.gz o .zip antiguos sobrantes.
+        """
+        try:
+            if not target_dir or not os.path.exists(target_dir):
+                logger.warning(f"[Retención] El directorio objetivo '{target_dir}' no existe.")
+                return
+
+            # Buscar respaldos .tar.gz y .zip en la carpeta
+            if prefix:
+                pattern_tar = os.path.join(target_dir, f"*{prefix}*.tar.gz")
+                pattern_zip = os.path.join(target_dir, f"*{prefix}*.zip")
+            else:
+                pattern_tar = os.path.join(target_dir, "*.tar.gz")
+                pattern_zip = os.path.join(target_dir, "*.zip")
+
+            files = list(set(glob.glob(pattern_tar) + glob.glob(pattern_zip)))
+
+            # Si excedemos el número máximo de copias permitidas
+            if len(files) > max_copies:
+                # Ordenar por fecha de modificación (el más reciente primero)
+                files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+
+                files_to_delete = files[max_copies:]
+                logger.info(
+                    f"🧹 [Retención] Se encontraron {len(files)} copias en '{target_dir}' para '{prefix or 'general'}'. "
+                    f"Aplicando límite de {max_copies} copias..."
+                )
+
+                for file_path in files_to_delete:
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"🗑️ [Retención] Backup antiguo eliminado: {os.path.basename(file_path)}")
+                    except Exception as err:
+                        logger.error(f"❌ [Retención Error] No se pudo eliminar '{file_path}': {err}")
+            else:
+                logger.info(f"ℹ️ [Retención] {len(files)}/{max_copies} copias conservadas en '{target_dir}'.")
+        except Exception as e:
+            logger.error(f"❌ [Retención Error] Error aplicando política de retención: {e}")
 
     async def _broadcast_ws(self, data: Dict[str, Any]) -> None:
         """

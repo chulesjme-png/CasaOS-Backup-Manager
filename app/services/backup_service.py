@@ -5,6 +5,7 @@ import subprocess
 from datetime import datetime
 from typing import List, Dict, Any
 from app.services.profile_service import profile_service
+from app.services.backup_engine_service import backup_engine_service
 
 CONFIG_FILE = "/data/settings.json"
 DEFAULT_BACKUP_DESTINATION = "/DATA/Backups/CasaOS"
@@ -74,6 +75,16 @@ class BackupService:
 
             size_bytes = os.path.getsize(backup_path) if os.path.exists(backup_path) else 0
             size_mb = round(size_bytes / (1024 * 1024), 2)
+
+            # 3. Aplicar Política de Retención Automática (Máximo 3 copias)
+            try:
+                backup_engine_service.apply_retention_policy(
+                    target_dir=active_target,
+                    prefix=app_id,
+                    max_copies=3
+                )
+            except Exception as ret_err:
+                print(f"[WARNING] Error aplicando retención para {app_id}: {ret_err}")
 
             return {
                 "success": True,
