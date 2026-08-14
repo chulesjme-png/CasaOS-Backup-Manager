@@ -535,11 +535,24 @@
                 
                 data.backups.forEach(b => {
                     let fecha = (b.created_at && !isNaN(b.created_at)) ? new Date(b.created_at * 1000).toLocaleString() : 'Reciente';
+                    
+                    // Formateo dinámico inteligente del tamaño (KB / MB / GB)
+                    let pesoTexto = b.size_str;
+                    if (!pesoTexto) {
+                        if (b.size_mb !== undefined && b.size_mb < 0.1) {
+                            pesoTexto = `${(b.size_mb * 1024).toFixed(2)} KB`;
+                        } else if (b.size_mb !== undefined) {
+                            pesoTexto = `${b.size_mb.toFixed(2)} MB`;
+                        } else {
+                            pesoTexto = 'Tamaño desconocido';
+                        }
+                    }
+
                     list.innerHTML += `
                         <div class="list-group-item d-flex justify-content-between align-items-center py-3">
                             <div>
                                 <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
-                                <div class="small text-muted mt-1">Peso: ${b.size_mb} MB &nbsp;|&nbsp; Fecha: ${fecha}</div>
+                                <div class="small text-muted mt-1">Peso: <strong>${pesoTexto}</strong> &nbsp;|&nbsp; Fecha: ${fecha}</div>
                             </div>
                             <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore('${b.filename}')">
                                 🔄 Restaurar
