@@ -63,16 +63,20 @@ def get_apps():
 
 @router.post("/notifications/settings")
 async def save_notification_settings(settings: NotificationSettings):
-    """Guarda la configuración de notificaciones recibida desde la UI."""
+    """Guarda la configuración de notificaciones recibida desde la UI y la persiste en config.json."""
     try:
         data = settings.model_dump() if hasattr(settings, 'model_dump') else settings.dict()
         
-        # 1. Guardar persistentemente en config.json
+        # 1. Guardar cada valor en el gestor de configuración
         for key, value in data.items():
             config_manager.update_key(key, value)
             
+        # Forzar guardado persistente en disco (config.json) si el método existe
+        if hasattr(config_manager, "save_config"):
+            config_manager.save_config()
+            
         # 2. Actualizar el servicio activo en memoria
-        notification_service.update_config(data)
+        notification_service.update_config(config_manager.config)
         
         return {"status": "ok", "message": "Configuración guardada correctamente"}
     except Exception as e:
@@ -162,9 +166,21 @@ async def restore_backup(payload: RestoreRequest):
     if not payload.backup_file:
         raise HTTPException(status_code=400, detail="Debe especificar un archivo de copia de seguridad.")
     
+    app_target = payload.target_app or "all"
+    await ws_manager.broadcast({
+        "job_id": f"restore_{app_target}",
+        "percentage": 15,
+        "message": f"Iniciando restauración de {payload.backup_file}..."
+    })
+
     try:
-        success = await duplicati_service.restore_backup(payload.backup_file, payload.target_app or "all")
+        success = await duplicati_service.restore_backup(payload.backup_file, app_target)
         if success:
+            await ws_manager.broadcast({
+                "job_id": f"restore_{app_target}",
+                "percentage": 100,
+                "message": f"¡Restauración de {payload.backup_file} completada con éxito!"
+            })
             await notification_service.send_notification(
                 title="Restauración Completada",
                 message=f"Se ha restaurado correctamente el respaldo: <b>{payload.backup_file}</b>",
@@ -175,9 +191,19 @@ async def restore_backup(payload: RestoreRequest):
                 "message": f"Restauración completada con éxito para '{payload.backup_file}'."
             }
         else:
+            await ws_manager.broadcast({
+                "job_id": f"restore_{app_target}",
+                "percentage": 0,
+                "message": f"Error al restaurar {payload.backup_file}."
+            })
             raise HTTPException(status_code=500, detail="Ocurrió un error al procesar el archivo de restauración.")
     except Exception as e:
         logger.error(f"Error en restauración: {e}")
+        await ws_manager.broadcast({
+            "job_id": f"restore_{app_target}",
+            "percentage": 0,
+            "message": f"Error: {str(e)}"
+        })
         await notification_service.send_notification(
             title="Error en Restauración",
             message=f"Falló la restauración de <b>{payload.backup_file}</b>:\n<code>{str(e)}</code>",
@@ -195,15 +221,34 @@ async def run_app_backup(app_name: str):
     if not app:
         raise HTTPException(status_code=404, detail="Aplicación no encontrada")
 
+    # 1. Notificar inicio mediante WebSocket
+    await ws_manager.broadcast({
+        "job_id": f"backup_{app_name}",
+        "percentage": 15,
+        "message": f"Iniciando resguardo de {app_name}..."
+    })
+
     success = await duplicati_service.run_app_backup(app["name"], app["path"])
     
     if success:
+        # 2. Notificar finalización mediante WebSocket
+        await ws_manager.broadcast({
+            "job_id": f"backup_{app_name}",
+            "percentage": 100,
+            "message": f"¡Backup de {app_name} completado con éxito!"
+        })
         await notification_service.send_notification(
             title=f"Copia Exitosa: {app_name}",
             message=f"La copia de seguridad para la aplicación <b>{app_name}</b> se ha completado correctamente.",
             status="success"
         )
     else:
+        # Notificar fallo por WebSocket
+        await ws_manager.broadcast({
+            "job_id": f"backup_{app_name}",
+            "percentage": 0,
+            "message": f"Error durante la copia de {app_name}."
+        })
         await notification_service.send_notification(
             title=f"Error en Copia: {app_name}",
             message=f"Ocurrió un fallo al respaldar la aplicación <b>{app_name}</b>.",
@@ -214,15 +259,33 @@ async def run_app_backup(app_name: str):
 
 @router.post("/backups/run-full")
 async def run_full_backup():
+    # 1. Notificar inicio de Disaster Recovery mediante WebSocket
+    await ws_manager.broadcast({
+        "job_id": "backup_disaster_recovery",
+        "percentage": 15,
+        "message": "Iniciando Disaster Recovery completo..."
+    })
+
     success = await duplicati_service.run_full_disaster_recovery()
     
     if success:
+        # 2. Notificar finalización por WebSocket
+        await ws_manager.broadcast({
+            "job_id": "backup_disaster_recovery",
+            "percentage": 100,
+            "message": "¡Disaster Recovery completado con éxito!"
+        })
         await notification_service.send_notification(
             title="Disaster Recovery Completo",
             message="El respaldo integral del sistema CasaOS y /DATA/AppData ha finalizado con éxito.",
             status="success"
         )
     else:
+        await ws_manager.broadcast({
+            "job_id": "backup_disaster_recovery",
+            "percentage": 0,
+            "message": "Error durante la ejecución del Disaster Recovery."
+        })
         await notification_service.send_notification(
             title="Error en Disaster Recovery",
             message="Falló la copia completa del sistema CasaOS.",

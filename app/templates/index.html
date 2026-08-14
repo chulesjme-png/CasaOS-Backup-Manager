@@ -580,13 +580,14 @@
                 });
 
                 if (response.ok) {
-                    alert('¡Configuración de notificaciones guardada con éxito!');
-                    // Cerrar el modal de configuración automáticamente
+                    // Cerrar el modal de configuración
                     const settingsModalEl = document.getElementById('modalSettings');
                     if (settingsModalEl) {
                         const modalInstance = bootstrap.Modal.getInstance(settingsModalEl) || new bootstrap.Modal(settingsModalEl);
                         modalInstance.hide();
                     }
+                    // Recargar la página para cargar la nueva configuración guardada en config.json
+                    window.location.reload();
                 } else {
                     const errData = await response.json().catch(() => ({}));
                     alert(`🔴 Error al guardar: ${errData.detail || 'Fallo en la API'}`);
@@ -669,11 +670,15 @@
         // --- LÓGICA MODAL PROGRAMACIÓN ---
         async function fetchScheduleData() {
             try {
-                const response = await fetch('/api/v1/scheduler/');
+                const response = await fetch('/api/v1/schedules');
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.jobs && data.jobs.length > 0) {
-                        const nextRun = data.jobs[0].next_run_time;
+                    if (data.schedule_time) {
+                        const parts = data.schedule_time.split(':');
+                        if (parts.length === 2) {
+                            document.getElementById('scheduleHour').value = parseInt(parts[0], 10);
+                            document.getElementById('scheduleMinute').value = parseInt(parts[1], 10);
+                        }
                     }
                 }
             } catch (err) {
@@ -684,16 +689,17 @@
         async function saveSchedule() {
             const hour = parseInt(document.getElementById('scheduleHour').value, 10);
             const minute = parseInt(document.getElementById('scheduleMinute').value, 10);
+            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
             try {
-                const response = await fetch('/api/v1/scheduler/disaster-recovery', {
+                const response = await fetch('/api/v1/schedules', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ hour: hour, minute: minute })
+                    body: JSON.stringify({ schedule_frequency: 'daily', schedule_time: timeStr })
                 });
 
                 if (response.ok) {
-                    alert(`¡Respaldo automático reprogramado con éxito a las ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}!`);
+                    alert(`¡Respaldo automático reprogramado con éxito a las ${timeStr}!`);
                 } else {
                     alert('Error al guardar la programación.');
                 }
@@ -799,7 +805,6 @@
         }
 
         async function triggerAppBackup(appName) {
-            updateProgressUI(`backup_${appName}`, 5, `Iniciando copia de ${appName}...`);
             try {
                 await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
             } catch (err) {
@@ -809,7 +814,6 @@
 
         async function triggerFullBackup() {
             if (confirm('¿Desea iniciar la copia de seguridad completa del sistema (Disaster Recovery)?')) {
-                updateProgressUI('backup_disaster_recovery', 5, 'Iniciando Disaster Recovery...');
                 try {
                     await fetch('/api/v1/backups/run-full', { method: 'POST' });
                 } catch (err) {
