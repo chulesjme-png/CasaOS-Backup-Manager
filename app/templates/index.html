@@ -4,58 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CasaOS Backup Manager</title>
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body {
-            background-color: #f4f6f9;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-        .navbar-brand img {
-            height: 32px;
-            width: auto;
-            object-fit: contain;
-        }
-        .card {
-            border-radius: 12px;
-        }
-        .nav-tabs .nav-link {
-            border: none;
-            background: transparent;
-            padding: 0.5rem 0.8rem;
-            cursor: pointer;
-        }
-        .nav-tabs .nav-link.active {
-            border-bottom: 2px solid #0d6efd;
-            background: transparent;
-        }
-        .host-tab-pane {
-            min-height: 140px;
-        }
-        .badge-hook {
-            background-color: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeeba;
-        }
-        .app-list-scroll {
-            max-height: 680px;
-            overflow-y: auto;
-            padding-right: 6px;
-        }
-        .app-list-scroll::-webkit-scrollbar {
-            width: 6px;
-        }
-        .app-list-scroll::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-        .app-list-scroll::-webkit-scrollbar-thumb {
-            background: #ccc;
-            border-radius: 10px;
-        }
-        .app-list-scroll::-webkit-scrollbar-thumb:hover {
-            background: #999;
-        }
+        body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .card { border-radius: 12px; }
+        .nav-tabs .nav-link { border: none; background: transparent; padding: 0.5rem 0.8rem; cursor: pointer; }
+        .nav-tabs .nav-link.active { border-bottom: 2px solid #0d6efd; background: transparent; }
+        .host-tab-pane { min-height: 140px; }
+        .badge-hook { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .app-list-scroll { max-height: 680px; overflow-y: auto; padding-right: 6px; }
     </style>
 </head>
 <body>
@@ -68,11 +25,11 @@
                 <span class="badge bg-light text-secondary border ms-2" style="font-size: 0.75rem;">{{ version }}</span>
             </a>
             <div class="d-flex gap-2">
-                <button class="btn btn-outline-secondary btn-sm" id="btn-scan" onclick="location.reload()">🔍 Escanear</button>
-                <button class="btn btn-outline-secondary btn-sm" id="btn-schedules" data-bs-toggle="modal" data-bs-target="#modalSchedules">📅 Programación</button>
-                <button class="btn btn-outline-secondary btn-sm" id="btn-logs" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
-                <button class="btn btn-warning btn-sm text-white fw-semibold" id="btn-restore" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
-                <button class="btn btn-outline-secondary btn-sm" id="btn-settings" data-bs-toggle="modal" data-bs-target="#modalSettings">⚙️ Configuración</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">🔍 Escanear</button>
+                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalSchedules">📅 Programación</button>
+                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
+                <button class="btn btn-warning btn-sm text-white fw-semibold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
+                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalSettings">⚙️ Configuración</button>
             </div>
         </div>
     </nav>
@@ -80,7 +37,6 @@
     <!-- Main Content Container -->
     <div class="container-fluid px-4 py-4">
         
-        <!-- SECCIÓN SUPERIOR -->
         <div class="row g-3 mb-3">
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
@@ -130,11 +86,9 @@
             </div>
         </div>
 
-        <!-- DOS COLUMNAS -->
         <div class="row">
-            
             <div class="col-lg-8">
-                <!-- Tarjeta Disaster Recovery -->
+                <!-- Disaster Recovery -->
                 <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex gap-3 align-items-center">
@@ -142,7 +96,7 @@
                             <div>
                                 <h5 class="fw-bold text-dark mb-1">Copia de Seguridad de la Raspberry Pi (Disaster Recovery)</h5>
                                 <p class="text-muted small mb-2">Resguarda la configuración de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>).</p>
-                                <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Incremental (Duplicati)</span>
+                                <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Incremental</span>
                                 <span class="badge bg-success-subtle text-success border border-success-subtle">🟢 Listo para resguardo</span>
                             </div>
                         </div>
@@ -170,9 +124,7 @@
                                         <span class="badge badge-hook small">Hook DB</span>
                                         {% endif %}
                                     </div>
-                                    <div class="text-muted small mt-1">
-                                        Rutas: <code>{{ app.path }}</code>
-                                    </div>
+                                    <div class="text-muted small mt-1">Rutas: <code>{{ app.path }}</code></div>
                                 </div>
                                 <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('{{ app.name }}')">
                                     ⚡ Copiar Ahora
@@ -188,19 +140,19 @@
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-white border-bottom-0 pt-3 px-3">
-                        <ul class="nav nav-tabs card-header-tabs" id="hostTabs" role="tablist">
+                        <ul class="nav nav-tabs card-header-tabs" id="hostTabs">
                             <li class="nav-item">
-                                <button class="nav-link active fw-semibold text-dark" id="tab-host-btn" onclick="switchHostTab('host')" type="button">
+                                <button class="nav-link active fw-semibold text-dark" id="tab-host-btn" onclick="switchHostTab('host')">
                                     🍓 Raspberry Pi 5
                                 </button>
                             </li>
                             <li class="nav-item">
-                                <button class="nav-link text-muted" id="tab-docker-btn" onclick="switchHostTab('docker')" type="button">
+                                <button class="nav-link text-muted" id="tab-docker-btn" onclick="switchHostTab('docker')">
                                     🐳 Docker
                                 </button>
                             </li>
                             <li class="nav-item">
-                                <button class="nav-link text-muted" id="tab-disks-btn" onclick="switchHostTab('disks')" type="button">
+                                <button class="nav-link text-muted" id="tab-disks-btn" onclick="switchHostTab('disks')">
                                     💾 Discos ({{ disks|length }})
                                 </button>
                             </li>
@@ -212,10 +164,6 @@
                                 <div class="d-flex justify-content-between py-2 border-bottom">
                                     <span class="text-muted">💻 Sistema Host:</span>
                                     <span class="fw-bold text-dark">Debian GNU/Linux 12</span>
-                                </div>
-                                <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">OS:</span>
-                                    <span class="fw-semibold">Debian GNU/Linux 12</span>
                                 </div>
                                 <div class="d-flex justify-content-between py-2 border-bottom">
                                     <span class="text-muted">CPU:</span>
@@ -234,22 +182,13 @@
                                     <span class="text-muted">Aplicaciones CasaOS:</span>
                                     <span class="badge bg-primary rounded-pill">{{ apps|length }}</span>
                                 </div>
-                                <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">Estado Docker Daemon:</span>
-                                    <span class="badge bg-success rounded-pill">Activo</span>
-                                </div>
                                 <div class="mt-2 text-muted" style="max-height: 220px; overflow-y: auto;">
                                     {% for app in apps[:10] %}
                                     <div class="d-flex align-items-center justify-content-between py-1 border-bottom">
                                         <span>📦 {{ app.name }}</span>
-                                        <span class="badge {% if app.status == 'running' %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} border">
-                                            {{ app.status or 'running' }}
-                                        </span>
+                                        <span class="badge bg-success-subtle text-success border">running</span>
                                     </div>
                                     {% endfor %}
-                                    {% if apps|length > 10 %}
-                                    <div class="text-center pt-2 text-primary small">+ {{ apps|length - 10 }} aplicaciones más</div>
-                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -259,16 +198,11 @@
                                 {% for disk in disks %}
                                 <div class="py-2 border-bottom">
                                     <div class="d-flex justify-content-between fw-semibold">
-                                        <span class="text-truncate" style="max-width: 170px;" title="{{ disk.mountpoint }}">💾 {{ disk.label }}</span>
+                                        <span class="text-truncate" style="max-width: 170px;">💾 {{ disk.label }}</span>
                                         <span class="text-success">{{ disk.free_gb }} GB libres</span>
                                     </div>
                                     <div class="progress mt-1" style="height: 6px;">
-                                        <div class="progress-bar {% if disk.percent > 85 %}bg-danger{% elif disk.percent > 70 %}bg-warning{% else %}bg-primary{% endif %}" 
-                                             role="progressbar" style="width: {{ disk.percent }}%;"></div>
-                                    </div>
-                                    <div class="d-flex justify-content-between text-muted mt-1" style="font-size: 0.75rem;">
-                                        <span>Uso: {{ disk.percent }}%</span>
-                                        <span>Total: {{ disk.total_gb }} GB</span>
+                                        <div class="progress-bar bg-primary" style="width: {{ disk.percent }}%;"></div>
                                     </div>
                                 </div>
                                 {% endfor %}
@@ -276,24 +210,12 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="card p-3 shadow-sm border-0">
-                    <h6 class="fw-bold text-dark mb-3">⚡ Motores Integrados</h6>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center gap-2">
-                            <span>🦅</span>
-                            <span class="fw-semibold text-dark">Duplicati Engine</span>
-                        </div>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>
-                    </div>
-                </div>
             </div>
-
         </div>
     </div>
 
-    <!-- WIDGET FLOTANTE PROGRESO -->
-    <div id="ws-progress-container" class="card shadow-lg border-0 d-none" style="position: fixed; bottom: 24px; right: 24px; z-index: 1100; min-width: 360px; max-width: 420px; border-radius: 12px; background: #ffffff;">
+    <!-- BARRA DE PROGRESO FLOTANTE -->
+    <div id="ws-progress-container" class="card shadow-lg border-0 d-none" style="position: fixed; bottom: 24px; right: 24px; z-index: 1100; min-width: 360px; max-width: 420px; background: #ffffff;">
         <div class="card-body p-3">
             <div class="d-flex align-items-center justify-content-between mb-2">
                 <div class="d-flex align-items-center gap-2">
@@ -302,7 +224,7 @@
                 </div>
                 <span id="ws-progress-percent" class="badge bg-primary rounded-pill">0%</span>
             </div>
-            <div class="progress mb-2" style="height: 8px; border-radius: 4px; background-color: #e9ecef;">
+            <div class="progress mb-2" style="height: 8px; border-radius: 4px;">
                 <div id="ws-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
             </div>
             <div id="ws-progress-message" class="text-muted small text-truncate" style="font-size: 0.8rem;">Iniciando proceso...</div>
@@ -315,10 +237,9 @@
             <div class="modal-content border-0 shadow">
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">📅 Programación de Copias</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted small">Configura la hora del respaldo automático diario del sistema (APScheduler).</p>
                     <div class="row g-3">
                         <div class="col-6">
                             <label class="form-label fw-semibold">Hora (0-23)</label>
@@ -332,30 +253,30 @@
                 </div>
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="saveSchedule()" data-bs-dismiss="modal">Guardar Cambios</button>
+                    <button type="button" class="btn btn-primary" onclick="saveSchedule()" data-bs-dismiss="modal">Guardar</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MODAL HISTORIAL DE EJECUCIONES -->
+    <!-- MODAL HISTORIAL -->
     <div class="modal fade" id="modalLogs" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">📜 Historial de Ejecuciones</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="text-muted small">Registro de las últimas 50 copias y restauraciones realizadas.</span>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted small">Últimos registros del sistema.</span>
                         <button class="btn btn-outline-danger btn-sm" onclick="clearLogs()">🗑️ Limpiar Historial</button>
                     </div>
-                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <div class="table-responsive" style="max-height: 400px;">
                         <table class="table table-hover align-middle small mb-0">
                             <thead class="table-light sticky-top">
                                 <tr>
-                                    <th>Fecha / Hora</th>
+                                    <th>Fecha</th>
                                     <th>Tipo</th>
                                     <th>Objetivo</th>
                                     <th>Estado</th>
@@ -363,107 +284,86 @@
                                 </tr>
                             </thead>
                             <tbody id="logsTableBody">
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted py-3">Cargando historial...</td>
-                                </tr>
+                                <tr><td colspan="5" class="text-center py-3">Cargando...</td></tr>
                             </tbody>
                         </table>
                     </div>
-                </div>
-                <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MODAL RESTAURAR COPIAS -->
+    <!-- MODAL RESTAURAR -->
     <div class="modal fade" id="modalRestore" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">📦 Restaurar Copias de Seguridad</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted small">Selecciona una copia disponible en tu destino activo para proceder con la restauración.</p>
-                    <div class="alert alert-warning py-2 small">
-                        ⚠️ <strong>Atención:</strong> La restauración creará un <strong>Snapshot de Seguridad</strong> preventivo antes de sobrescribir ningún dato.
-                    </div>
                     <div class="list-group list-group-flush border rounded" id="restoreBackupsList">
-                        <div class="p-3 text-center text-muted">Buscando copias disponibles...</div>
+                        <div class="p-3 text-center text-muted">Buscando copias...</div>
                     </div>
-                </div>
-                <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MODAL CONFIGURACIÓN CON SECCIÓN DE NOTIFICACIONES -->
+    <!-- MODAL CONFIGURACIÓN & NOTIFICACIONES -->
     <div class="modal fade" id="modalSettings" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">⚙️ Configuración del Sistema</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Versión de la aplicación</label>
-                        <input type="text" class="form-control" value="{{ version }}" readonly>
-                    </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Disco Destino Configurado</label>
                         <input type="text" class="form-control" id="settingsTargetDisk" value="{{ config.selected_target_disk or '' }}" readonly>
                     </div>
 
-                    <!-- SECCIÓN DE NOTIFICACIONES -->
                     <div class="border-top pt-3 mt-3">
-                        <h6 class="fw-bold text-dark mb-3">🔔 Notificaciones</h6>
+                        <h6 class="fw-bold text-dark mb-3">🔔 Notificaciones por Telegram</h6>
                         
-                        <!-- Telegram -->
                         <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" id="telegramEnabled" {% if config.telegram_enabled %}checked{% endif %}>
-                            <label class="form-check-label fw-semibold" for="telegramEnabled">Activar Notificaciones por Telegram</label>
+                            <label class="form-check-label fw-semibold" for="telegramEnabled">Activar Telegram</label>
                         </div>
                         <div class="mb-2">
-                            <input type="text" class="form-control form-control-sm" id="telegramToken" placeholder="Bot Token (ej: 123456:ABC-DEF...)" value="{{ config.telegram_bot_token or '' }}">
+                            <input type="text" class="form-control form-control-sm" id="telegramToken" placeholder="Bot Token" value="{{ config.telegram_bot_token or '' }}">
                         </div>
                         <div class="mb-3">
-                            <input type="text" class="form-control form-control-sm" id="telegramChatId" placeholder="Chat ID (ej: 987654321)" value="{{ config.telegram_chat_id or '' }}">
+                            <input type="text" class="form-control form-control-sm" id="telegramChatId" placeholder="Chat ID" value="{{ config.telegram_chat_id or '' }}">
                         </div>
 
-                        <!-- Webhook -->
                         <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" id="webhookEnabled" {% if config.webhook_enabled %}checked{% endif %}>
-                            <label class="form-check-label fw-semibold" for="webhookEnabled">Activar Webhook (Discord / Slack / Custom)</label>
+                            <label class="form-check-label fw-semibold" for="webhookEnabled">Activar Webhook</label>
                         </div>
                         <div class="mb-3">
-                            <input type="url" class="form-control form-control-sm" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." value="{{ config.webhook_url or '' }}">
+                            <input type="url" class="form-control form-control-sm" id="webhookUrl" placeholder="https://webhook.url" value="{{ config.webhook_url or '' }}">
                         </div>
 
-                        <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div class="d-flex justify-content-start mt-2">
                             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sendTestNotification()">🧪 Probar Notificación</button>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-primary" onclick="saveNotificationSettings()">Guardar Notificaciones</button>
+                    <button type="button" id="btnSaveNotif" class="btn btn-primary" onclick="saveNotificationSettings()">Guardar Notificaciones</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        // --- WEBSOCKET DE PROGRESO ---
+        // WEBSOCKET DE PROGRESO DE COPIAS
         let progressSocket = null;
-        let pingInterval = null;
 
         function initProgressWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -471,31 +371,19 @@
 
             progressSocket = new WebSocket(wsUrl);
 
-            progressSocket.onopen = () => {
-                console.log("🟢 [WebSocket] Conectado con el servidor.");
-                clearInterval(pingInterval);
-                pingInterval = setInterval(() => {
-                    if (progressSocket.readyState === WebSocket.OPEN) {
-                        progressSocket.send("ping");
-                    }
-                }, 20000);
-            };
+            progressSocket.onopen = () => console.log("🟢 [WebSocket] Conectado.");
 
             progressSocket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    const pct = data.percentage !== undefined ? data.percentage : data.percent;
-                    if (data && typeof pct === 'number') {
-                        updateProgressUI(data.job_id || data.type || 'backup', pct, data.message || '');
+                    if (data && (data.percentage !== undefined || data.percent !== undefined)) {
+                        const pct = data.percentage !== undefined ? data.percentage : data.percent;
+                        updateProgressUI(data.job_id || 'backup', pct, data.message || '');
                     }
                 } catch (e) {}
             };
 
-            progressSocket.onclose = () => {
-                console.warn("🔴 [WebSocket] Conexión cerrada. Reintentando en 3 segundos...");
-                clearInterval(pingInterval);
-                setTimeout(initProgressWebSocket, 3000);
-            };
+            progressSocket.onclose = () => setTimeout(initProgressWebSocket, 3000);
         }
 
         function updateProgressUI(jobId, percentage, message) {
@@ -504,323 +392,119 @@
             const percentBadge = document.getElementById('ws-progress-percent');
             const msgEl = document.getElementById('ws-progress-message');
             const titleEl = document.getElementById('ws-job-title');
-            const iconEl = document.getElementById('ws-job-icon');
 
             if (!container) return;
 
             container.classList.remove('d-none');
-
-            if (jobId.startsWith('backup_')) {
-                const appName = jobId.replace('backup_', '');
-                titleEl.innerText = appName === 'disaster_recovery' ? 'Disaster Recovery (Sistema)' : `Copia de ${appName}`;
-            } else if (jobId.startsWith('restore_')) {
-                titleEl.innerText = `Restauración: ${jobId.replace('restore_', '')}`;
-            } else {
-                titleEl.innerText = 'Ejecutando Tarea';
-            }
-
+            titleEl.innerText = jobId.includes('disaster') ? 'Disaster Recovery' : `Copia: ${jobId.replace('backup_', '')}`;
+            
             bar.style.width = `${percentage}%`;
             percentBadge.innerText = `${percentage}%`;
             msgEl.innerText = message;
 
-            if (message.toLowerCase().includes('error')) {
-                bar.classList.remove('bg-primary', 'progress-bar-striped', 'progress-bar-animated');
-                bar.classList.add('bg-danger');
-                percentBadge.classList.remove('bg-primary');
-                percentBadge.classList.add('bg-danger');
-                if (iconEl) iconEl.className = 'text-danger fw-bold fs-6';
-            } else {
-                bar.classList.remove('bg-danger');
-                bar.classList.add('bg-primary', 'progress-bar-striped', 'progress-bar-animated');
-                percentBadge.classList.remove('bg-danger');
-                percentBadge.classList.add('bg-primary');
-                if (iconEl) iconEl.className = 'spinner-border spinner-border-sm text-primary';
-            }
-
             if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
-                setTimeout(() => {
-                    container.classList.add('d-none');
-                    setTimeout(() => { bar.style.width = '0%'; }, 300);
-                }, 4000);
+                setTimeout(() => container.classList.add('d-none'), 3500);
             }
         }
 
-        // --- EVENTOS DE CARGA Y MODALES ---
-        document.addEventListener('DOMContentLoaded', () => {
-            initProgressWebSocket();
+        // GUARDAR NOTIFICACIONES Y FORZAR RECARGA
+        async function saveNotificationSettings() {
+            const btn = document.getElementById('btnSaveNotif');
+            btn.disabled = true;
+            btn.innerHTML = 'Guardando...';
 
-            const modalSchedulesEl = document.getElementById('modalSchedules');
-            if (modalSchedulesEl) modalSchedulesEl.addEventListener('show.bs.modal', fetchScheduleData);
-
-            const modalRestoreEl = document.getElementById('modalRestore');
-            if (modalRestoreEl) modalRestoreEl.addEventListener('show.bs.modal', fetchAvailableBackups);
-
-            const modalLogsEl = document.getElementById('modalLogs');
-            if (modalLogsEl) modalLogsEl.addEventListener('show.bs.modal', fetchExecutionLogs);
-        });
-
-        // --- LÓGICA DE NOTIFICACIONES Y CIERRE DE MODAL ---
-        function getNotificationFormData() {
-            return {
+            const payload = {
                 telegram_enabled: document.getElementById('telegramEnabled').checked,
                 telegram_bot_token: document.getElementById('telegramToken').value.trim(),
                 telegram_chat_id: document.getElementById('telegramChatId').value.trim(),
                 webhook_enabled: document.getElementById('webhookEnabled').checked,
                 webhook_url: document.getElementById('webhookUrl').value.trim()
             };
-        }
 
-        async function saveNotificationSettings() {
-            const data = getNotificationFormData();
             try {
                 const response = await fetch('/api/v1/notifications/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(payload)
                 });
 
                 if (response.ok) {
-                    // Cerrar el modal de configuración
-                    const settingsModalEl = document.getElementById('modalSettings');
-                    if (settingsModalEl) {
-                        const modalInstance = bootstrap.Modal.getInstance(settingsModalEl) || new bootstrap.Modal(settingsModalEl);
-                        modalInstance.hide();
-                    }
-                    // Recargar la página para cargar la nueva configuración guardada en config.json
+                    // Cerrar Modal explícitamente mediante JS de Bootstrap
+                    const modalEl = document.getElementById('modalSettings');
+                    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                    if (modalInstance) modalInstance.hide();
+                    
+                    // Recargar pantalla principal para forzar render del nuevo estado
                     window.location.reload();
                 } else {
-                    const errData = await response.json().catch(() => ({}));
-                    alert(`🔴 Error al guardar: ${errData.detail || 'Fallo en la API'}`);
+                    const err = await response.json();
+                    alert(`🔴 Error: ${err.detail || 'No se guardaron los datos'}`);
+                    btn.disabled = false;
+                    btn.innerHTML = 'Guardar Notificaciones';
                 }
             } catch (err) {
-                console.error('Error guardando notificaciones:', err);
-                alert('Ocurrió un error en la solicitud.');
+                alert('🔴 Error en la red o conexión.');
+                btn.disabled = false;
+                btn.innerHTML = 'Guardar Notificaciones';
             }
         }
 
         async function sendTestNotification() {
-            const data = getNotificationFormData();
+            const payload = {
+                telegram_enabled: document.getElementById('telegramEnabled').checked,
+                telegram_bot_token: document.getElementById('telegramToken').value.trim(),
+                telegram_chat_id: document.getElementById('telegramChatId').value.trim(),
+                webhook_enabled: document.getElementById('webhookEnabled').checked,
+                webhook_url: document.getElementById('webhookUrl').value.trim()
+            };
+
             try {
-                const response = await fetch('/api/v1/notifications/test', {
+                const res = await fetch('/api/v1/notifications/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(payload)
                 });
-
-                if (response.ok) {
-                    alert('🟢 Notificación de prueba enviada. Comprueba tu canal de Telegram.');
-                } else {
-                    const errData = await response.json().catch(() => ({}));
-                    alert(`🔴 Error al enviar prueba: ${errData.detail || 'Fallo en la API'}`);
-                }
+                const data = await res.json();
+                if (res.ok) alert('🟢 ¡Mensaje enviado con éxito a Telegram!');
+                else alert(`🔴 Error: ${data.detail}`);
             } catch (err) {
-                console.error('Error probando notificación:', err);
-                alert('Ocurrió un error al intentar enviar la notificación.');
+                alert('🔴 Error conectando al servidor.');
             }
         }
 
-        // --- LÓGICA MODAL HISTORIAL DE LOGS ---
-        async function fetchExecutionLogs() {
-            const tbody = document.getElementById('logsTableBody');
-            if (!tbody) return;
-
+        // ACCIONES DE COPIA
+        async function triggerAppBackup(appName) {
+            updateProgressUI(`backup_${appName}`, 5, `Preparando copia de ${appName}...`);
             try {
-                const response = await fetch('/api/v1/logs');
-                const logs = await response.json();
-
-                if (!logs || logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No hay ejecuciones registradas.</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = logs.map(log => `
-                    <tr>
-                        <td class="text-nowrap">${log.timestamp}</td>
-                        <td>
-                            <span class="badge ${log.job_type === 'backup' ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-warning-subtle text-warning border border-warning-subtle'}">
-                                ${log.job_type === 'backup' ? '📦 Copia' : '🔄 Restaurar'}
-                            </span>
-                        </td>
-                        <td class="fw-bold">${log.target_name}</td>
-                        <td>
-                            <span class="badge ${log.status === 'success' ? 'bg-success' : 'bg-danger'}">
-                                ${log.status === 'success' ? 'Éxito' : 'Fallo'}
-                            </span>
-                        </td>
-                        <td>${log.duration_seconds}s</td>
-                    </tr>
-                `).join('');
-
-            } catch (err) {
-                console.error('Error cargando historial:', err);
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-3">Error al cargar registros.</td></tr>';
-            }
+                await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
+            } catch (err) { console.error(err); }
         }
 
-        async function clearLogs() {
-            if (!confirm('¿Deseas vaciar el historial de ejecuciones?')) return;
-            try {
-                await fetch('/api/v1/logs', { method: 'DELETE' });
-                fetchExecutionLogs();
-            } catch (err) {
-                console.error('Error limpiando logs:', err);
-            }
-        }
-
-        // --- LÓGICA MODAL PROGRAMACIÓN ---
-        async function fetchScheduleData() {
-            try {
-                const response = await fetch('/api/v1/schedules');
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.schedule_time) {
-                        const parts = data.schedule_time.split(':');
-                        if (parts.length === 2) {
-                            document.getElementById('scheduleHour').value = parseInt(parts[0], 10);
-                            document.getElementById('scheduleMinute').value = parseInt(parts[1], 10);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('Error cargando programación:', err);
-            }
-        }
-
-        async function saveSchedule() {
-            const hour = parseInt(document.getElementById('scheduleHour').value, 10);
-            const minute = parseInt(document.getElementById('scheduleMinute').value, 10);
-            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-
-            try {
-                const response = await fetch('/api/v1/schedules', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ schedule_frequency: 'daily', schedule_time: timeStr })
-                });
-
-                if (response.ok) {
-                    alert(`¡Respaldo automático reprogramado con éxito a las ${timeStr}!`);
-                } else {
-                    alert('Error al guardar la programación.');
-                }
-            } catch (err) {
-                console.error('Error enviando programación:', err);
-            }
-        }
-
-        // --- LÓGICA MODAL RESTAURAR ---
-        async function fetchAvailableBackups() {
-            const listContainer = document.getElementById('restoreBackupsList');
-            if (!listContainer) return;
-
-            listContainer.innerHTML = '<div class="p-3 text-center text-muted">Buscando copias disponibles...</div>';
-
-            try {
-                const response = await fetch('/api/v1/backups/list');
-                const data = await response.json();
-
-                if (!data.backups || data.backups.length === 0) {
-                    listContainer.innerHTML = `
-                        <div class="p-3 text-center text-muted">
-                            No se encontraron archivos de backup en el destino activo:<br>
-                            <code>${data.target_disk || 'No configurado'}</code>
-                        </div>`;
-                    return;
-                }
-
-                listContainer.innerHTML = data.backups.map(b => `
-                    <div class="list-group-item d-flex justify-content-between align-items-center py-2">
-                        <div>
-                            <span class="fw-bold d-block text-dark">${b.filename}</span>
-                            <span class="text-muted small">Tamaño: ${b.size_mb} MB</span>
-                        </div>
-                        <button class="btn btn-outline-warning btn-sm fw-semibold" onclick="executeRestore('${b.filename}')">
-                            Restaurar
-                        </button>
-                    </div>
-                `).join('');
-
-            } catch (err) {
-                console.error('Error cargando lista de backups:', err);
-                listContainer.innerHTML = '<div class="p-3 text-center text-danger">Error al explorar copias.</div>';
-            }
-        }
-
-        async function executeRestore(filename) {
-            if (!confirm(`¿Confirmas que deseas restaurar la copia "${filename}"?\n\nSe creará un Snapshot de Seguridad previo antes de sobrescribir datos.`)) {
-                return;
-            }
-
-            const modalEl = document.getElementById('modalRestore');
-            const modalInstance = bootstrap.Modal.getInstance(modalEl);
-            if (modalInstance) modalInstance.hide();
-
-            try {
-                await fetch('/api/v1/backups/restore', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ backup_file: filename, target_app: 'all' })
-                });
-            } catch (err) {
-                console.error('Error en restauración:', err);
-            }
-        }
-
-        // --- FUNCIONES GENERALES ---
-        function switchHostTab(tabName) {
-            document.querySelectorAll('.host-tab-pane').forEach(el => el.classList.add('d-none'));
-
-            ['tab-host-btn', 'tab-docker-btn', 'tab-disks-btn'].forEach(id => {
-                const btn = document.getElementById(id);
-                if (btn) {
-                    btn.classList.remove('active', 'fw-semibold', 'text-dark');
-                    btn.classList.add('text-muted');
-                }
-            });
-
-            const activeContent = document.getElementById(`tab-content-${tabName}`);
-            const activeBtn = document.getElementById(`tab-${tabName}-btn`);
-
-            if (activeContent) activeContent.classList.remove('d-none');
-            if (activeBtn) {
-                activeBtn.classList.add('active', 'fw-semibold', 'text-dark');
-                activeBtn.classList.remove('text-muted');
+        async function triggerFullBackup() {
+            if (confirm('¿Iniciar copia de seguridad completa del sistema?')) {
+                updateProgressUI('backup_disaster_recovery', 5, 'Preparando Disaster Recovery...');
+                try {
+                    await fetch('/api/v1/backups/run-full', { method: 'POST' });
+                } catch (err) { console.error(err); }
             }
         }
 
         async function updateTargetDisk(diskPath) {
-            try {
-                const response = await fetch('/api/v1/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ selected_target_disk: diskPath })
-                });
-                if (response.ok) {
-                    const settingsDiskInput = document.getElementById('settingsTargetDisk');
-                    if (settingsDiskInput) settingsDiskInput.value = diskPath;
-                }
-            } catch (err) {
-                console.error('Error guardando configuración de disco:', err);
-            }
+            await fetch('/api/v1/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ selected_target_disk: diskPath })
+            });
         }
 
-        async function triggerAppBackup(appName) {
-            try {
-                await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
-            } catch (err) {
-                console.error('Error ejecutando copia de app:', err);
-            }
+        function switchHostTab(tabName) {
+            document.querySelectorAll('.host-tab-pane').forEach(el => el.classList.add('d-none'));
+            document.getElementById(`tab-content-${tabName}`).classList.remove('d-none');
         }
 
-        async function triggerFullBackup() {
-            if (confirm('¿Desea iniciar la copia de seguridad completa del sistema (Disaster Recovery)?')) {
-                try {
-                    await fetch('/api/v1/backups/run-full', { method: 'POST' });
-                } catch (err) {
-                    console.error('Error ejecutando backup completo:', err);
-                }
-            }
-        }
+        document.addEventListener('DOMContentLoaded', () => {
+            initProgressWebSocket();
+        });
     </script>
 </body>
 </html>
