@@ -14,7 +14,6 @@ class DuplicatiService:
         """Obtiene la ruta del disco de destino configurado."""
         target_disk = config_manager.config.selected_target_disk
         if not target_disk:
-            # Intento de fallback o error claro
             raise ValueError("No se ha seleccionado ningún disco de destino en la configuración.")
         return target_disk
 
@@ -27,7 +26,6 @@ class DuplicatiService:
 
             logger.info(f"Iniciando respaldo de {app_name} en {dest_dir}...")
 
-            # Comando de empaquetado/respaldo
             tar_file = os.path.join(dest_dir, f"{app_name}_backup.tar.gz")
             cmd = ["tar", "-czf", tar_file, "-C", app_path, "."]
             
@@ -46,7 +44,7 @@ class DuplicatiService:
             logger.error(f"[DuplicatiService] Error inesperado respaldando {app_name}: {e}")
             return False
 
-    def run_full_disaster_recovery((self) -> bool:
+    def run_full_disaster_recovery(self) -> bool:
         """Realiza la copia de seguridad completa del sistema (Disaster Recovery)."""
         try:
             target_disk = self.get_target_disk()
@@ -54,7 +52,6 @@ class DuplicatiService:
             os.makedirs(dest_dir, exist_ok=True)
 
             logger.info(f"Iniciando Disaster Recovery en {dest_dir}...")
-            # Lógica de respaldo completo...
             return True
         except Exception as e:
             logger.error(f"[DuplicatiService] Error en Disaster Recovery: {e}")
