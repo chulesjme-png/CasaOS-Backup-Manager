@@ -5,17 +5,8 @@ document.addEventListener("DOMContentLoaded", () => {
     cargarBackends();
     initWebSocketProgress();
     
-    // Auto-destrucción de barras de progreso colgadas al cargar la interfaz
-    setTimeout(() => {
-        document.querySelectorAll('div').forEach(box => {
-            const style = window.getComputedStyle(box);
-            if (style.position === 'fixed' || box.style.position === 'fixed') {
-                if (box.innerHTML && (box.innerHTML.includes("Restauración") || box.innerHTML.includes("10%") || box.innerHTML.includes("despliegue"))) {
-                    box.style.display = 'none';
-                }
-            }
-        });
-    }, 3000);
+    // Eliminar la caja estática de restauración colgada al cargar la página
+    destruirBarraProgresoFija();
 });
 
 // Función para obtener los motores de backup disponibles y pintarlos en el HTML
@@ -83,20 +74,37 @@ async function solicitarRestauracion(snapshotId, appName) {
         }
 
         const data = await response.json();
-        console.log("Restauración iniciada/completada con éxito:", data);
+        console.log("Restauración completada con éxito:", data);
         
-        setTimeout(() => {
-            window.location.reload();
-        }, 2000);
+        destruirBarraProgresoFija();
+        setTimeout(() => window.location.reload(), 1500);
 
         return data;
     } catch (error) {
         console.error("Error al enviar solicitud de restauración:", error);
         alert("No se pudo iniciar la restauración: " + error.message);
+        destruirBarraProgresoFija();
     }
 }
 
-// Gestión del WebSocket por si emite eventos en tiempo real
+// Función que busca y elimina físicamente la barra azul fija del DOM
+function destruirBarraProgresoFija() {
+    // Buscar todos los divs o elementos flotantes en la esquina inferior
+    const elementos = document.querySelectorAll('div');
+    elementos.forEach(el => {
+        const texto = el.innerText || "";
+        if (
+            texto.includes("Copia: Restauración") || 
+            texto.includes("Iniciando despliegue") || 
+            (texto.includes("10%") && texto.includes("Restauración"))
+        ) {
+            // Eliminar el elemento por completo de la pantalla
+            el.remove();
+        }
+    });
+}
+
+// Gestión del WebSocket
 function initWebSocketProgress() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/progress`;
@@ -107,6 +115,7 @@ function initWebSocketProgress() {
         try {
             const data = JSON.parse(event.data);
             if (data.type === "restore_complete" || data.status === "COMPLETED") {
+                destruirBarraProgresoFija();
                 setTimeout(() => window.location.reload(), 1500);
             }
         } catch (err) {
