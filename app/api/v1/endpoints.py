@@ -1,7 +1,7 @@
 import os
 import logging
 import asyncio
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 
@@ -17,7 +17,7 @@ from app.services.notification_service import notification_service
 logger = logging.getLogger("casaos-backup")
 router = APIRouter()
 
-# --- MODELOS PYDANTIC ---
+# --- MODELOS PYDANTIC (DTOs) ---
 
 class ScheduleUpdateRequest(BaseModel):
     schedule_frequency: str = Field(..., description="Frecuencia: 'daily', 'weekly', 'monthly'")
@@ -60,40 +60,55 @@ def get_apps():
     return discovery_service.scan_apps()
 
 
-# --- NOTIFICACIONES (COMPATIBILIDAD PYDANTIC V1/V2 CORREGIDA) ---
+# --- NOTIFICACIONES (NORMALIZACIÓN Y PERSISTENCIA ROBUSTA) ---
 
 @router.post("/notifications/settings")
-async def save_notification_settings(settings: NotificationSettings):
+async def save_notification_settings(settings: Union[NotificationSettings, Dict]):
+    """
+    Guarda la configuración de notificaciones garantizando compatibilidad 
+    con Pydantic V1, V2 y diccionarios nativos.
+    """
     try:
+        # 1. Normalización agnóstica del Payload DTO
         if hasattr(settings, 'model_dump'):
             data = settings.model_dump()
         elif hasattr(settings, 'dict'):
             data = settings.dict()
+        elif isinstance(settings, dict):
+            data = settings
         else:
             data = dict(settings)
-        
+
+        # 2. Actualización atómica en el gestor de configuración
         for key, value in data.items():
+            str_value = str(value) if isinstance(value, bool) else (value or "")
+            config_manager.update_key(key, str_value)
             if hasattr(config_manager.config, key):
                 setattr(config_manager.config, key, value)
-            config_manager.update_key(key, str(value) if isinstance(value, bool) else (value or ""))
 
-        try:
-            config_manager.save_config()
-        except TypeError:
-            if hasattr(config_manager.config, 'model_dump'):
-                config_data = config_manager.config.model_dump()
-            elif hasattr(config_manager.config, 'dict'):
-                config_data = config_manager.config.dict()
-            else:
-                config_data = dict(config_manager.config)
-            config_manager.save_config(config_data)
+        # 3. Persistencia segura del estado
+        if hasattr(config_manager, 'save_config'):
+            try:
+                config_manager.save_config()
+            except TypeError:
+                # Si save_config requiere un argumento
+                cfg = config_manager.config
+                if hasattr(cfg, 'model_dump'):
+                    cfg_data = cfg.model_dump()
+                elif hasattr(cfg, 'dict'):
+                    cfg_data = cfg.dict()
+                else:
+                    cfg_data = dict(cfg)
+                config_manager.save_config(cfg_data)
 
+        # 4. Sincronización del servicio en runtime
         notification_service.update_config(config_manager.config)
         
-        logger.info("Configuración de notificaciones guardada exitosamente.")
+        logger.info("[Backend] Configuración de notificaciones guardada con éxito.")
         return {"status": "ok", "message": "Configuración guardada correctamente"}
+
     except Exception as e:
-        logger.error(f"Error guardando notificaciones: {e}")
+        logger.error(f"[Backend] Error guardando notificaciones: {e}")
         raise HTTPException(status_code=500, detail=f"Error al guardar datos: {str(e)}")
 
 @router.post("/notifications/test")
@@ -110,11 +125,11 @@ async def test_notification(settings: NotificationSettings):
             raise HTTPException(status_code=400, detail="No se pudo entregar el mensaje de prueba.")
         return {"status": "ok", "message": "Notificación de prueba enviada con éxito."}
     except Exception as e:
-        logger.error(f"Error en test de notificación: {e}")
+        logger.error(f"[Backend] Error en test de notificación: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- TAREAS DE RESPALDO (NO BLOQUEANTES) ---
+# --- TAREAS DE RESPALDO (ASÍNCRONAS Y NO BLOQUEANTES) ---
 
 async def task_run_app_backup(app_name: str, app_path: str):
     await notification_service.send_notification(
@@ -255,7 +270,7 @@ def list_available_backups():
                                 "created_at": stats.st_mtime
                             })
     except Exception as e:
-        logger.error(f"Error escaneando backups: {e}")
+        logger.error(f"[Backend] Error escaneando backups: {e}")
         raise HTTPException(status_code=500, detail=f"Error leyendo almacenamiento: {str(e)}")
 
     return {"target_disk": target_disk, "backups": backups}
