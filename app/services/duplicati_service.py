@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any
 from app.core.ws_manager import ws_manager
 from app.services.notification_service import notification_service
 from app.services.audit_service import audit_service
+from app.services.retention_service import retention_service
 from app.core.config import config_manager
 
 logger = logging.getLogger("casaos-backup")
@@ -87,7 +88,8 @@ class BackupRestoreService:
         dest_dir = os.path.join(target_disk, "Backups", "Apps", app_name)
         os.makedirs(dest_dir, exist_ok=True)
         
-        backup_filename = f"{app_name}_backup.tar.gz"
+        # Nombre con timestamp para almacenar historial de copias
+        backup_filename = f"{app_name}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.tar.gz"
         backup_path = os.path.join(dest_dir, backup_filename)
 
         try:
@@ -112,6 +114,12 @@ class BackupRestoreService:
                 )
             except Exception as e:
                 logger.warning(f"Error enviando notificación: {e}")
+
+            # Ejecución de la política de retención (conservar únicamente las 3 más recientes)
+            try:
+                retention_service.clean_old_backups(3)
+            except Exception as e:
+                logger.warning(f"Error durante la limpieza de retención: {e}")
 
             return True
 
@@ -156,6 +164,12 @@ class BackupRestoreService:
                 )
             except Exception as e:
                 logger.warning(f"Error enviando notificación: {e}")
+
+            # Ejecución de la política de retención (conservar únicamente las 3 más recientes)
+            try:
+                retention_service.clean_old_backups(3)
+            except Exception as e:
+                logger.warning(f"Error durante la limpieza de retención: {e}")
 
             return True
 
