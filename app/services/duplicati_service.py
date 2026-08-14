@@ -11,10 +11,17 @@ class DuplicatiService:
         pass
 
     def get_target_disk(self) -> str:
-        """Obtiene la ruta del disco de destino configurado."""
+        """Obtiene la ruta del disco de destino configurado, con fallback si está vacío."""
         target_disk = config_manager.config.selected_target_disk
+        
+        # Fallback inteligente si no hay nada guardado en la configuración
         if not target_disk:
+            default_disk = "/media/pichules/7a4f9383-f80b-4270-8926-8203030bb8d4"
+            if os.path.exists(default_disk):
+                logger.warning(f"[DuplicatiService] Sin disco en config. Usando ruta por defecto: {default_disk}")
+                return default_disk
             raise ValueError("No se ha seleccionado ningún disco de destino en la configuración.")
+            
         return target_disk
 
     def run_app_backup(self, app_name: str, app_path: str) -> bool:
