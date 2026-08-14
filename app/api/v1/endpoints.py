@@ -323,10 +323,25 @@ def list_available_backups():
                         if file.endswith(".tar.gz") or file.endswith(".zip"):
                             file_path = os.path.join(root, file)
                             stats = os.stat(file_path)
+                            size_bytes = stats.st_size
+
+                            # Ignorar archivos totalmente vacíos (0 bytes)
+                            if size_bytes == 0:
+                                continue
+
+                            # Calcular tamaño formateado adecuadamente (KB o MB)
+                            size_mb = round(size_bytes / (1024 * 1024), 2)
+                            if size_mb < 0.1:
+                                size_kb = round(size_bytes / 1024, 2)
+                                size_str = f"{size_kb} KB"
+                            else:
+                                size_str = f"{size_mb} MB"
+
                             backups.append({
                                 "filename": file,
                                 "path": file_path,
-                                "size_mb": round(stats.st_size / (1024 * 1024), 2),
+                                "size_mb": size_mb,
+                                "size_str": size_str,
                                 "created_at": stats.st_mtime
                             })
     except Exception as e:
