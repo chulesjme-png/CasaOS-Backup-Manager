@@ -1,7 +1,7 @@
 import os
 import logging
 from pathlib import Path
-from typing import Optional, Any, Dict
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, status
 from pydantic import BaseModel
 
@@ -15,10 +15,12 @@ DESTINATION_PATH = "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa"
 
 
 # ------------------------------------------------------------------------------
-# SCHEMAS Flexible (Acepta cualquier nombre de clave desde el Frontend)
+# SCHEMAS (Mapeo exacto del payload del Frontend)
 # ------------------------------------------------------------------------------
 
 class RestorePayload(BaseModel):
+    backup_file: Optional[str] = None     # <--- Clave principal enviada por el Frontend
+    target_app: Optional[str] = None      # <--- Clave secundaria enviada por el Frontend
     snapshot_id: Optional[str] = None
     backup_id: Optional[str] = None
     filename: Optional[str] = None
@@ -73,11 +75,12 @@ def get_backup_profiles():
 @router.post("/restore")
 async def restore_backup_endpoint(payload: RestorePayload, request: Request, background_tasks: BackgroundTasks):
     """
-    Endpoint de restauración ultra-compatible con cualquier formato de JSON enviado por la interfaz.
+    Endpoint de restauración que procesa 'backup_file' y 'target_app'.
     """
-    # 1. Extraer el nombre del archivo desde cualquiera de los campos posibles
+    # 1. Extraer el nombre del archivo enviado por la interfaz
     file_identifier = (
-        payload.snapshot_id
+        payload.backup_file
+        or payload.snapshot_id
         or payload.backup_id
         or payload.filename
         or payload.file_name
@@ -87,12 +90,11 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
         or payload.path
     )
 
-    # Fallback: si Pydantic no lo cazó, inspeccionar el diccionario JSON en bruto
+    # Inspección de respaldo si viniera sin mapear
     if not file_identifier:
         try:
             raw_body = await request.json()
-            logger.info(f"🔍 [Restore] Contenido JSON recibido en bruto: {raw_body}")
-            for k in ["snapshot_id", "backup_id", "filename", "file_name", "file", "id", "name", "path"]:
+            for k in ["backup_file", "snapshot_id", "backup_id", "filename", "file_name", "file", "id", "name", "path"]:
                 if k in raw_body and raw_body[k]:
                     file_identifier = str(raw_body[k])
                     break
@@ -106,9 +108,9 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
             detail="No se ha recibido el nombre o ID del archivo de backup a restaurar."
         )
 
-    logger.info(f"🔄 [POST /api/v1/backups/restore] Solicitud recibida para: {file_identifier}")
+    logger.info(f"🔄 [POST /api/v1/backups/restore] Procesando restauración de: {file_identifier}")
 
-    # 2. Localizar el archivo en el almacenamiento
+    # 2. Comprobar existencia del archivo en el disco
     file_path = os.path.join(DESTINATION_PATH, file_identifier)
     
     if not os.path.exists(file_path):
@@ -122,18 +124,18 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
                 detail=f"El archivo de backup '{file_identifier}' no existe en {DESTINATION_PATH}."
             )
 
-    # 3. Detección del nombre de la app objetivo
+    # 3. Determinar la app destino a partir del nombre del archivo o target_app
     app_name = payload.app_name or payload.app
-    if not app_name or app_name == "system":
+    if not app_name or app_name in ["system", "all"]:
         file_lower = file_identifier.lower()
-        if "transmission" in file_lower:
-            app_name = "transmission"
-        elif "jellyfin" in file_lower:
-            app_name = "jellyfin"
-        elif "sonarr" in file_lower:
+        if "sonarr" in file_lower:
             app_name = "sonarr"
         elif "radarr" in file_lower:
             app_name = "radarr"
+        elif "transmission" in file_lower:
+            app_name = "transmission"
+        elif "jellyfin" in file_lower:
+            app_name = "jellyfin"
         elif "immich" in file_lower:
             app_name = "immich-postgres"
         elif "duplicati" in file_lower:
@@ -143,7 +145,7 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
         else:
             app_name = file_identifier.split("_")[0]
 
-    # 4. Lanzar orquestación en segundo plano (no bloquea la respuesta HTTP)
+    # 4. Lanzar la descompresión y rearranque en segundo plano
     background_tasks.add_task(
         backup_engine_service.execute_restore_1click,
         app_name=app_name,
