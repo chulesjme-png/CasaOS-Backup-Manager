@@ -104,6 +104,17 @@
                             📦 Copiar Sistema Completo
                         </button>
                     </div>
+                    
+                    <!-- INLINE PROGRESS: DISASTER RECOVERY -->
+                    <div id="progress-container-disaster_recovery" class="d-none mt-3 p-3 bg-light rounded border">
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span id="msg-disaster_recovery" class="fw-semibold">Iniciando empaquetado del sistema...</span>
+                            <span id="pct-disaster_recovery" class="fw-bold text-primary">0%</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div id="bar-disaster_recovery" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Perfiles de Aplicaciones -->
@@ -116,19 +127,32 @@
                     <div class="app-list-scroll">
                         <div class="list-group list-group-flush">
                             {% for app in apps %}
-                            <div class="list-group-item px-0 py-3 d-flex justify-content-between align-items-center border-bottom">
-                                <div>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="fw-bold text-dark">{{ app.name }}</span>
-                                        {% if app.has_db_hook %}
-                                        <span class="badge badge-hook small">Hook DB</span>
-                                        {% endif %}
+                            <div class="list-group-item px-0 py-3 border-bottom">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="fw-bold text-dark">{{ app.name }}</span>
+                                            {% if app.has_db_hook %}
+                                            <span class="badge badge-hook small">Hook DB</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-muted small mt-1">Rutas: <code>{{ app.path }}</code></div>
                                     </div>
-                                    <div class="text-muted small mt-1">Rutas: <code>{{ app.path }}</code></div>
+                                    <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('{{ app.name }}')">
+                                        ⚡ Copiar Ahora
+                                    </button>
                                 </div>
-                                <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('{{ app.name }}')">
-                                    ⚡ Copiar Ahora
-                                </button>
+                                
+                                <!-- INLINE PROGRESS: APP INDIVIDUAL -->
+                                <div id="progress-container-{{ app.name }}" class="d-none mt-3 w-100 bg-light p-2 rounded border">
+                                    <div class="d-flex justify-content-between small text-muted mb-1">
+                                        <span id="msg-{{ app.name }}">Iniciando copia...</span>
+                                        <span id="pct-{{ app.name }}" class="fw-bold text-primary">0%</span>
+                                    </div>
+                                    <div class="progress" style="height: 6px;">
+                                        <div id="bar-{{ app.name }}" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
+                                    </div>
+                                </div>
                             </div>
                             {% endfor %}
                         </div>
@@ -378,7 +402,12 @@
                     const data = JSON.parse(event.data);
                     if (data && (data.percentage !== undefined || data.percent !== undefined)) {
                         const pct = data.percentage !== undefined ? data.percentage : data.percent;
-                        updateProgressUI(data.job_id || 'backup', pct, data.message || '');
+                        
+                        // Actualiza la barra flotante (General)
+                        updateFloatingProgressUI(data.job_id || 'backup', pct, data.message || '');
+                        
+                        // Actualiza la barra en línea (Específica de la App o Sistema)
+                        updateInlineProgressUI(data.job_id || 'backup', pct, data.message || '');
                     }
                 } catch (e) {}
             };
@@ -386,7 +415,7 @@
             progressSocket.onclose = () => setTimeout(initProgressWebSocket, 3000);
         }
 
-        function updateProgressUI(jobId, percentage, message) {
+        function updateFloatingProgressUI(jobId, percentage, message) {
             const container = document.getElementById('ws-progress-container');
             const bar = document.getElementById('ws-progress-bar');
             const percentBadge = document.getElementById('ws-progress-percent');
@@ -404,6 +433,42 @@
 
             if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
                 setTimeout(() => container.classList.add('d-none'), 3500);
+            }
+        }
+
+        function updateInlineProgressUI(jobId, percentage, message) {
+            // El jobId normalmente es "backup_nombreapp" o "backup_disaster_recovery"
+            const suffix = jobId.replace('backup_', ''); 
+            const container = document.getElementById(`progress-container-${suffix}`);
+            const bar = document.getElementById(`bar-${suffix}`);
+            const pctText = document.getElementById(`pct-${suffix}`);
+            const msgText = document.getElementById(`msg-${suffix}`);
+
+            if (container && bar && pctText && msgText) {
+                container.classList.remove('d-none');
+                bar.style.width = `${percentage}%`;
+                pctText.innerText = `${percentage}%`;
+                msgText.innerText = message;
+
+                // Color en caso de error
+                if (percentage === 0 && message.toLowerCase().includes('error')) {
+                    bar.classList.replace('bg-primary', 'bg-danger');
+                    pctText.classList.replace('text-primary', 'text-danger');
+                } else if (percentage === 100) {
+                    bar.classList.replace('bg-primary', 'bg-success');
+                    pctText.classList.replace('text-primary', 'text-success');
+                }
+
+                if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
+                    setTimeout(() => {
+                        container.classList.add('d-none');
+                        // Resetear estilos para futuras ejecuciones
+                        bar.classList.remove('bg-success', 'bg-danger');
+                        bar.classList.add('bg-primary');
+                        pctText.classList.remove('text-success', 'text-danger');
+                        pctText.classList.add('text-primary');
+                    }, 4000);
+                }
             }
         }
 
@@ -429,12 +494,10 @@
                 });
 
                 if (response.ok) {
-                    // Cerrar Modal explícitamente mediante JS de Bootstrap
                     const modalEl = document.getElementById('modalSettings');
                     const modalInstance = bootstrap.Modal.getInstance(modalEl);
                     if (modalInstance) modalInstance.hide();
                     
-                    // Recargar pantalla principal para forzar render del nuevo estado
                     window.location.reload();
                 } else {
                     const err = await response.json();
@@ -472,20 +535,29 @@
             }
         }
 
-        // ACCIONES DE COPIA
+        // ACCIONES DE COPIA (LLAMADAS ASÍNCRONAS AL BACKEND)
         async function triggerAppBackup(appName) {
-            updateProgressUI(`backup_${appName}`, 5, `Preparando copia de ${appName}...`);
+            // Mostrar barra inline inicial
+            updateInlineProgressUI(`backup_${appName}`, 5, `Iniciando petición al servidor...`);
             try {
-                await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
-            } catch (err) { console.error(err); }
+                const res = await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
+                if (!res.ok) throw new Error('Falló la petición HTTP');
+            } catch (err) { 
+                console.error(err);
+                updateInlineProgressUI(`backup_${appName}`, 0, `Error de conexión`);
+            }
         }
 
         async function triggerFullBackup() {
             if (confirm('¿Iniciar copia de seguridad completa del sistema?')) {
-                updateProgressUI('backup_disaster_recovery', 5, 'Preparando Disaster Recovery...');
+                updateInlineProgressUI('backup_disaster_recovery', 5, 'Iniciando petición al servidor...');
                 try {
-                    await fetch('/api/v1/backups/run-full', { method: 'POST' });
-                } catch (err) { console.error(err); }
+                    const res = await fetch('/api/v1/backups/run-full', { method: 'POST' });
+                    if (!res.ok) throw new Error('Falló la petición HTTP');
+                } catch (err) { 
+                    console.error(err);
+                    updateInlineProgressUI('backup_disaster_recovery', 0, 'Error de conexión');
+                }
             }
         }
 

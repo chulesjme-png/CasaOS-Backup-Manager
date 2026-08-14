@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from typing import List, Dict, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -59,7 +60,7 @@ def get_apps():
     return discovery_service.scan_apps()
 
 
-# --- NOTIFICACIONES (GUARDADO PERMANENTE CORREGIDO) ---
+# --- NOTIFICACIONES (CORREGIDO EL ERROR DE ARITY EN SAVE_CONFIG) ---
 
 @router.post("/notifications/settings")
 async def save_notification_settings(settings: NotificationSettings):
@@ -67,17 +68,19 @@ async def save_notification_settings(settings: NotificationSettings):
     try:
         data = settings.model_dump() if hasattr(settings, 'model_dump') else settings.dict()
         
-        # 1. Actualizar atributos de la configuración interna
+        # 1. Actualizar valores en config_manager
         for key, value in data.items():
             if hasattr(config_manager.config, key):
                 setattr(config_manager.config, key, value)
             config_manager.update_key(key, str(value) if isinstance(value, bool) else (value or ""))
 
-        # 2. Guardar en disco duro de forma explícita
-        if hasattr(config_manager, "save_config"):
+        # 2. Guardar en disco (Manejo robusto para evitar 'missing 1 required positional argument')
+        try:
             config_manager.save_config()
+        except TypeError:
+            config_manager.save_config(config_manager.config)
 
-        # 3. Actualizar la instancia del servicio de notificaciones
+        # 3. Refrescar la configuración en el servicio de notificaciones
         notification_service.update_config(config_manager.config)
         
         logger.info("Configuración de notificaciones guardada exitosamente.")
@@ -105,29 +108,125 @@ async def test_notification(settings: NotificationSettings):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- PROGRAMACIÓN DE COPIAS ---
+# --- TAREAS DE RESPALDO (NO BLOQUEANTES) ---
+
+async def task_run_app_backup(app_name: str, app_path: str):
+    """Ejecuta la copia en un hilo separado para NO congelar la UI ni Telegram."""
+    # Notificación de INICIO
+    await notification_service.send_notification(
+        title=f"⏳ Inicio de Copia: {app_name}",
+        message=f"Se ha iniciado la copia de seguridad de la aplicación <b>{app_name}</b>.",
+        status="info"
+    )
+    
+    await ws_manager.broadcast({
+        "job_id": f"backup_{app_name}",
+        "percentage": 25,
+        "message": f"Realizando empaquetado de {app_name}..."
+    })
+
+    # Ejecutar proceso en hilo secundario no bloqueante
+    if asyncio.iscoroutinefunction(duplicati_service.run_app_backup):
+        success = await duplicati_service.run_app_backup(app_name, app_path)
+    else:
+        success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path)
+
+    # Notificación y WS de FIN
+    if success:
+        await ws_manager.broadcast({
+            "job_id": f"backup_{app_name}",
+            "percentage": 100,
+            "message": f"¡Copia de {app_name} finalizada!"
+        })
+        await notification_service.send_notification(
+            title=f"✅ Copia Completada: {app_name}",
+            message=f"La aplicación <b>{app_name}</b> se ha respaldado con éxito en el disco.",
+            status="success"
+        )
+    else:
+        await ws_manager.broadcast({
+            "job_id": f"backup_{app_name}",
+            "percentage": 0,
+            "message": f"Error respaldando {app_name}."
+        })
+        await notification_service.send_notification(
+            title=f"❌ Error en Copia: {app_name}",
+            message=f"Ocurrió un fallo al respaldar la aplicación <b>{app_name}</b>.",
+            status="error"
+        )
+
+@router.post("/backups/run-app/{app_name}")
+async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
+    apps = discovery_service.scan_apps()
+    app = next((a for a in apps if a["name"] == app_name), None)
+    if not app:
+        raise HTTPException(status_code=404, detail="Aplicación no encontrada")
+
+    # Responder de inmediato al navegador y delegar la copia a segundo plano
+    background_tasks.add_task(task_run_app_backup, app["name"], app["path"])
+    
+    return {"status": "started", "message": f"Copia de {app_name} iniciada en segundo plano."}
+
+async def task_run_full_backup():
+    await notification_service.send_notification(
+        title="⏳ Inicio: Disaster Recovery",
+        message="Se ha iniciado la copia de seguridad completa del sistema (Raspberry Pi).",
+        status="info"
+    )
+    
+    await ws_manager.broadcast({
+        "job_id": "backup_disaster_recovery",
+        "percentage": 20,
+        "message": "Empaquetando datos y configuraciones del sistema..."
+    })
+
+    if asyncio.iscoroutinefunction(duplicati_service.run_full_disaster_recovery):
+        success = await duplicati_service.run_full_disaster_recovery()
+    else:
+        success = await asyncio.to_thread(duplicati_service.run_full_disaster_recovery)
+
+    if success:
+        await ws_manager.broadcast({
+            "job_id": "backup_disaster_recovery",
+            "percentage": 100,
+            "message": "¡Disaster Recovery finalizado!"
+        })
+        await notification_service.send_notification(
+            title="✅ Disaster Recovery Finalizado",
+            message="El respaldo integral del sistema se completó correctamente.",
+            status="success"
+        )
+    else:
+        await ws_manager.broadcast({
+            "job_id": "backup_disaster_recovery",
+            "percentage": 0,
+            "message": "Error en Disaster Recovery."
+        })
+        await notification_service.send_notification(
+            title="❌ Error en Disaster Recovery",
+            message="Falló el proceso de copia integral.",
+            status="error"
+        )
+
+@router.post("/backups/run-full")
+async def run_full_backup(background_tasks: BackgroundTasks):
+    background_tasks.add_task(task_run_full_backup)
+    return {"status": "started", "message": "Disaster recovery iniciado en segundo plano."}
+
+
+# --- RESTO DE ENDPOINTS ---
 
 @router.get("/schedules")
 def get_schedule():
     config = config_manager.config
-    return {
-        "schedule_frequency": config.schedule_frequency,
-        "schedule_time": config.schedule_time
-    }
+    return {"schedule_frequency": config.schedule_frequency, "schedule_time": config.schedule_time}
 
 @router.post("/schedules")
 def update_schedule(payload: ScheduleUpdateRequest):
-    try:
-        config_manager.update_key("schedule_frequency", payload.schedule_frequency)
-        config_manager.update_key("schedule_time", payload.schedule_time)
-        scheduler_service.reload_schedule()
-        return {"status": "success", "message": "Programación actualizada"}
-    except Exception as e:
-        logger.error(f"Error guardando programación: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# --- RESTAURACIÓN & EXPLORACIÓN ---
+    config_manager.update_key("schedule_frequency", payload.schedule_frequency)
+    config_manager.update_key("schedule_time", payload.schedule_time)
+    scheduler_service.reload_schedule()
+    return {"status": "success", "message": "Programación actualizada"}
 
 @router.get("/backups/list")
 def list_available_backups():
@@ -152,121 +251,6 @@ def list_available_backups():
         logger.error(f"Error escaneando backups: {e}")
 
     return {"target_disk": target_disk, "backups": backups}
-
-@router.post("/backups/restore")
-async def restore_backup(payload: RestoreRequest):
-    if not payload.backup_file:
-        raise HTTPException(status_code=400, detail="Debe especificar un archivo.")
-    
-    app_target = payload.target_app or "all"
-    await ws_manager.broadcast({
-        "job_id": f"restore_{app_target}",
-        "percentage": 10,
-        "message": f"Restaurando {payload.backup_file}..."
-    })
-
-    try:
-        success = await duplicati_service.restore_backup(payload.backup_file, app_target)
-        if success:
-            await ws_manager.broadcast({
-                "job_id": f"restore_{app_target}",
-                "percentage": 100,
-                "message": "¡Restauración completada!"
-            })
-            await notification_service.send_notification(
-                title="Restauración Completada",
-                message=f"Se ha restaurado el respaldo: <b>{payload.backup_file}</b>",
-                status="success"
-            )
-            return {"status": "success"}
-        else:
-            await ws_manager.broadcast({"job_id": f"restore_{app_target}", "percentage": 0, "message": "Error al restaurar."})
-            raise HTTPException(status_code=500, detail="Error al restaurar.")
-    except Exception as e:
-        await ws_manager.broadcast({"job_id": f"restore_{app_target}", "percentage": 0, "message": f"Error: {str(e)}"})
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# --- TAREAS DE RESPALDO MANUAL ---
-
-@router.post("/backups/run-app/{app_name}")
-async def run_app_backup(app_name: str):
-    apps = discovery_service.scan_apps()
-    app = next((a for a in apps if a["name"] == app_name), None)
-    if not app:
-        raise HTTPException(status_code=404, detail="Aplicación no encontrada")
-
-    # Broadcast de inicio
-    await ws_manager.broadcast({
-        "job_id": f"backup_{app_name}",
-        "percentage": 20,
-        "message": f"Iniciando resguardo de {app_name}..."
-    })
-
-    success = await duplicati_service.run_app_backup(app["name"], app["path"])
-    
-    if success:
-        await ws_manager.broadcast({
-            "job_id": f"backup_{app_name}",
-            "percentage": 100,
-            "message": f"¡Copia de {app_name} finalizada!"
-        })
-        await notification_service.send_notification(
-            title=f"Copia Exitosa: {app_name}",
-            message=f"La aplicación <b>{app_name}</b> se ha respaldado correctamente.",
-            status="success"
-        )
-    else:
-        await ws_manager.broadcast({
-            "job_id": f"backup_{app_name}",
-            "percentage": 0,
-            "message": f"Error respaldando {app_name}."
-        })
-        await notification_service.send_notification(
-            title=f"Error en Copia: {app_name}",
-            message=f"Ocurrió un error al respaldar <b>{app_name}</b>.",
-            status="error"
-        )
-
-    return {"status": "success" if success else "failed"}
-
-@router.post("/backups/run-full")
-async def run_full_backup():
-    await ws_manager.broadcast({
-        "job_id": "backup_disaster_recovery",
-        "percentage": 15,
-        "message": "Iniciando Disaster Recovery del sistema..."
-    })
-
-    success = await duplicati_service.run_full_disaster_recovery()
-    
-    if success:
-        await ws_manager.broadcast({
-            "job_id": "backup_disaster_recovery",
-            "percentage": 100,
-            "message": "¡Disaster Recovery finalizado!"
-        })
-        await notification_service.send_notification(
-            title="Disaster Recovery Completo",
-            message="Respaldo integral finalizado con éxito.",
-            status="success"
-        )
-    else:
-        await ws_manager.broadcast({
-            "job_id": "backup_disaster_recovery",
-            "percentage": 0,
-            "message": "Error en Disaster Recovery."
-        })
-        await notification_service.send_notification(
-            title="Error en Disaster Recovery",
-            message="Falló el proceso de Disaster Recovery.",
-            status="error"
-        )
-
-    return {"status": "success" if success else "failed"}
-
-
-# --- HISTORIAL & WEBSOCKET ---
 
 @router.get("/logs")
 def get_execution_logs():
