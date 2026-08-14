@@ -1,26 +1,71 @@
 import os
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, status
 from pydantic import BaseModel
 
+from app.core.config import config_manager
 from app.services.backup_engine_service import backup_engine_service
 
 logger = logging.getLogger("casaos-backup")
 
 router = APIRouter(prefix="/api/v1/backups", tags=["backups"])
 
-DESTINATION_PATH = "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa"
+
+def locate_backup_file(filename: str) -> Optional[str]:
+    """
+    Busca el archivo de backup en la ruta configurada, rutas habituales
+    o mediante escaneo rápido en los puntos de montaje /media y /DATA.
+    """
+    # 1. Probar ruta directa si filename ya es un path completo
+    if os.path.isabs(filename) and os.path.exists(filename):
+        return filename
+
+    candidates = []
+    
+    # 2. Añadir destino configurado dinámicamente desde config_manager
+    cfg = config_manager.config
+    if hasattr(cfg, "destination_path") and cfg.destination_path:
+        candidates.append(cfg.destination_path)
+    if hasattr(cfg, "backup_destination") and cfg.backup_destination:
+        candidates.append(cfg.backup_destination)
+
+    # 3. Rutas alternativas habituales
+    candidates.extend([
+        "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa",
+        "/DATA/AppData",
+        "/DATA",
+    ])
+
+    # Verificar coincidencia directa en los candidatos
+    for base in candidates:
+        if not base:
+            continue
+        possible_file = os.path.join(base, filename)
+        if os.path.exists(possible_file):
+            return possible_file
+
+    # 4. Búsqueda profunda en /media por si el disco está en otra subcarpeta
+    media_root = Path("/media")
+    if media_root.exists():
+        try:
+            for match in media_root.glob(f"**/{filename}"):
+                if match.is_file():
+                    return str(match)
+        except Exception as e:
+            logger.warning(f"Error al escanear /media: {e}")
+
+    return None
 
 
 # ------------------------------------------------------------------------------
-# SCHEMAS (Mapeo exacto del payload del Frontend)
+# SCHEMAS (Pydantic)
 # ------------------------------------------------------------------------------
 
 class RestorePayload(BaseModel):
-    backup_file: Optional[str] = None     # <--- Clave principal enviada por el Frontend
-    target_app: Optional[str] = None      # <--- Clave secundaria enviada por el Frontend
+    backup_file: Optional[str] = None
+    target_app: Optional[str] = None
     snapshot_id: Optional[str] = None
     backup_id: Optional[str] = None
     filename: Optional[str] = None
@@ -43,7 +88,6 @@ def get_backup_profiles():
     """Escanea el directorio de aplicaciones y devuelve los perfiles disponibles."""
     profiles = []
     base_path = "/DATA/AppData"
-    
     search_path = base_path if os.path.exists(base_path) else "app/data/AppData"
     
     if os.path.exists(search_path):
@@ -75,9 +119,9 @@ def get_backup_profiles():
 @router.post("/restore")
 async def restore_backup_endpoint(payload: RestorePayload, request: Request, background_tasks: BackgroundTasks):
     """
-    Endpoint de restauración que procesa 'backup_file' y 'target_app'.
+    Endpoint de restauración dinámico con localización automática de archivos.
     """
-    # 1. Extraer el nombre del archivo enviado por la interfaz
+    # 1. Obtener identificador del archivo desde el cuerpo de la petición
     file_identifier = (
         payload.backup_file
         or payload.snapshot_id
@@ -90,7 +134,6 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
         or payload.path
     )
 
-    # Inspección de respaldo si viniera sin mapear
     if not file_identifier:
         try:
             raw_body = await request.json()
@@ -99,32 +142,30 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
                     file_identifier = str(raw_body[k])
                     break
         except Exception as e:
-            logger.warning(f"[Restore] No se pudo leer el cuerpo de la petición en bruto: {e}")
+            logger.warning(f"[Restore] No se pudo leer el JSON en bruto: {e}")
 
     if not file_identifier:
-        logger.error("❌ [Restore Error 400] La petición no contiene ningún identificador de archivo válido.")
+        logger.error("❌ [Restore Error 400] Petición sin identificador de archivo.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No se ha recibido el nombre o ID del archivo de backup a restaurar."
+            detail="No se ha recibido el nombre del archivo de backup a restaurar."
         )
 
-    logger.info(f"🔄 [POST /api/v1/backups/restore] Procesando restauración de: {file_identifier}")
+    logger.info(f"🔄 [POST /api/v1/backups/restore] Buscando archivo de respaldo: {file_identifier}")
 
-    # 2. Comprobar existencia del archivo en el disco
-    file_path = os.path.join(DESTINATION_PATH, file_identifier)
-    
-    if not os.path.exists(file_path):
-        possible_path = Path(file_identifier)
-        if possible_path.exists():
-            file_path = str(possible_path)
-        else:
-            logger.error(f"❌ Archivo no encontrado en disco: {file_path}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"El archivo de backup '{file_identifier}' no existe en {DESTINATION_PATH}."
-            )
+    # 2. Localizar dinámicamente la ruta física del archivo
+    file_path = locate_backup_file(file_identifier)
 
-    # 3. Determinar la app destino a partir del nombre del archivo o target_app
+    if not file_path:
+        logger.error(f"❌ [Restore Error 404] No se encontró el archivo '{file_identifier}' en ninguna ruta conocida de almacenamiento.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"El archivo '{file_identifier}' no se encuentra en el disco destino ni en el sistema."
+        )
+
+    logger.info(f"✅ Archivo localizado exitosamente en: {file_path}")
+
+    # 3. Identificar nombre de la app destino
     app_name = payload.app_name or payload.app
     if not app_name or app_name in ["system", "all"]:
         file_lower = file_identifier.lower()
@@ -145,7 +186,7 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
         else:
             app_name = file_identifier.split("_")[0]
 
-    # 4. Lanzar la descompresión y rearranque en segundo plano
+    # 4. Iniciar ejecución de restauración en segundo plano
     background_tasks.add_task(
         backup_engine_service.execute_restore_1click,
         app_name=app_name,
@@ -156,5 +197,6 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
     return {
         "status": "ACCEPTED",
         "message": f"Restauración iniciada con éxito para {app_name}",
-        "snapshot_id": file_identifier
+        "snapshot_id": file_identifier,
+        "resolved_path": file_path
     }
