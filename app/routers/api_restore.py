@@ -1,10 +1,12 @@
 import os
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, BackgroundTasks, status
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
+from app.services.backup_engine_service import backup_engine_service
+
+logger = logging.getLogger("casaos-backup")
 
 router = APIRouter(prefix="/api/v1/restore", tags=["restore"])
 
@@ -49,14 +51,21 @@ def list_snapshots():
                 
                 # Identificación básica del nombre del perfil
                 app_name = "system_disaster_recovery"
-                if "immich" in entry.lower():
+                entry_lower = entry.lower()
+                if "immich" in entry_lower:
                     app_name = "immich-postgres"
-                elif "nextcloud" in entry.lower():
+                elif "nextcloud" in entry_lower:
                     app_name = "nextcloud"
-                elif "navidrome" in entry.lower():
+                elif "navidrome" in entry_lower:
                     app_name = "navidrome"
-                elif "plex" in entry.lower():
+                elif "plex" in entry_lower:
                     app_name = "plex"
+                elif "jellyfin" in entry_lower:
+                    app_name = "jellyfin"
+                elif "sonarr" in entry_lower:
+                    app_name = "sonarr"
+                elif "radarr" in entry_lower:
+                    app_name = "radarr"
 
                 snapshots.append(BackupSnapshot(
                     id=entry,
@@ -72,13 +81,30 @@ def list_snapshots():
 
 
 @router.post("/execute")
-def execute_restore(payload: RestoreRequest):
-    """Inicia el proceso de recuperación de datos a partir de una copia seleccionada."""
+async def execute_restore(payload: RestoreRequest, background_tasks: BackgroundTasks):
+    """
+    Inicia el proceso de recuperación de datos automatizado (1-Click)
+    a partir de una copia seleccionada.
+    """
     logger.info(f"🔄 Iniciando solicitud de restauración para {payload.app_name} desde {payload.snapshot_id}")
     
-    # Aquí se engancha la lógica del backend de recuperación (Duplicati / Tar)
+    file_path = os.path.join(DESTINATION_PATH, payload.snapshot_id)
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"El archivo de backup '{payload.snapshot_id}' no fue encontrado en el disco de destino."
+        )
+
+    # Delegamos la tarea de restauración al fondo para respuesta asíncrona inmediata
+    background_tasks.add_task(
+        backup_engine_service.execute_restore_1click,
+        app_name=payload.app_name,
+        file_path=file_path,
+        target_path=payload.target_path
+    )
+
     return {
         "status": "ACCEPTED",
-        "message": f"Restauración iniciada para {payload.app_name}",
+        "message": f"Restauración automatizada iniciada para {payload.app_name}",
         "snapshot_id": payload.snapshot_id
     }
