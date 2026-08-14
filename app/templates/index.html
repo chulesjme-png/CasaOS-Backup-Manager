@@ -416,7 +416,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Disco Destino Configurado</label>
-                        <input type="text" class="form-control" id="settingsTargetDisk" value="{{ config.selected_target_disk }}" readonly>
+                        <input type="text" class="form-control" id="settingsTargetDisk" value="{{ config.selected_target_disk or '' }}" readonly>
                     </div>
 
                     <!-- SECCIÓN DE NOTIFICACIONES -->
@@ -484,8 +484,9 @@
             progressSocket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    if (data && typeof data.percentage === 'number') {
-                        updateProgressUI(data.job_id, data.percentage, data.message);
+                    const pct = data.percentage !== undefined ? data.percentage : data.percent;
+                    if (data && typeof pct === 'number') {
+                        updateProgressUI(data.job_id || data.type || 'backup', pct, data.message || '');
                     }
                 } catch (e) {}
             };
@@ -558,7 +559,7 @@
             if (modalLogsEl) modalLogsEl.addEventListener('show.bs.modal', fetchExecutionLogs);
         });
 
-        // --- LÓGICA DE NOTIFICACIONES CORREGIDA ---
+        // --- LÓGICA DE NOTIFICACIONES Y CIERRE DE MODAL ---
         function getNotificationFormData() {
             return {
                 telegram_enabled: document.getElementById('telegramEnabled').checked,
@@ -580,6 +581,12 @@
 
                 if (response.ok) {
                     alert('¡Configuración de notificaciones guardada con éxito!');
+                    // Cerrar el modal de configuración automáticamente
+                    const settingsModalEl = document.getElementById('modalSettings');
+                    if (settingsModalEl) {
+                        const modalInstance = bootstrap.Modal.getInstance(settingsModalEl) || new bootstrap.Modal(settingsModalEl);
+                        modalInstance.hide();
+                    }
                 } else {
                     const errData = await response.json().catch(() => ({}));
                     alert(`🔴 Error al guardar: ${errData.detail || 'Fallo en la API'}`);
@@ -792,6 +799,7 @@
         }
 
         async function triggerAppBackup(appName) {
+            updateProgressUI(`backup_${appName}`, 5, `Iniciando copia de ${appName}...`);
             try {
                 await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
             } catch (err) {
@@ -801,6 +809,7 @@
 
         async function triggerFullBackup() {
             if (confirm('¿Desea iniciar la copia de seguridad completa del sistema (Disaster Recovery)?')) {
+                updateProgressUI('backup_disaster_recovery', 5, 'Iniciando Disaster Recovery...');
                 try {
                     await fetch('/api/v1/backups/run-full', { method: 'POST' });
                 } catch (err) {

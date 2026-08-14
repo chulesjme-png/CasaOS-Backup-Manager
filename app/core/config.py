@@ -14,6 +14,13 @@ class AppConfig(BaseModel):
     retention_days: int = 30
     schedule_frequency: str = "daily"
     schedule_time: str = "03:00"
+    
+    # Parámetros de Notificaciones (Telegram y Webhook)
+    telegram_enabled: bool = False
+    telegram_bot_token: Optional[str] = ""
+    telegram_chat_id: Optional[str] = ""
+    webhook_enabled: bool = False
+    webhook_url: Optional[str] = ""
 
 class ConfigManager:
     def __init__(self):
