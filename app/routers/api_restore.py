@@ -81,6 +81,7 @@ def list_snapshots():
 
 
 @router.post("/execute")
+@router.post("/restore")  # ALIAS PARA SOLUCIONAR EL ERROR 404 DE LA INTERFAZ
 async def execute_restore(payload: RestoreRequest, background_tasks: BackgroundTasks):
     """
     Inicia el proceso de recuperación de datos automatizado (1-Click)
