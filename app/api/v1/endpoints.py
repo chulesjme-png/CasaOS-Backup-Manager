@@ -39,6 +39,21 @@ class NotificationSettings(BaseModel):
 
 @router.get("/config", response_model=AppConfig)
 def get_config():
+    """
+    Devuelve la configuración actual. Si no hay disco seleccionado,
+    resuelve automáticamente el primer disco del sistema disponible.
+    """
+    if not config_manager.config.selected_target_disk:
+        try:
+            disks = disk_service.get_system_disks()
+            if disks and len(disks) > 0:
+                first_disk = disks[0].get("mountpoint") or disks[0].get("path")
+                if first_disk:
+                    config_manager.update_key("selected_target_disk", first_disk)
+                    logger.info(f"[Config] Disco autoseleccionado por defecto: {first_disk}")
+        except Exception as e:
+            logger.warning(f"[Config] No se pudo resolver disco por defecto: {e}")
+
     return config_manager.config
 
 @router.post("/config", response_model=AppConfig)
@@ -60,16 +75,16 @@ def get_apps():
     return discovery_service.scan_apps()
 
 
-# --- NOTIFICACIONES (NORMALIZACIÓN Y PERSISTENCIA ROBUSTA) ---
+# --- NOTIFICACIONES (SINCRO Y MANEJO DE TIPOS SEGURO) ---
 
 @router.post("/notifications/settings")
 async def save_notification_settings(settings: Union[NotificationSettings, Dict]):
     """
-    Guarda la configuración de notificaciones garantizando compatibilidad 
-    con Pydantic V1, V2 y diccionarios nativos.
+    Guarda la configuración de notificaciones y sincroniza el servicio 
+    de forma compatible con diccionarios y modelos Pydantic.
     """
     try:
-        # 1. Normalización agnóstica del Payload DTO
+        # 1. Normalización del payload entrante
         if hasattr(settings, 'model_dump'):
             data = settings.model_dump()
         elif hasattr(settings, 'dict'):
@@ -79,32 +94,31 @@ async def save_notification_settings(settings: Union[NotificationSettings, Dict]
         else:
             data = dict(settings)
 
-        # 2. Actualización atómica en el gestor de configuración
+        # 2. Actualización de valores en ConfigManager
         for key, value in data.items():
             str_value = str(value) if isinstance(value, bool) else (value or "")
             config_manager.update_key(key, str_value)
             if hasattr(config_manager.config, key):
                 setattr(config_manager.config, key, value)
 
-        # 3. Persistencia segura del estado
-        if hasattr(config_manager, 'save_config'):
-            try:
-                config_manager.save_config()
-            except TypeError:
-                # Si save_config requiere un argumento
-                cfg = config_manager.config
-                if hasattr(cfg, 'model_dump'):
-                    cfg_data = cfg.model_dump()
-                elif hasattr(cfg, 'dict'):
-                    cfg_data = cfg.dict()
-                else:
-                    cfg_data = dict(cfg)
-                config_manager.save_config(cfg_data)
+        # 3. Persistencia en disco
+        config_manager.save_config()
 
-        # 4. Sincronización del servicio en runtime
-        notification_service.update_config(config_manager.config)
+        # 4. Sincronización con notification_service (Soporte seguro Dict vs AppConfig)
+        if hasattr(config_manager.config, "model_dump"):
+            cfg_dict = config_manager.config.model_dump()
+        elif hasattr(config_manager.config, "dict"):
+            cfg_dict = config_manager.config.dict()
+        else:
+            cfg_dict = dict(config_manager.config)
+
+        try:
+            notification_service.update_config(cfg_dict)
+        except Exception:
+            # Fallback en caso de que notification_service espere el objeto AppConfig directamente
+            notification_service.update_config(config_manager.config)
         
-        logger.info("[Backend] Configuración de notificaciones guardada con éxito.")
+        logger.info("[Backend] Configuración de notificaciones y alertas guardada con éxito.")
         return {"status": "ok", "message": "Configuración guardada correctamente"}
 
     except Exception as e:
