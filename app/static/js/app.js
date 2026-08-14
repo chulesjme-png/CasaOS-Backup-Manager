@@ -4,6 +4,18 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Dashboard cargado. Iniciando conexión con la API...");
     cargarBackends();
     initWebSocketProgress();
+    
+    // Auto-destrucción de barras de progreso colgadas al cargar la interfaz
+    setTimeout(() => {
+        document.querySelectorAll('div').forEach(box => {
+            const style = window.getComputedStyle(box);
+            if (style.position === 'fixed' || box.style.position === 'fixed') {
+                if (box.innerHTML && (box.innerHTML.includes("Restauración") || box.innerHTML.includes("10%") || box.innerHTML.includes("despliegue"))) {
+                    box.style.display = 'none';
+                }
+            }
+        });
+    }, 3000);
 });
 
 // Función para obtener los motores de backup disponibles y pintarlos en el HTML
@@ -72,47 +84,19 @@ async function solicitarRestauracion(snapshotId, appName) {
 
         const data = await response.json();
         console.log("Restauración iniciada/completada con éxito:", data);
-
-        // Forzar limpieza y cierre de la notificación flotante al terminar con éxito
-        finalizarBarraProgresoVisual();
+        
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
 
         return data;
     } catch (error) {
         console.error("Error al enviar solicitud de restauración:", error);
         alert("No se pudo iniciar la restauración: " + error.message);
-        finalizarBarraProgresoVisual();
     }
 }
 
-// Función para completar visualmente la barra y ocultarla
-function finalizarBarraProgresoVisual() {
-    // Buscar cualquier barra de progreso y ponerla al 100%
-    document.querySelectorAll('.progress-bar, [role="progressbar"]').forEach(bar => {
-        bar.style.width = "100%";
-    });
-
-    // Actualizar textos de estado si existen
-    document.querySelectorAll('div').forEach(el => {
-        if (el.textContent && el.textContent.includes("Iniciando despliegue")) {
-            el.textContent = "¡Restauración completada con éxito!";
-        }
-    });
-
-    // Ocultar contenedor flotante y recargar tras 1.5 segundos
-    setTimeout(() => {
-        document.querySelectorAll('div').forEach(box => {
-            const style = window.getComputedStyle(box);
-            if (style.position === 'fixed' || box.style.position === 'fixed') {
-                if (box.innerHTML.includes("Restauración") || box.innerHTML.includes("despliegue") || box.innerHTML.includes("10%")) {
-                    box.style.display = 'none';
-                }
-            }
-        });
-        window.location.reload();
-    }, 1500);
-}
-
-// Gestión del WebSocket para sincronización en tiempo real adicional
+// Gestión del WebSocket por si emite eventos en tiempo real
 function initWebSocketProgress() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/progress`;
@@ -123,7 +107,7 @@ function initWebSocketProgress() {
         try {
             const data = JSON.parse(event.data);
             if (data.type === "restore_complete" || data.status === "COMPLETED") {
-                finalizarBarraProgresoVisual();
+                setTimeout(() => window.location.reload(), 1500);
             }
         } catch (err) {
             console.error("Error al procesar mensaje de WebSocket:", err);
