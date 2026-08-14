@@ -60,7 +60,7 @@ def get_apps():
     return discovery_service.scan_apps()
 
 
-# --- NOTIFICACIONES (CORREGIDO EL ERROR DE ARITY EN SAVE_CONFIG) ---
+# --- NOTIFICACIONES (CORREGIDO) ---
 
 @router.post("/notifications/settings")
 async def save_notification_settings(settings: NotificationSettings):
@@ -74,11 +74,12 @@ async def save_notification_settings(settings: NotificationSettings):
                 setattr(config_manager.config, key, value)
             config_manager.update_key(key, str(value) if isinstance(value, bool) else (value or ""))
 
-        # 2. Guardar en disco (Manejo robusto para evitar 'missing 1 required positional argument')
+        # 2. Guardar en disco (Pasando explícitamente el diccionario para evitar error .get)
         try:
             config_manager.save_config()
         except TypeError:
-            config_manager.save_config(config_manager.config)
+            config_data = config_manager.config.model_dump() if hasattr(config_manager.config, 'model_dump') else config_manager.config.dict()
+            config_manager.save_config(config_data)
 
         # 3. Refrescar la configuración en el servicio de notificaciones
         notification_service.update_config(config_manager.config)

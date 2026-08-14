@@ -238,20 +238,22 @@
         </div>
     </div>
 
-    <!-- BARRA DE PROGRESO FLOTANTE -->
-    <div id="ws-progress-container" class="card shadow-lg border-0 d-none" style="position: fixed; bottom: 24px; right: 24px; z-index: 1100; min-width: 360px; max-width: 420px; background: #ffffff;">
-        <div class="card-body p-3">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-                <div class="d-flex align-items-center gap-2">
-                    <div id="ws-job-icon" class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                    <span id="ws-job-title" class="fw-bold text-dark small text-truncate" style="max-width: 230px;">Procesando Tarea...</span>
+    <!-- CONTENEDOR DE TOASTS (NOTIFICACIÓN FLOTANTE ELEGANTE) -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-4" style="z-index: 1100;">
+        <div id="wsToast" class="toast text-bg-primary border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+            <div class="toast-body p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="spinner-border spinner-border-sm text-light" role="status"></div>
+                        <span id="ws-job-title" class="fw-bold text-white small text-truncate" style="max-width: 180px;">Procesando...</span>
+                    </div>
+                    <span id="ws-progress-percent" class="badge bg-light text-primary rounded-pill">0%</span>
                 </div>
-                <span id="ws-progress-percent" class="badge bg-primary rounded-pill">0%</span>
+                <div class="progress mb-2" style="height: 6px; border-radius: 3px; background-color: rgba(255,255,255,0.3);">
+                    <div id="ws-progress-bar" class="progress-bar bg-white progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="ws-progress-message" class="text-white-50 small text-truncate" style="font-size: 0.8rem;">Iniciando proceso...</div>
             </div>
-            <div class="progress mb-2" style="height: 8px; border-radius: 4px;">
-                <div id="ws-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
-            </div>
-            <div id="ws-progress-message" class="text-muted small text-truncate" style="font-size: 0.8rem;">Iniciando proceso...</div>
         </div>
     </div>
 
@@ -415,16 +417,17 @@
             progressSocket.onclose = () => setTimeout(initProgressWebSocket, 3000);
         }
 
+        // USO DEL TOAST DE BOOTSTRAP PARA LA BARRA FLOTANTE
         function updateFloatingProgressUI(jobId, percentage, message) {
-            const container = document.getElementById('ws-progress-container');
+            const toastEl = document.getElementById('wsToast');
+            const toast = bootstrap.Toast.getOrCreateInstance(toastEl);
+            
             const bar = document.getElementById('ws-progress-bar');
             const percentBadge = document.getElementById('ws-progress-percent');
             const msgEl = document.getElementById('ws-progress-message');
             const titleEl = document.getElementById('ws-job-title');
 
-            if (!container) return;
-
-            container.classList.remove('d-none');
+            toast.show();
             titleEl.innerText = jobId.includes('disaster') ? 'Disaster Recovery' : `Copia: ${jobId.replace('backup_', '')}`;
             
             bar.style.width = `${percentage}%`;
@@ -432,7 +435,7 @@
             msgEl.innerText = message;
 
             if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
-                setTimeout(() => container.classList.add('d-none'), 3500);
+                setTimeout(() => toast.hide(), 4000);
             }
         }
 
@@ -469,6 +472,90 @@
                         pctText.classList.add('text-primary');
                     }, 4000);
                 }
+            }
+        }
+
+        // CARGAR HISTORIAL AL ABRIR EL MODAL
+        document.getElementById('modalLogs').addEventListener('show.bs.modal', async () => {
+            const tbody = document.getElementById('logsTableBody');
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Buscando registros...</td></tr>';
+            try {
+                const res = await fetch('/api/v1/logs');
+                const logs = await res.json();
+                tbody.innerHTML = '';
+                
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">El historial está vacío.</td></tr>';
+                    return;
+                }
+                
+                logs.forEach(log => {
+                    let fecha = isNaN(log.timestamp) ? log.timestamp : new Date(log.timestamp * 1000).toLocaleString();
+                    let color = log.status.toLowerCase() === 'success' ? 'bg-success' : 'bg-danger';
+                    
+                    tbody.innerHTML += `<tr>
+                        <td class="text-nowrap">${fecha}</td>
+                        <td class="fw-semibold">${log.type}</td>
+                        <td><code>${log.target}</code></td>
+                        <td><span class="badge ${color}">${log.status}</span></td>
+                        <td>${log.duration || '0'}s</td>
+                    </tr>`;
+                });
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-danger">Error conectando con el servidor.</td></tr>';
+            }
+        });
+
+        async function clearLogs() {
+            if (confirm("¿Estás seguro de que deseas borrar todo el historial?")) {
+                await fetch('/api/v1/logs', { method: 'DELETE' });
+                bootstrap.Modal.getInstance(document.getElementById('modalLogs')).hide();
+            }
+        }
+
+        // CARGAR COPIAS AL ABRIR EL MODAL RESTAURAR
+        document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
+            const list = document.getElementById('restoreBackupsList');
+            list.innerHTML = '<div class="p-4 text-center text-muted">Buscando copias en el disco destino...</div>';
+            try {
+                const res = await fetch('/api/v1/backups/list');
+                const data = await res.json();
+                list.innerHTML = '';
+                
+                if (!data.backups || data.backups.length === 0) {
+                    list.innerHTML = '<div class="p-4 text-center text-muted">No se han encontrado copias de seguridad (.tar.gz) en el disco seleccionado.</div>';
+                    return;
+                }
+                
+                data.backups.forEach(b => {
+                    let fecha = new Date(b.created_at * 1000).toLocaleString();
+                    list.innerHTML += `
+                        <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                            <div>
+                                <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
+                                <div class="small text-muted mt-1">Peso: ${b.size_mb} MB &nbsp;|&nbsp; Fecha: ${fecha}</div>
+                            </div>
+                            <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore('${b.filename}')">
+                                🔄 Restaurar
+                            </button>
+                        </div>`;
+                });
+            } catch (err) {
+                list.innerHTML = '<div class="p-4 text-center text-danger">Error leyendo el almacenamiento.</div>';
+            }
+        });
+
+        async function triggerRestore(filename) {
+            if (confirm(`¿Estás seguro de que deseas restaurar la copia: ${filename}?\n\nEsto sobrescribirá los datos actuales.`)) {
+                bootstrap.Modal.getInstance(document.getElementById('modalRestore')).hide();
+                updateFloatingProgressUI('Restauración', 10, `Iniciando despliegue de ${filename}...`);
+                try {
+                    await fetch('/api/v1/backups/restore', { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ backup_file: filename, target_app: "all" })
+                    });
+                } catch (err) { console.error(err); }
             }
         }
 
@@ -537,7 +624,6 @@
 
         // ACCIONES DE COPIA (LLAMADAS ASÍNCRONAS AL BACKEND)
         async function triggerAppBackup(appName) {
-            // Mostrar barra inline inicial
             updateInlineProgressUI(`backup_${appName}`, 5, `Iniciando petición al servidor...`);
             try {
                 const res = await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
