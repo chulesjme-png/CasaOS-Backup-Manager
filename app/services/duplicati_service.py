@@ -2,7 +2,9 @@ import os
 import logging
 import subprocess
 import asyncio
+from datetime import datetime
 from app.core.config import config_manager
+from app.services.backup_engine_service import backup_engine_service
 
 logger = logging.getLogger("casaos-backup")
 
@@ -16,7 +18,7 @@ class DuplicatiService:
         
         # Fallback inteligente si no hay nada guardado en la configuración
         if not target_disk:
-            default_disk = "/media/pichules/7a4f9383-f80b-4270-8926-8203030bb8d4"
+            default_disk = "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa"
             if os.path.exists(default_disk):
                 logger.warning(f"[DuplicatiService] Sin disco en config. Usando ruta por defecto: {default_disk}")
                 return default_disk
@@ -33,12 +35,26 @@ class DuplicatiService:
 
             logger.info(f"Iniciando respaldo de {app_name} en {dest_dir}...")
 
-            tar_file = os.path.join(dest_dir, f"{app_name}_backup.tar.gz")
+            # Marca de tiempo para mantener historial de respaldos
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            tar_file = os.path.join(dest_dir, f"{app_name}_backup_{timestamp}.tar.gz")
+            
             cmd = ["tar", "-czf", tar_file, "-C", app_path, "."]
             
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
-                logger.info(f"Respaldo de {app_name} completado con éxito.")
+                logger.info(f"Respaldo de {app_name} completado con éxito: {os.path.basename(tar_file)}")
+                
+                # 🧹 Aplicar política de retención automática (máximo 3 copias)
+                try:
+                    backup_engine_service.apply_retention_policy(
+                        target_dir=dest_dir,
+                        prefix=app_name,
+                        max_copies=3
+                    )
+                except Exception as ret_err:
+                    logger.warning(f"[DuplicatiService] Error aplicando retención para {app_name}: {ret_err}")
+
                 return True
             else:
                 logger.error(f"Error al empaquetar {app_name}: {result.stderr}")
