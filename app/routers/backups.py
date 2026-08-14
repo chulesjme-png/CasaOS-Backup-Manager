@@ -1,8 +1,8 @@
 import os
 import logging
 from pathlib import Path
-from typing import Optional
-from fastapi import APIRouter, HTTPException, BackgroundTasks, status
+from typing import Optional, Any, Dict
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, status
 from pydantic import BaseModel
 
 from app.services.backup_engine_service import backup_engine_service
@@ -15,13 +15,20 @@ DESTINATION_PATH = "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa"
 
 
 # ------------------------------------------------------------------------------
-# SCHEMAS (Pydantic)
+# SCHEMAS Flexible (Acepta cualquier nombre de clave desde el Frontend)
 # ------------------------------------------------------------------------------
 
 class RestorePayload(BaseModel):
     snapshot_id: Optional[str] = None
     backup_id: Optional[str] = None
-    app_name: Optional[str] = "system"
+    filename: Optional[str] = None
+    file_name: Optional[str] = None
+    file: Optional[str] = None
+    id: Optional[str] = None
+    name: Optional[str] = None
+    path: Optional[str] = None
+    app_name: Optional[str] = None
+    app: Optional[str] = None
     target_path: Optional[str] = None
 
 
@@ -35,7 +42,6 @@ def get_backup_profiles():
     profiles = []
     base_path = "/DATA/AppData"
     
-    # Si no existe la ruta en el entorno local, buscamos o creamos una alternativa
     search_path = base_path if os.path.exists(base_path) else "app/data/AppData"
     
     if os.path.exists(search_path):
@@ -53,7 +59,6 @@ def get_backup_profiles():
         except Exception:
             pass
             
-    # Si no se detecta ninguna app física, devolvemos perfiles de ejemplo para que la interfaz luzca completa
     if not profiles:
         profiles = [
             {"name": "duplicati", "app_name": "Duplicati", "path": "/DATA/AppData/duplicati", "status": "Protected"},
@@ -66,21 +71,44 @@ def get_backup_profiles():
 
 
 @router.post("/restore")
-async def restore_backup_endpoint(payload: RestorePayload, background_tasks: BackgroundTasks):
+async def restore_backup_endpoint(payload: RestorePayload, request: Request, background_tasks: BackgroundTasks):
     """
-    Endpoint invocado por el modal del frontend (/api/v1/backups/restore).
+    Endpoint de restauración ultra-compatible con cualquier formato de JSON enviado por la interfaz.
     """
-    # Identificar el archivo seleccionado (acepta snapshot_id o backup_id)
-    file_identifier = payload.snapshot_id or payload.backup_id
-    
+    # 1. Extraer el nombre del archivo desde cualquiera de los campos posibles
+    file_identifier = (
+        payload.snapshot_id
+        or payload.backup_id
+        or payload.filename
+        or payload.file_name
+        or payload.file
+        or payload.id
+        or payload.name
+        or payload.path
+    )
+
+    # Fallback: si Pydantic no lo cazó, inspeccionar el diccionario JSON en bruto
     if not file_identifier:
+        try:
+            raw_body = await request.json()
+            logger.info(f"🔍 [Restore] Contenido JSON recibido en bruto: {raw_body}")
+            for k in ["snapshot_id", "backup_id", "filename", "file_name", "file", "id", "name", "path"]:
+                if k in raw_body and raw_body[k]:
+                    file_identifier = str(raw_body[k])
+                    break
+        except Exception as e:
+            logger.warning(f"[Restore] No se pudo leer el cuerpo de la petición en bruto: {e}")
+
+    if not file_identifier:
+        logger.error("❌ [Restore Error 400] La petición no contiene ningún identificador de archivo válido.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Se requiere 'snapshot_id' o 'backup_id' para iniciar la restauración."
+            detail="No se ha recibido el nombre o ID del archivo de backup a restaurar."
         )
 
-    logger.info(f"🔄 [POST /api/v1/backups/restore] Solicitud recibida para {file_identifier}")
+    logger.info(f"🔄 [POST /api/v1/backups/restore] Solicitud recibida para: {file_identifier}")
 
+    # 2. Localizar el archivo en el almacenamiento
     file_path = os.path.join(DESTINATION_PATH, file_identifier)
     
     if not os.path.exists(file_path):
@@ -88,13 +116,14 @@ async def restore_backup_endpoint(payload: RestorePayload, background_tasks: Bac
         if possible_path.exists():
             file_path = str(possible_path)
         else:
+            logger.error(f"❌ Archivo no encontrado en disco: {file_path}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"El archivo de backup '{file_identifier}' no existe en {DESTINATION_PATH}."
             )
 
-    # Detección dinámica del nombre del servicio destino
-    app_name = payload.app_name
+    # 3. Detección del nombre de la app objetivo
+    app_name = payload.app_name or payload.app
     if not app_name or app_name == "system":
         file_lower = file_identifier.lower()
         if "transmission" in file_lower:
@@ -107,10 +136,14 @@ async def restore_backup_endpoint(payload: RestorePayload, background_tasks: Bac
             app_name = "radarr"
         elif "immich" in file_lower:
             app_name = "immich-postgres"
+        elif "duplicati" in file_lower:
+            app_name = "duplicati"
+        elif "disasterrecovery" in file_lower:
+            app_name = "disaster-recovery"
         else:
             app_name = file_identifier.split("_")[0]
 
-    # Ejecutamos la restauración 1-Click en segundo plano
+    # 4. Lanzar orquestación en segundo plano (no bloquea la respuesta HTTP)
     background_tasks.add_task(
         backup_engine_service.execute_restore_1click,
         app_name=app_name,
