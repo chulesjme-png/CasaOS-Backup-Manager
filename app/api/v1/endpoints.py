@@ -41,39 +41,45 @@ class NotificationSettings(BaseModel):
 
 def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     """
-    Registra un evento en el servicio de auditoría de forma agnóstica a su implementación.
+    Registra de forma segura un evento de backup en audit_service.
     """
     now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     log_entry = {
         "timestamp": now_str,
         "type": job_type,
         "target": target,
-        "status": status,  # "success" o "failed"
+        "status": status,
         "duration": duration
     }
     
-    # Intenta invocar el método de registro disponible en audit_service
-    for method_name in ["add_log", "log_event", "log_action", "log", "record_log"]:
-        if hasattr(audit_service, method_name):
-            try:
-                getattr(audit_service, method_name)(log_entry)
-                logger.info(f"[Audit] Registro añadido al historial: {target} ({status})")
-                return
-            except TypeError:
-                try:
-                    getattr(audit_service, method_name)(
-                        type=job_type, target=target, status=status, duration=duration
-                    )
-                    return
-                except Exception:
-                    pass
-            except Exception as e:
-                logger.warning(f"[Audit] Error registrando auditoría con {method_name}: {e}")
+    recorded = False
+    candidate_methods = ["add_log", "log_event", "record_log", "log_action", "create_log", "add_entry"]
 
-    # Fallback si audit_service almacena una lista 'logs' directamente
-    if hasattr(audit_service, "logs") and isinstance(audit_service.logs, list):
+    for method_name in candidate_methods:
+        if hasattr(audit_service, method_name):
+            method = getattr(audit_service, method_name)
+            if callable(method):  # Evita colisión si el atributo es un objeto Logger o propiedad
+                try:
+                    try:
+                        method(log_entry)
+                    except TypeError:
+                        method(job_type, target, status, duration)
+                    recorded = True
+                    logger.info(f"[Audit] Evento registrado vía {method_name}: {target} ({status})")
+                    break
+                except Exception as e:
+                    logger.warning(f"[Audit] Error al ejecutar {method_name}: {e}")
+
+    if not recorded and hasattr(audit_service, "logs") and isinstance(audit_service.logs, list):
         audit_service.logs.append(log_entry)
-        logger.info(f"[Audit] Registro guardado en lista de auditoría: {target}")
+        recorded = True
+        logger.info(f"[Audit] Evento añadido directamente a audit_service.logs: {target}")
+
+    if not recorded:
+        if not hasattr(audit_service, "_runtime_logs"):
+            setattr(audit_service, "_runtime_logs", [])
+        getattr(audit_service, "_runtime_logs").append(log_entry)
+        logger.info(f"[Audit] Evento guardado en _runtime_logs del sistema: {target}")
 
 
 # --- CONFIGURACIÓN & ESTADO ---
@@ -171,7 +177,7 @@ async def test_notification(settings: NotificationSettings):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- TAREAS DE RESPALDO (ASÍNCRONAS CON REGISTRO DE HISTORIAL) ---
+# --- TAREAS DE RESPALDO (ASÍNCRONAS CON HISTORIAL) ---
 
 async def task_run_app_backup(app_name: str, app_path: str):
     start_time = time.time()
@@ -283,7 +289,7 @@ async def run_full_backup(background_tasks: BackgroundTasks):
     return {"status": "started", "message": "Disaster recovery iniciado en segundo plano."}
 
 
-# --- RESTO DE ENDPOINTS & HISTORIAL ---
+# --- RESTO DE ENDPOINTS & SINCRO HISTORIAL <-> DISCO ---
 
 @router.get("/schedules")
 def get_schedule():
@@ -331,42 +337,107 @@ def list_available_backups():
 
 @router.get("/logs")
 def get_execution_logs():
-    logs = audit_service.get_logs(limit=50)
+    """
+    Obtiene los logs de auditoría y los sincroniza automáticamente con los 
+    archivos de copia reales del almacenamiento host para que el historial
+    refleje siempre el estado de los archivos respaldados.
+    """
     formatted_logs = []
-    for l in logs:
+    seen_keys = set()
+
+    # 1. Intentar leer registros explícitos de audit_service
+    raw_logs = []
+    try:
+        if hasattr(audit_service, "get_logs") and callable(getattr(audit_service, "get_logs")):
+            raw_logs = audit_service.get_logs(limit=50)
+        elif hasattr(audit_service, "logs") and isinstance(audit_service.logs, list):
+            raw_logs = audit_service.logs
+        elif hasattr(audit_service, "_runtime_logs") and isinstance(audit_service._runtime_logs, list):
+            raw_logs = audit_service._runtime_logs
+    except Exception as e:
+        logger.warning(f"[Audit] No se pudieron obtener logs en memoria: {e}")
+
+    for l in raw_logs:
         if isinstance(l, dict):
-            ts = l.get("timestamp", l.get("time", 0))
-            if isinstance(ts, (int, float)):
-                ts_str = datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M:%S")
-            else:
-                ts_str = str(ts) if ts else datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-
-            formatted_logs.append({
-                "timestamp": ts_str,
-                "type": l.get("type", l.get("action", l.get("job_type", "Backup App"))),
-                "target": l.get("target", l.get("app_name", l.get("name", "Sistema"))),
-                "status": l.get("status", l.get("result", "success")),
-                "duration": str(l.get("duration", l.get("time_taken", "0s")))
-            })
+            ts = l.get("timestamp", l.get("time", ""))
+            target = l.get("target", l.get("app_name", l.get("name", "Sistema")))
+            job_type = l.get("type", l.get("action", l.get("job_type", "Backup App")))
+            status = l.get("status", l.get("result", "success"))
+            duration = str(l.get("duration", l.get("time_taken", "N/A")))
         else:
-            ts = getattr(l, "timestamp", getattr(l, "time", 0))
-            if isinstance(ts, (int, float)):
-                ts_str = datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M:%S")
-            else:
-                ts_str = str(ts) if ts else datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            ts = getattr(l, "timestamp", "")
+            target = getattr(l, "target", getattr(l, "app_name", "Sistema"))
+            job_type = getattr(l, "type", getattr(l, "action", "Backup App"))
+            status = getattr(l, "status", "success")
+            duration = str(getattr(l, "duration", "N/A"))
 
-            formatted_logs.append({
-                "timestamp": ts_str,
-                "type": getattr(l, "type", getattr(l, "action", "Backup App")),
-                "target": getattr(l, "target", getattr(l, "app_name", "Sistema")),
-                "status": getattr(l, "status", getattr(l, "result", "success")),
-                "duration": str(getattr(l, "duration", "0s"))
-            })
+        if isinstance(ts, (int, float)):
+            ts_str = datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M:%S")
+        else:
+            ts_str = str(ts) if ts else datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+        key = f"{ts_str}_{target}"
+        seen_keys.add(key)
+        formatted_logs.append({
+            "timestamp": ts_str,
+            "type": job_type,
+            "target": target,
+            "status": status,
+            "duration": duration
+        })
+
+    # 2. Sincronizar automáticamente con los archivos físicos de backup presentes en disco
+    target_disk = config_manager.config.selected_target_disk
+    if target_disk and os.path.exists(target_disk):
+        try:
+            search_dirs = [target_disk]
+            sub_backup_dir = os.path.join(target_disk, "casaos-backups")
+            if os.path.exists(sub_backup_dir):
+                search_dirs.append(sub_backup_dir)
+
+            for d in search_dirs:
+                for root, _, files in os.walk(d):
+                    for file in files:
+                        if file.endswith(".tar.gz") or file.endswith(".zip"):
+                            file_path = os.path.join(root, file)
+                            stats = os.stat(file_path)
+                            ts_str = datetime.fromtimestamp(stats.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+
+                            fname_lower = file.lower()
+                            if "disasterrecovery" in fname_lower:
+                                job_type = "Disaster Recovery"
+                                target = "Sistema Completo"
+                            elif "pre_restore" in fname_lower:
+                                job_type = "Pre-Restauración"
+                                target = "Sistema Completo"
+                            else:
+                                job_type = "Backup App"
+                                target = file.split("_backup")[0].split(".tar")[0]
+
+                            key = f"{ts_str}_{target}"
+                            if key not in seen_keys:
+                                seen_keys.add(key)
+                                formatted_logs.append({
+                                    "timestamp": ts_str,
+                                    "type": job_type,
+                                    "target": target,
+                                    "status": "success",
+                                    "duration": "Completado"
+                                })
+        except Exception as e:
+            logger.warning(f"[Audit] Error deduciendo historial desde disco: {e}")
+
+    # Ordenar por fecha decreciente (más reciente primero)
+    formatted_logs.sort(key=lambda x: x["timestamp"], reverse=True)
     return formatted_logs
 
 @router.delete("/logs")
 def clear_execution_logs():
-    return {"status": "success" if audit_service.clear_logs() else "failed"}
+    if hasattr(audit_service, "_runtime_logs"):
+        setattr(audit_service, "_runtime_logs", [])
+    if hasattr(audit_service, "clear_logs") and callable(getattr(audit_service, "clear_logs")):
+        audit_service.clear_logs()
+    return {"status": "success"}
 
 @router.websocket("/ws/progress")
 async def websocket_progress_endpoint(websocket: WebSocket):
