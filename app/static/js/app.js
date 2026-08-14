@@ -1,28 +1,65 @@
 // app/static/js/app.js
 
+// Interceptor global para atrapar el momento exacto en que la API responde al restaurar
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+    const url = args[0];
+    const response = await originalFetch.apply(this, args);
+    
+    // Si la petición a la ruta de restauración finaliza con éxito
+    if (typeof url === 'string' && url.includes('/api/v1/backups/restore')) {
+        if (response.ok) {
+            console.log("Restauración finalizada con éxito. Forzando limpieza de interfaz...");
+            setTimeout(() => {
+                destruirBarraProgresoForzosa();
+                window.location.reload();
+            }, 600);
+        }
+    }
+    return response;
+};
+
 document.addEventListener("DOMContentLoaded", () => {
-    console.log("Dashboard cargado. Iniciando conexión con la API...");
+    console.log("Dashboard cargado. Activando monitor de limpieza visual...");
     cargarBackends();
     initWebSocketProgress();
+    destruirBarraProgresoForzosa();
+
+    // Vigilar continuamente el DOM por si el framework frontend vuelve a pintar la barra
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach(() => {
+            destruirBarraProgresoForzosa();
+        });
+    });
     
-    // Eliminar la caja estática de restauración colgada al cargar la página
-    destruirBarraProgresoFija();
+    observer.observe(document.body, { childList: true, subtree: true });
 });
 
-// Función para obtener los motores de backup disponibles y pintarlos en el HTML
+// Función agresiva para buscar y destruir cualquier rastro de la barra de progreso de restauración
+function destruirBarraProgresoForzosa() {
+    document.querySelectorAll('div, section, aside').forEach(el => {
+        const texto = el.innerText || "";
+        if (
+            texto.includes("Copia: Restauración") || 
+            texto.includes("Iniciando despliegue") || 
+            (texto.includes("10%") && texto.includes("Restauración"))
+        ) {
+            el.style.display = 'none';
+            el.remove();
+        }
+    });
+}
+
+// Función para obtener los motores de backup disponibles
 async function cargarBackends() {
     const container = document.getElementById('backends-container');
     if (!container) return;
     
     try {
-        const response = await fetch('/api/v1/backends');
-        if (!response.ok) {
-            throw new Error(`Error en la API: ${response.status}`);
-        }
+        const response = await originalFetch('/api/v1/backends');
+        if (!response.ok) throw new Error(`Error en la API: ${response.status}`);
         
         const data = await response.json();
-        console.log("Motores de backup obtenidos:", data);
-        
         container.innerHTML = '';
 
         if (!data || Object.keys(data).length === 0) {
@@ -31,7 +68,6 @@ async function cargarBackends() {
         }
 
         const backendsList = Array.isArray(data) ? data : Object.values(data);
-        
         backendsList.forEach(backend => {
             const backendEl = document.createElement('div');
             backendEl.style.padding = "10px";
@@ -48,81 +84,26 @@ async function cargarBackends() {
             `;
             container.appendChild(backendEl);
         });
-        
     } catch (error) {
         console.error("Fallo al cargar los motores de backup:", error);
-        container.innerHTML = `<p style="color: red;">Error al cargar los motores: ${error.message}</p>`;
     }
 }
 
-// Función global auxiliar para ejecutar la restauración 1-Click
-async function solicitarRestauracion(snapshotId, appName) {
-    try {
-        const response = await fetch('/api/v1/backups/restore', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                snapshot_id: snapshotId,
-                app_name: appName
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Respuesta de red KO (${response.status})`);
-        }
-
-        const data = await response.json();
-        console.log("Restauración completada con éxito:", data);
-        
-        destruirBarraProgresoFija();
-        setTimeout(() => window.location.reload(), 1500);
-
-        return data;
-    } catch (error) {
-        console.error("Error al enviar solicitud de restauración:", error);
-        alert("No se pudo iniciar la restauración: " + error.message);
-        destruirBarraProgresoFija();
-    }
-}
-
-// Función que busca y elimina físicamente la barra azul fija del DOM
-function destruirBarraProgresoFija() {
-    // Buscar todos los divs o elementos flotantes en la esquina inferior
-    const elementos = document.querySelectorAll('div');
-    elementos.forEach(el => {
-        const texto = el.innerText || "";
-        if (
-            texto.includes("Copia: Restauración") || 
-            texto.includes("Iniciando despliegue") || 
-            (texto.includes("10%") && texto.includes("Restauración"))
-        ) {
-            // Eliminar el elemento por completo de la pantalla
-            el.remove();
-        }
-    });
-}
-
-// Gestión del WebSocket
+// Gestión del WebSocket por seguridad
 function initWebSocketProgress() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/progress`;
     
     const ws = new WebSocket(wsUrl);
-
     ws.onmessage = function(event) {
         try {
             const data = JSON.parse(event.data);
             if (data.type === "restore_complete" || data.status === "COMPLETED") {
-                destruirBarraProgresoFija();
-                setTimeout(() => window.location.reload(), 1500);
+                destruirBarraProgresoForzosa();
+                window.location.reload();
             }
-        } catch (err) {
-            console.error("Error al procesar mensaje de WebSocket:", err);
-        }
+        } catch (err) {}
     };
-
     ws.onclose = function() {
         setTimeout(initWebSocketProgress, 5000);
     };
