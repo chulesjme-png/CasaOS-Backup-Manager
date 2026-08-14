@@ -1,11 +1,13 @@
 import os
 import logging
+import asyncio
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, status
 from pydantic import BaseModel
 
 from app.core.config import config_manager
+from app.core.ws_manager import ws_manager
 from app.services.backup_engine_service import backup_engine_service
 
 logger = logging.getLogger("casaos-backup")
@@ -18,27 +20,23 @@ def locate_backup_file(filename: str) -> Optional[str]:
     Busca el archivo de backup en la ruta configurada, rutas habituales
     o mediante escaneo rápido en los puntos de montaje /media y /DATA.
     """
-    # 1. Probar ruta directa si filename ya es un path completo
     if os.path.isabs(filename) and os.path.exists(filename):
         return filename
 
     candidates = []
     
-    # 2. Añadir destino configurado dinámicamente desde config_manager
     cfg = config_manager.config
     if hasattr(cfg, "destination_path") and cfg.destination_path:
         candidates.append(cfg.destination_path)
     if hasattr(cfg, "backup_destination") and cfg.backup_destination:
         candidates.append(cfg.backup_destination)
 
-    # 3. Rutas alternativas habituales
     candidates.extend([
         "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adf6fa",
         "/DATA/AppData",
         "/DATA",
     ])
 
-    # Verificar coincidencia directa en los candidatos
     for base in candidates:
         if not base:
             continue
@@ -46,7 +44,6 @@ def locate_backup_file(filename: str) -> Optional[str]:
         if os.path.exists(possible_file):
             return possible_file
 
-    # 4. Búsqueda profunda en /media por si el disco está en otra subcarpeta
     media_root = Path("/media")
     if media_root.exists():
         try:
@@ -58,10 +55,6 @@ def locate_backup_file(filename: str) -> Optional[str]:
 
     return None
 
-
-# ------------------------------------------------------------------------------
-# SCHEMAS (Pydantic)
-# ------------------------------------------------------------------------------
 
 class RestorePayload(BaseModel):
     backup_file: Optional[str] = None
@@ -79,13 +72,8 @@ class RestorePayload(BaseModel):
     target_path: Optional[str] = None
 
 
-# ------------------------------------------------------------------------------
-# ENDPOINTS REST API
-# ------------------------------------------------------------------------------
-
 @router.get("/profiles")
 def get_backup_profiles():
-    """Escanea el directorio de aplicaciones y devuelve los perfiles disponibles."""
     profiles = []
     base_path = "/DATA/AppData"
     search_path = base_path if os.path.exists(base_path) else "app/data/AppData"
@@ -116,12 +104,48 @@ def get_backup_profiles():
     return profiles
 
 
+# Tarea de fondo con aviso de progreso y finalización vía WebSocket
+async def task_execute_restore_with_ws(app_name: str, file_path: str, target_path: Optional[str]):
+    try:
+        # Notificar progreso inicial
+        await ws_manager.broadcast({
+            "type": "restore_progress",
+            "status": "IN_PROGRESS",
+            "percentage": 30,
+            "message": f"Restaurando {app_name}..."
+        })
+
+        # Ejecutar la lógica de restauración sincrónica/asincrónica
+        if asyncio.iscoroutinefunction(backup_engine_service.execute_restore_1click):
+            await backup_engine_service.execute_restore_1click(app_name=app_name, file_path=file_path, target_path=target_path)
+        else:
+            await asyncio.to_thread(
+                backup_engine_service.execute_restore_1click,
+                app_name=app_name,
+                file_path=file_path,
+                target_path=target_path
+            )
+
+        # Notificar finalización exitosa al frontend
+        logger.info(f"✨ [Restore] Notificando éxito de restauración vía WebSocket para {app_name}")
+        await ws_manager.broadcast({
+            "type": "restore_complete",
+            "status": "COMPLETED",
+            "percentage": 100,
+            "message": f"Restauración de {app_name} completada con éxito."
+        })
+    except Exception as e:
+        logger.error(f"❌ [Restore Error] Error en tarea de restauración: {e}")
+        await ws_manager.broadcast({
+            "type": "restore_error",
+            "status": "FAILED",
+            "percentage": 0,
+            "message": f"Error restaurando {app_name}: {str(e)}"
+        })
+
+
 @router.post("/restore")
 async def restore_backup_endpoint(payload: RestorePayload, request: Request, background_tasks: BackgroundTasks):
-    """
-    Endpoint de restauración dinámico con localización automática de archivos.
-    """
-    # 1. Obtener identificador del archivo desde el cuerpo de la petición
     file_identifier = (
         payload.backup_file
         or payload.snapshot_id
@@ -153,7 +177,6 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
 
     logger.info(f"🔄 [POST /api/v1/backups/restore] Buscando archivo de respaldo: {file_identifier}")
 
-    # 2. Localizar dinámicamente la ruta física del archivo
     file_path = locate_backup_file(file_identifier)
 
     if not file_path:
@@ -165,7 +188,6 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
 
     logger.info(f"✅ Archivo localizado exitosamente en: {file_path}")
 
-    # 3. Identificar nombre de la app destino
     app_name = payload.app_name or payload.app
     if not app_name or app_name in ["system", "all"]:
         file_lower = file_identifier.lower()
@@ -186,9 +208,9 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
         else:
             app_name = file_identifier.split("_")[0]
 
-    # 4. Iniciar ejecución de restauración en segundo plano
+    # Añadir la tarea de fondo envolvente con WebSocket integrado
     background_tasks.add_task(
-        backup_engine_service.execute_restore_1click,
+        task_execute_restore_with_ws,
         app_name=app_name,
         file_path=file_path,
         target_path=payload.target_path
