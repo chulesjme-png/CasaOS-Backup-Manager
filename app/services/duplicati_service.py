@@ -75,9 +75,48 @@ class DuplicatiService:
             os.makedirs(dest_dir, exist_ok=True)
 
             logger.info(f"Iniciando Disaster Recovery en {dest_dir}...")
-            return True
+
+            # 1. Crear nombre de archivo con marca de tiempo
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            tar_file = os.path.join(dest_dir, f"disaster_recovery_{timestamp}.tar.gz")
+            
+            # 2. Comando tar para resguardar las rutas críticas de CasaOS
+            # (Puedes añadir o quitar rutas si lo necesitas)
+            cmd = [
+                "tar", "-czf", tar_file, 
+                "/DATA/AppData",     # Datos de los contenedores
+                "/var/lib/casaos",   # Base de datos y estado de CasaOS
+                "/etc/casaos"        # Configuraciones de CasaOS
+            ]
+            
+            # 3. Ejecutar la compresión (esto bloqueará/tardará según el tamaño)
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            # NOTA: tar suele devolver '1' si un archivo cambió mientras se leía (común en logs/dbs activas).
+            # Por tanto, consideramos éxito el código 0 (perfecto) y el 1 (warning tolerado).
+            if result.returncode in [0, 1]:
+                logger.info(f"Disaster Recovery completado con éxito: {os.path.basename(tar_file)}")
+                
+                # 4. Limpieza: Mantener solo las últimas 2 copias del sistema completo (para no saturar disco)
+                try:
+                    backup_engine_service.apply_retention_policy(
+                        target_dir=dest_dir,
+                        prefix="disaster_recovery",
+                        max_copies=2
+                    )
+                except Exception as ret_err:
+                    logger.warning(f"[DuplicatiService] Error aplicando retención en DR: {ret_err}")
+
+                return True
+            else:
+                logger.error(f"Error al empaquetar Disaster Recovery: {result.stderr}")
+                return False
+
+        except ValueError as ve:
+            logger.error(f"[DuplicatiService] Error de configuración: {ve}")
+            return False
         except Exception as e:
-            logger.error(f"[DuplicatiService] Error en Disaster Recovery: {e}")
+            logger.error(f"[DuplicatiService] Error inesperado en Disaster Recovery: {e}")
             return False
 
 duplicati_service = DuplicatiService()
