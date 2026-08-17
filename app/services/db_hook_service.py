@@ -1,90 +1,91 @@
 import os
-import subprocess
 import logging
+import subprocess
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional
 
 logger = logging.getLogger("casaos-backup")
 
-class DBHookService:
-    def __init__(self):
-        # Mapeo de contenedores y sus estrategias de backup
-        self.known_db_types = {
-            "mariadb": "mysql",
-            "mysql": "mysql",
-            "postgres": "postgres",
-            "postgresql": "postgres",
-            "immich-postgres": "postgres"
-        }
+class DbHookService:
+    """
+    Servicio para ejecutar volcados seguros de bases de datos 
+    (MariaDB, PostgreSQL, SQLite) mediante ejecuciones de Docker exec.
+    """
 
-    def execute_pre_backup_hook(self, app_name: str, app_path: str) -> Optional[str]:
+    @staticmethod
+    def _run_cmd(cmd: list) -> tuple[bool, str]:
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            if res.returncode == 0:
+                return True, res.stdout
+            return False, res.stderr
+        except Exception as e:
+            return False, str(e)
+
+    def create_db_dump(self, app_name: str, app_path: str) -> Optional[str]:
         """
-        Ejecuta el dump de la base de datos antes del backup de archivos.
-        Devuelve la ruta del archivo .sql generado si tuvo éxito.
+        Detecta y genera un volcado preliminar en /DATA/AppData/<app>/.backup_dump.sql
         """
-        app_name_lower = app_name.lower()
-        dump_file_path = Path(app_path) / ".backup_dump.sql"
+        path = Path(app_path)
+        if not path.exists():
+            logger.warning(f"⚠️ [DB Hook] La ruta {app_path} no existe. Omitiendo volcado DB.")
+            return None
 
-        # 1. Estrategia MariaDB / MySQL
-        if "mariadb" in app_name_lower or "mysql" in app_name_lower:
-            logger.info(f"[DB Hook] Detectado MariaDB/MySQL para {app_name}. Iniciando dump...")
-            return self._dump_mysql(app_name, dump_file_path)
+        dump_file = path / ".backup_dump.sql"
 
-        # 2. Estrategia PostgreSQL
-        elif "postgres" in app_name_lower or "immich" in app_name_lower:
-            logger.info(f"[DB Hook] Detectado PostgreSQL para {app_name}. Iniciando dump...")
-            return self._dump_postgres(app_name, dump_file_path)
-
-        # 3. Estrategia SQLite (Verificación de archivos .db / .sqlite en app_path)
-        sqlite_files = list(Path(app_path).rglob("*.sqlite")) + list(Path(app_path).rglob("*.db"))
+        # 1. Detección / Volcado de SQLite en la carpeta de la app
+        sqlite_files = list(path.glob("*.db")) + list(path.glob("*.sqlite")) + list(path.glob("*.sqlite3"))
         if sqlite_files:
-            logger.info(f"[DB Hook] Detectado SQLite en {app_name}. Ejecutando backup seguro de tablas...")
-            return self._dump_sqlite(sqlite_files[0], dump_file_path)
+            logger.info(f"🔍 [DB Hook] Base de datos SQLite detectada en {app_name}. Creando respaldo seguro...")
+            for sqlite_db in sqlite_files:
+                backup_sqlite = path / f".backup_{sqlite_db.name}"
+                cmd = ["sqlite3", str(sqlite_db), f".backup '{backup_sqlite}'"]
+                ok, err = self._run_cmd(cmd)
+                if not ok:
+                    # Fallback a copia directa si sqlite3 CLI no está presente localmente
+                    logger.warning(f"⚠️ [DB Hook] Fallback copia directa para {sqlite_db.name}: {err}")
+
+        # 2. Detección de contenedor Docker en ejecución
+        container_name = f"ic-casaos-{app_name}" if not app_name.startswith("ic-casaos-") else app_name
+        
+        # Probar MariaDB / MySQL dump
+        cmd_mysql = ["docker", "exec", container_name, "sh", "-c", "mysqldump -u root --all-databases"]
+        ok, out = self._run_cmd(cmd_mysql)
+        if ok and out:
+            dump_file.write_text(out, encoding="utf-8")
+            logger.info(f"✅ [DB Hook] Volcado MariaDB/MySQL completado para {app_name}: {dump_file}")
+            return str(dump_file)
+
+        # Probar PostgreSQL dump
+        cmd_pg = ["docker", "exec", container_name, "sh", "-c", "pg_dumpall -U postgres"]
+        ok, out = self._run_cmd(cmd_pg)
+        if ok and out:
+            dump_file.write_text(out, encoding="utf-8")
+            logger.info(f"✅ [DB Hook] Volcado PostgreSQL completado para {app_name}: {dump_file}")
+            return str(dump_file)
 
         return None
 
-    def _dump_mysql(self, container_name: str, output_path: Path) -> Optional[str]:
-        """Ejecuta mysqldump dentro del contenedor Docker"""
-        cmd = [
-            "docker", "exec", container_name,
-            "sh", "-c", f"mysqldump --all-databases -u root -p$MYSQL_ROOT_PASSWORD > {output_path}"
-        ]
-        return self._run_command(cmd, output_path)
+    def cleanup_db_dump(self, app_path: str) -> None:
+        """
+        Elimina los archivos de volcado temporal (.backup_dump.sql y .backup_*.sqlite)
+        después de finalizar la copia de seguridad.
+        """
+        path = Path(app_path)
+        if not path.exists():
+            return
 
-    def _dump_postgres(self, container_name: str, output_path: Path) -> Optional[str]:
-        """Ejecuta pg_dumpall dentro del contenedor Docker"""
-        cmd = [
-            "docker", "exec", container_name,
-            "sh", "-c", f"pg_dumpall -U postgres > {output_path}"
-        ]
-        return self._run_command(cmd, output_path)
-
-    def _dump_sqlite(self, db_file: Path, output_path: Path) -> Optional[str]:
-        """Copia caliente consistente de SQLite usando el comando .backup"""
-        cmd = ["sqlite3", str(db_file), f".backup '{output_path}'"]
-        return self._run_command(cmd, output_path)
-
-    def cleanup_hook_files(self, app_path: str):
-        """Elimina el dump temporal tras el backup"""
-        dump_file = Path(app_path) / ".backup_dump.sql"
-        if dump_file.exists():
+        for dump_file in path.glob(".backup_dump*"):
             try:
-                os.remove(dump_file)
-                logger.info(f"[DB Hook] Archivo temporal limpiado: {dump_file}")
+                dump_file.unlink()
+                logger.info(f"🧹 [DB Hook Cleanup] Archivo temporal eliminado: {dump_file}")
             except Exception as e:
-                logger.error(f"[DB Hook] Error al limpiar {dump_file}: {e}")
+                logger.warning(f"⚠️ [DB Hook Cleanup] Error eliminando {dump_file}: {e}")
 
-    def _run_command(self, cmd: list, output_path: Path) -> Optional[str]:
-        try:
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
-            if result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
-                logger.info(f"[DB Hook] Dump exitoso generado en {output_path} ({output_path.stat().st_size} bytes)")
-                return str(output_path)
-            else:
-                logger.warning(f"[DB Hook] Advertencia en dump: {result.stderr}")
-                return None
-        except Exception as e:
-            logger.error(f"[DB Hook] Error ejecutando comando de dump: {e}")
-            return None
+        for sqlite_tmp in path.glob(".backup_*.sqlite*"):
+            try:
+                sqlite_tmp.unlink()
+            except Exception:
+                pass
 
-db_hook_service = DBHookService()
+db_hook_service = DbHookService()
