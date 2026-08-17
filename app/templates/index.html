@@ -111,8 +111,13 @@
                             <span id="msg-disaster_recovery" class="fw-semibold">Iniciando empaquetado del sistema...</span>
                             <span id="pct-disaster_recovery" class="fw-bold text-primary">0%</span>
                         </div>
-                        <div class="progress" style="height: 8px;">
+                        <div class="progress mb-2" style="height: 8px;">
                             <div id="bar-disaster_recovery" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button class="btn btn-danger btn-sm text-white fw-semibold py-1 px-3 shadow-sm" style="font-size: 0.78rem;" onclick="cancelBackup(this)">
+                                🛑 Cancelar Copia
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -149,8 +154,13 @@
                                         <span id="msg-{{ app.name }}">Iniciando copia...</span>
                                         <span id="pct-{{ app.name }}" class="fw-bold text-primary">0%</span>
                                     </div>
-                                    <div class="progress" style="height: 6px;">
+                                    <div class="progress mb-2" style="height: 6px;">
                                         <div id="bar-{{ app.name }}" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-end">
+                                        <button class="btn btn-danger btn-sm text-white fw-semibold py-1 px-3 shadow-sm" style="font-size: 0.75rem;" onclick="cancelBackup(this)">
+                                            🛑 Cancelar Copia
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -252,7 +262,12 @@
                 <div class="progress mb-2" style="height: 6px; border-radius: 3px; background-color: rgba(255,255,255,0.3);">
                     <div id="ws-progress-bar" class="progress-bar bg-white progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
                 </div>
-                <div id="ws-progress-message" class="text-white-50 small text-truncate" style="font-size: 0.8rem;">Iniciando proceso...</div>
+                <div id="ws-progress-message" class="text-white-50 small text-truncate mb-2" style="font-size: 0.8rem;">Iniciando proceso...</div>
+                <div class="d-flex justify-content-end">
+                    <button id="ws-cancel-btn" class="btn btn-light btn-sm text-danger fw-bold py-1 px-3 shadow-sm" style="font-size: 0.75rem;" onclick="cancelBackup(this)">
+                        🛑 Cancelar Copia
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -411,6 +426,37 @@
             progressSocket.onclose = () => setTimeout(initProgressWebSocket, 3000);
         }
 
+        async function cancelBackup(btnElement) {
+            let originalText = "🛑 Cancelar Copia";
+            if (btnElement) {
+                originalText = btnElement.innerText;
+                btnElement.disabled = true;
+                btnElement.innerText = "Cancelando...";
+            }
+
+            try {
+                const res = await fetch('/api/v1/backups/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(`🔴 Error: ${data.detail || 'No se pudo cancelar la copia'}`);
+                    if (btnElement) {
+                        btnElement.disabled = false;
+                        btnElement.innerText = originalText;
+                    }
+                }
+            } catch (err) {
+                console.error("Error al enviar la petición de cancelación:", err);
+                alert("🔴 Error de conexión al intentar cancelar.");
+                if (btnElement) {
+                    btnElement.disabled = false;
+                    btnElement.innerText = originalText;
+                }
+            }
+        }
+
         function updateFloatingProgressUI(jobId, percentage, message) {
             const toastEl = document.getElementById('wsToast');
             const toast = bootstrap.Toast.getOrCreateInstance(toastEl, { autohide: false });
@@ -420,6 +466,7 @@
             const msgEl = document.getElementById('ws-progress-message');
             const titleEl = document.getElementById('ws-job-title');
             const spinner = document.getElementById('ws-spinner');
+            const cancelBtn = document.getElementById('ws-cancel-btn');
 
             toast.show();
             titleEl.innerText = jobId.includes('disaster') ? 'Disaster Recovery' : `Copia: ${jobId.replace('backup_', '')}`;
@@ -428,10 +475,18 @@
             percentBadge.innerText = `${percentage}%`;
             msgEl.innerText = message;
 
+            if (cancelBtn) {
+                cancelBtn.disabled = false;
+                cancelBtn.innerText = "🛑 Cancelar Copia";
+                cancelBtn.classList.remove('d-none');
+            }
+
             if (toastTimeout) clearTimeout(toastTimeout);
 
             if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
                 spinner.classList.add('d-none');
+                if (cancelBtn) cancelBtn.classList.add('d-none');
+
                 if (percentage === 100) {
                     bar.classList.replace('bg-white', 'bg-success');
                 } else {
@@ -536,7 +591,6 @@
                 data.backups.forEach(b => {
                     let fecha = (b.created_at && !isNaN(b.created_at)) ? new Date(b.created_at * 1000).toLocaleString() : 'Reciente';
                     
-                    // Formateo dinámico inteligente del tamaño (KB / MB / GB)
                     let pesoTexto = b.size_str;
                     if (!pesoTexto) {
                         if (b.size_mb !== undefined && b.size_mb < 0.1) {
