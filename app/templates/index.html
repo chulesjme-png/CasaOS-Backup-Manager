@@ -105,7 +105,7 @@
                         </button>
                     </div>
                     
-                    <!-- INLINE PROGRESS: DISASTER RECOVERY (Sin botón duplicado) -->
+                    <!-- INLINE PROGRESS: DISASTER RECOVERY -->
                     <div id="progress-container-disaster_recovery" class="d-none mt-3 p-3 bg-light rounded border">
                         <div class="d-flex justify-content-between small text-muted mb-1">
                             <span id="msg-disaster_recovery" class="fw-semibold">Iniciando empaquetado del sistema...</span>
@@ -143,7 +143,7 @@
                                     </button>
                                 </div>
                                 
-                                <!-- INLINE PROGRESS: APP INDIVIDUAL (Sin botón duplicado) -->
+                                <!-- INLINE PROGRESS: APP INDIVIDUAL -->
                                 <div id="progress-container-{{ app.name }}" class="d-none mt-3 w-100 bg-light p-2 rounded border">
                                     <div class="d-flex justify-content-between small text-muted mb-1">
                                         <span id="msg-{{ app.name }}">Iniciando copia...</span>
@@ -238,7 +238,7 @@
         </div>
     </div>
 
-    <!-- CONTENEDOR DE TOASTS (ÚNICO BOTÓN PRINCIPAL DE CANCELACIÓN) -->
+    <!-- CONTENEDOR DE TOASTS -->
     <div class="toast-container position-fixed bottom-0 end-0 p-4" style="z-index: 1100;">
         <div id="wsToast" class="toast text-bg-primary border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
             <div class="toast-body p-3">
@@ -416,6 +416,32 @@
             };
 
             progressSocket.onclose = () => setTimeout(initProgressWebSocket, 3000);
+        }
+
+        // FUNCIÓN DE POLLING PARA MONITOREAR DUPLICATI EN TIEMPO REAL
+        function trackBackupProgress(taskId, jobIdLabel) {
+            if (progressInterval) clearInterval(progressInterval);
+
+            progressInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/v1/backups/status/${taskId}`);
+                    if (!res.ok) return;
+
+                    const data = await res.json();
+                    
+                    if (data.progress !== undefined) {
+                        const phaseMsg = data.current_file ? `${data.phase}: ${data.current_file}` : data.phase;
+                        updateFloatingProgressUI(jobIdLabel, data.progress, phaseMsg);
+                        updateInlineProgressUI(jobIdLabel, data.progress, phaseMsg);
+                    }
+
+                    if (data.status === 'completed' || data.status === 'error') {
+                        clearInterval(progressInterval);
+                    }
+                } catch (err) {
+                    console.error("Error consultando progreso en vivo:", err);
+                }
+            }, 2000);
         }
 
         async function cancelBackup(btnElement) {
@@ -723,7 +749,13 @@
             updateFloatingProgressUI(jobId, 5, `Iniciando petición...`);
             startSmoothProgressTimer(jobId);
             try {
-                await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
+                const res = await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
+                const data = await res.json();
+                
+                const taskId = data.execution_reference?.metadata?.raw_reference?.ID || data.metadata?.duplicati_run_response?.ID;
+                if (taskId) {
+                    trackBackupProgress(taskId, jobId);
+                }
             } catch (err) { console.error(err); }
         }
 
@@ -734,7 +766,13 @@
                 updateFloatingProgressUI(jobId, 5, 'Iniciando petición...');
                 startSmoothProgressTimer(jobId);
                 try {
-                    await fetch('/api/v1/backups/run-full', { method: 'POST' });
+                    const res = await fetch('/api/v1/backups/run-full', { method: 'POST' });
+                    const data = await res.json();
+
+                    const taskId = data.execution_reference?.metadata?.raw_reference?.ID || data.metadata?.duplicati_run_response?.ID;
+                    if (taskId) {
+                        trackBackupProgress(taskId, jobId);
+                    }
                 } catch (err) { console.error(err); }
             }
         }

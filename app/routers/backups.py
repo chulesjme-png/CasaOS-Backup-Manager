@@ -9,10 +9,22 @@ from pydantic import BaseModel
 from app.core.config import config_manager
 from app.core.ws_manager import ws_manager
 from app.services.backup_engine_service import backup_engine_service
+from app.services.duplicati_service import duplicati_orchestrator
 
 logger = logging.getLogger("casaos-backup")
 
 router = APIRouter(prefix="/api/v1/backups", tags=["backups"])
+
+
+@router.get("/status/{task_id}")
+def get_backup_status(task_id: int):
+    """
+    Endpoint de Polling para obtener el estado real de ejecución y progreso desde Duplicati.
+    """
+    status_data = duplicati_orchestrator.get_task_status(task_id=task_id)
+    if "error" in status_data:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=status_data.get("message", "Error en Duplicati"))
+    return status_data
 
 
 def locate_backup_file(filename: str) -> Optional[str]:

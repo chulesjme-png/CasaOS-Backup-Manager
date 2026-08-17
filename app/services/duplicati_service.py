@@ -1,5 +1,6 @@
 import os
 import logging
+import requests
 from types import SimpleNamespace
 from typing import Optional, Dict, Any
 
@@ -112,6 +113,46 @@ class DuplicatiOrchestratorService:
             target_disk_path=target_disk_path,
             duplicati_job_id=duplicati_job_id
         )
+
+    def get_task_status(
+        self,
+        task_id: int,
+        duplicati_url: str = DEFAULT_DUPLICATI_URL
+    ) -> Dict[str, Any]:
+        """
+        Obtiene el estado actual y porcentaje de progreso de una tarea en Duplicati.
+        """
+        try:
+            resp = requests.get(f"{duplicati_url}/api/v1/progressstate", timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                current_task = data.get("Task")
+                if current_task and current_task.get("ID") == task_id:
+                    phase = data.get("Phase", "Running")
+                    progress = data.get("OverallProgress", 0.0) * 100
+                    return {
+                        "status": "running",
+                        "phase": phase,
+                        "progress": round(progress, 2),
+                        "current_file": data.get("CurrentFilename", ""),
+                        "backend_speed": data.get("BackendSpeed", 0)
+                    }
+
+            history_resp = requests.get(f"{duplicati_url}/api/v1/backup/{task_id}", timeout=5)
+            if history_resp.status_code == 200:
+                history_data = history_resp.json()
+                last_result = history_data.get("Metadata", {}).get("LastBackupDate")
+                return {
+                    "status": "completed" if last_result else "idle",
+                    "phase": "Completed" if last_result else "Idle",
+                    "progress": 100.0 if last_result else 0.0
+                }
+
+            return {"status": "unknown", "phase": "Unknown", "progress": 0.0}
+
+        except Exception as e:
+            logger.error(f"⚠️ Error al consultar estado de tarea Duplicati #{task_id}: {e}")
+            return {"status": "error", "message": str(e), "progress": 0.0}
 
 duplicati_orchestrator = DuplicatiOrchestratorService()
 duplicati_service = duplicati_orchestrator
