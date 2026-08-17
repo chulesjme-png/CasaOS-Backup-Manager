@@ -19,7 +19,7 @@ DEFAULT_DUPLICATI_PASS = os.getenv("DUPLICATI_PASSWORD", "MiContraseñaSegura202
 class DuplicatiOrchestratorService:
     """
     Servicio de orquestación completa para la ejecución de backups con Duplicati,
-    integrando Pre-flight Checks y DB Hooks.
+    integrando Pre-flight Checks, DB Hooks y tareas programadas de Disaster Recovery.
     """
 
     def __init__(self):
@@ -94,6 +94,24 @@ class DuplicatiOrchestratorService:
         finally:
             # 4. Cleanup (Eliminar volcados temporales)
             db_hook_service.cleanup_db_dump(app_path=app_path)
+
+    def run_full_disaster_recovery(
+        self,
+        app_name: str = "CasaOS System Disaster Recovery",
+        app_path: str = "/var/lib/casaos",
+        target_disk_path: str = "/var/lib/casaos",
+        duplicati_job_id: int = 1
+    ) -> Dict[str, Any]:
+        """
+        Ejecuta la tarea programada de Disaster Recovery para el sistema.
+        """
+        logger.info("🛡️ [Orchestrator] Iniciando Disaster Recovery programado")
+        return self.run_app_backup(
+            app_name=app_name,
+            app_path=app_path,
+            target_disk_path=target_disk_path,
+            duplicati_job_id=duplicati_job_id
+        )
 
 duplicati_orchestrator = DuplicatiOrchestratorService()
 duplicati_service = duplicati_orchestrator
