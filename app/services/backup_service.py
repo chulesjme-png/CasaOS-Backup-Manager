@@ -3,7 +3,7 @@ import json
 import tarfile
 import subprocess
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Callable, Optional
 from app.services.profile_service import profile_service
 from app.services.backup_engine_service import backup_engine_service
 
@@ -38,8 +38,51 @@ class BackupService:
             print(f"[WARNING] No se pudo crear el directorio de backups '{path}': {e}")
         return path
 
-    def execute_app_backup(self, app_id: str) -> Dict[str, Any]:
-        """Ejecuta la copia de seguridad de un perfil de aplicación específico."""
+    def _collect_file_list(self, paths: List[str], active_target: str):
+        """Escanea las rutas objetivo y genera una lista detallada con sus tamaños para calcular el progreso."""
+        file_list = []
+        total_bytes = 0
+
+        abs_target = os.path.abspath(active_target)
+
+        for path in paths:
+            if not os.path.exists(path):
+                continue
+
+            abs_path = os.path.abspath(path)
+            if abs_path == abs_target or abs_path.startswith(abs_target + os.sep):
+                continue
+
+            if os.path.isfile(path):
+                try:
+                    sz = os.path.getsize(path)
+                    total_bytes += sz
+                    file_list.append((path, os.path.basename(path), sz))
+                except (OSError, FileNotFoundError):
+                    pass
+            elif os.path.isdir(path):
+                parent_dir = os.path.dirname(path)
+                for root, _, files in os.walk(path):
+                    for f in files:
+                        full_f = os.path.join(root, f)
+                        abs_full_f = os.path.abspath(full_f)
+                        if abs_full_f == abs_target or abs_full_f.startswith(abs_target + os.sep):
+                            continue
+                        try:
+                            sz = os.path.getsize(full_f)
+                            total_bytes += sz
+                            rel_p = os.path.relpath(full_f, start=parent_dir)
+                            file_list.append((full_f, rel_p, sz))
+                        except (OSError, FileNotFoundError):
+                            pass
+
+        return file_list, total_bytes if total_bytes > 0 else 1
+
+    def execute_app_backup(self, app_id: str, progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
+        """Ejecuta la copia de seguridad de un perfil de aplicación específico con progreso en tiempo real."""
+        if progress_callback:
+            progress_callback(2, f"Iniciando respaldo de {app_id}...")
+
         profiles = profile_service.generate_profiles_from_discovery()
         profile = next((p for p in profiles if p["app_id"] == app_id), None)
 
@@ -59,24 +102,42 @@ class BackupService:
             # 1. Ejecución opcional de Pre-Hook (Dumps DB, etc.)
             hooks = profile.get("recommended_hooks", [])
             for hook in hooks:
+                if progress_callback:
+                    progress_callback(5, f"Ejecutando pre-hook ({hook})...")
                 print(f"[HOOK] Ejecutando pre-backup hook ({hook}) para {app_id}...")
 
-            # 2. Creación del archivo comprimido TAR.GZ
+            # 2. Escaneo previo para cálculo de progreso
+            if progress_callback:
+                progress_callback(8, "Calculando volumen de datos...")
+            
+            file_list, total_bytes = self._collect_file_list(included_paths, active_target)
+
+            # 3. Creación del archivo comprimido TAR.GZ con reporte continuo
             files_added = 0
+            processed_bytes = 0
+
             with tarfile.open(backup_path, "w:gz") as tar:
-                for path in included_paths:
-                    if os.path.exists(path):
-                        # Evita añadir recursivamente la propia carpeta de destino
-                        if os.path.abspath(path) == os.path.abspath(active_target):
-                            continue
-                        arcname = os.path.basename(path)
-                        tar.add(path, arcname=arcname)
+                for full_f, arcname, sz in file_list:
+                    if os.path.exists(full_f):
+                        tar.add(full_f, arcname=arcname, recursive=False)
+                        processed_bytes += sz
                         files_added += 1
+
+                        if progress_callback:
+                            pct = 10 + int((processed_bytes / total_bytes) * 80)
+                            pct = min(pct, 92)
+                            mb_proc = processed_bytes / (1024 * 1024)
+                            progress_callback(pct, f"Empaquetando datos ({mb_proc:.1f} MB)...")
+
+            if progress_callback:
+                progress_callback(94, "Verificando archivo comprimido...")
 
             size_bytes = os.path.getsize(backup_path) if os.path.exists(backup_path) else 0
             size_mb = round(size_bytes / (1024 * 1024), 2)
 
-            # 3. Aplicar Política de Retención Automática (Máximo 3 copias)
+            # 4. Aplicar Política de Retención Automática (Máximo 3 copias)
+            if progress_callback:
+                progress_callback(97, "Aplicando políticas de retención...")
             try:
                 backup_engine_service.apply_retention_policy(
                     target_dir=active_target,
@@ -85,6 +146,9 @@ class BackupService:
                 )
             except Exception as ret_err:
                 print(f"[WARNING] Error aplicando retención para {app_id}: {ret_err}")
+
+            if progress_callback:
+                progress_callback(100, "Copia de seguridad completada con éxito")
 
             return {
                 "success": True,
@@ -97,6 +161,62 @@ class BackupService:
             }
 
         except Exception as e:
+            if progress_callback:
+                progress_callback(0, f"Error en copia de seguridad: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+    def execute_disaster_recovery(self, progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
+        """Ejecuta un respaldo completo de Disaster Recovery (/DATA/AppData) con barra de progreso fluida."""
+        if progress_callback:
+            progress_callback(2, "Iniciando Disaster Recovery...")
+
+        active_target = self.target_dir
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"disaster_recovery_{timestamp}.tar.gz"
+        backup_path = os.path.join(active_target, backup_filename)
+
+        source_paths = ["/DATA/AppData"]
+
+        try:
+            if progress_callback:
+                progress_callback(8, "Escaneando archivos del sistema...")
+
+            file_list, total_bytes = self._collect_file_list(source_paths, active_target)
+
+            files_added = 0
+            processed_bytes = 0
+
+            with tarfile.open(backup_path, "w:gz") as tar:
+                for full_f, arcname, sz in file_list:
+                    if os.path.exists(full_f):
+                        tar.add(full_f, arcname=arcname, recursive=False)
+                        processed_bytes += sz
+                        files_added += 1
+
+                        if progress_callback:
+                            pct = 10 + int((processed_bytes / total_bytes) * 82)
+                            pct = min(pct, 95)
+                            mb_proc = processed_bytes / (1024 * 1024)
+                            progress_callback(pct, f"Empaquetando datos y configuraciones ({mb_proc:.1f} MB)...")
+
+            size_bytes = os.path.getsize(backup_path) if os.path.exists(backup_path) else 0
+            size_mb = round(size_bytes / (1024 * 1024), 2)
+
+            if progress_callback:
+                progress_callback(100, "Disaster Recovery completado con éxito")
+
+            return {
+                "success": True,
+                "backup_file": backup_filename,
+                "full_path": backup_path,
+                "size_mb": size_mb,
+                "timestamp": timestamp,
+                "files_added": files_added
+            }
+
+        except Exception as e:
+            if progress_callback:
+                progress_callback(0, f"Error en Disaster Recovery: {str(e)}")
             return {"success": False, "error": str(e)}
 
     def list_snapshots(self) -> List[Dict[str, Any]]:
