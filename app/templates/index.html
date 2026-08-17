@@ -475,31 +475,30 @@
             percentBadge.innerText = `${percentage}%`;
             msgEl.innerText = message;
 
-            if (cancelBtn) {
-                cancelBtn.disabled = false;
-                cancelBtn.innerText = "🛑 Cancelar Copia";
-                cancelBtn.classList.remove('d-none');
-            }
+            const isErrorOrCancel = message.toLowerCase().includes('error') || 
+                                    message.toLowerCase().includes('cancel');
 
             if (toastTimeout) clearTimeout(toastTimeout);
 
-            if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
+            if (percentage === 100 || (percentage === 0 && isErrorOrCancel)) {
                 spinner.classList.add('d-none');
                 if (cancelBtn) cancelBtn.classList.add('d-none');
 
                 if (percentage === 100) {
                     bar.classList.replace('bg-white', 'bg-success');
                 } else {
-                    bar.classList.replace('bg-white', 'bg-danger');
+                    bar.classList.replace('bg-white', 'bg-warning');
                 }
+
                 toastTimeout = setTimeout(() => {
                     toast.hide();
                     spinner.classList.remove('d-none');
                     bar.classList.replace('bg-success', 'bg-white');
-                    bar.classList.replace('bg-danger', 'bg-white');
+                    bar.classList.replace('bg-warning', 'bg-white');
                 }, 3500);
             } else {
                 spinner.classList.remove('d-none');
+                if (cancelBtn) cancelBtn.classList.remove('d-none');
             }
         }
 
@@ -516,22 +515,31 @@
                 pctText.innerText = `${percentage}%`;
                 msgText.innerText = message;
 
-                if (percentage === 0 && message.toLowerCase().includes('error')) {
-                    bar.classList.replace('bg-primary', 'bg-danger');
-                    pctText.classList.replace('text-primary', 'text-danger');
+                const isErrorOrCancel = message.toLowerCase().includes('error') || 
+                                        message.toLowerCase().includes('cancel');
+
+                if (percentage === 0 && isErrorOrCancel) {
+                    bar.classList.replace('bg-primary', 'bg-warning');
+                    pctText.classList.replace('text-primary', 'text-warning');
                 } else if (percentage === 100) {
                     bar.classList.replace('bg-primary', 'bg-success');
                     pctText.classList.replace('text-primary', 'text-success');
                 }
 
-                if (percentage === 100 || (percentage === 0 && message.toLowerCase().includes('error'))) {
+                if (percentage === 100 || (percentage === 0 && isErrorOrCancel)) {
                     setTimeout(() => {
                         container.classList.add('d-none');
-                        bar.classList.remove('bg-success', 'bg-danger');
+                        bar.classList.remove('bg-success', 'bg-danger', 'bg-warning');
                         bar.classList.add('bg-primary');
-                        pctText.classList.remove('text-success', 'text-danger');
+                        pctText.classList.remove('text-success', 'text-danger', 'text-warning');
                         pctText.classList.add('text-primary');
-                    }, 4000);
+
+                        const btn = container.querySelector('button');
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerText = "🛑 Cancelar Copia";
+                        }
+                    }, 3500);
                 }
             }
         }
