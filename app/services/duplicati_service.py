@@ -11,7 +11,6 @@ from app.models.backup_configuration import BackupConfiguration
 from app.models.backup_operation import BackupOperationType
 from app.services.preflight_service import preflight_service
 from app.services.db_hook_service import db_hook_service
-from app.services.config_service import config_service
 
 logger = logging.getLogger("casaos-backup")
 
@@ -105,12 +104,15 @@ class DuplicatiOrchestratorService:
         duplicati_job_id: int = 1
     ) -> Dict[str, Any]:
         """
-        Ejecuta la tarea programada de Disaster Recovery para el sistema,
-        apuntando automáticamente al disco montado seleccionado en la UI.
+        Ejecuta la tarea programada de Disaster Recovery para el sistema.
         """
-        # Si no se provee la ruta de destino, leer la ruta del disco activo desde la configuración
         if not target_disk_path:
-            target_disk_path = config_service.get_active_target_path()
+            try:
+                from app.services.config_service import config_service
+                target_disk_path = config_service.get_active_target_path()
+            except ImportError:
+                # Si el servicio de configuración no existe, usa la ruta por defecto del sistema
+                target_disk_path = "/var/lib/casaos"
 
         logger.info(f"🛡️ [Orchestrator] Iniciando Disaster Recovery en destino: {target_disk_path}")
         return self.run_app_backup(
