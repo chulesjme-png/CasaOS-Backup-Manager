@@ -1,3 +1,4 @@
+import os
 import logging
 from types import SimpleNamespace
 from typing import Optional, Dict, Any
@@ -11,6 +12,9 @@ from app.services.preflight_service import preflight_service
 from app.services.db_hook_service import db_hook_service
 
 logger = logging.getLogger("casaos-backup")
+
+DEFAULT_DUPLICATI_URL = os.getenv("DUPLICATI_URL", "http://172.17.0.1:8200")
+DEFAULT_DUPLICATI_PASS = os.getenv("DUPLICATI_PASSWORD", "MiContraseñaSegura2026")
 
 class DuplicatiOrchestratorService:
     """
@@ -27,8 +31,8 @@ class DuplicatiOrchestratorService:
         app_path: str,
         target_disk_path: str,
         duplicati_job_id: int,
-        duplicati_url: str = "http://localhost:8200",
-        duplicati_password: str = "MiContraseñaSegura2026"
+        duplicati_url: str = DEFAULT_DUPLICATI_URL,
+        duplicati_password: str = DEFAULT_DUPLICATI_PASS
     ) -> Dict[str, Any]:
         """
         Ejecuta el flujo completo de backup para una aplicación o sistema.
