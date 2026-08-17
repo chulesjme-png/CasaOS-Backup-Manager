@@ -1,4 +1,6 @@
 import os
+import json
+import time
 import logging
 import requests
 from types import SimpleNamespace
@@ -16,6 +18,20 @@ logger = logging.getLogger("casaos-backup")
 
 DEFAULT_DUPLICATI_URL = os.getenv("DUPLICATI_URL", "http://172.17.0.1:8200")
 DEFAULT_DUPLICATI_PASS = os.getenv("DUPLICATI_PASSWORD", "MiContraseñaSegura2026")
+
+def get_active_target_disk() -> str:
+    """Lee el disco activo directamente desde la configuración persistent del sistema."""
+    config_path = "/DATA/AppData/casaos-backup-manager/config.json"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                path = data.get("active_target_path") or data.get("target_disk")
+                if path:
+                    return path
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo leer config.json: {e}")
+    return "/DATA"
 
 class DuplicatiOrchestratorService:
     """
@@ -38,7 +54,7 @@ class DuplicatiOrchestratorService:
         """
         Ejecuta el flujo completo de backup para una aplicación o sistema.
         """
-        logger.info(f"🚀 [Orchestrator] Iniciando secuencia de backup para: {app_name}")
+        logger.info(f"🚀 [Orchestrator] Iniciando secuencia de backup para: {app_name} en {target_disk_path}")
 
         # 1. Pre-flight Check (Validación de espacio)
         is_ok, msg = preflight_service.check_disk_space(
@@ -81,7 +97,11 @@ class DuplicatiOrchestratorService:
                 logger.error(f"❌ [Orchestrator] Error en la ejecución de Duplicati: {result.errors}")
                 return {"success": False, "errors": result.errors}
 
-            logger.info(f"✅ [Orchestrator] Tarea {duplicati_job_id} iniciada correctamente en Duplicati.")
+            logger.info(f"⏳ [Orchestrator] Tarea {duplicati_job_id} enviada a Duplicati. Esperando procesamiento...")
+            
+            # Espera de verificación para tareas en ejecución
+            time.sleep(3)
+            
             return {
                 "success": True,
                 "execution_reference": result.execution_reference.dict() if (result.execution_reference and hasattr(result.execution_reference, "dict")) else str(result.execution_reference),
@@ -106,15 +126,10 @@ class DuplicatiOrchestratorService:
         """
         Ejecuta la tarea programada de Disaster Recovery para el sistema.
         """
-        if not target_disk_path:
-            try:
-                from app.services.config_service import config_service
-                target_disk_path = config_service.get_active_target_path()
-            except ImportError:
-                # Si el servicio de configuración no existe, usa la ruta por defecto del sistema
-                target_disk_path = "/var/lib/casaos"
+        if not target_disk_path or target_disk_path == "/var/lib/casaos":
+            target_disk_path = get_active_target_disk()
 
-        logger.info(f"🛡️ [Orchestrator] Iniciando Disaster Recovery en destino: {target_disk_path}")
+        logger.info(f"🛡️ [Orchestrator] Iniciando Disaster Recovery en disco activo: {target_disk_path}")
         return self.run_app_backup(
             app_name=app_name,
             app_path=app_path,
