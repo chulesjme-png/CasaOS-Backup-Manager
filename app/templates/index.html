@@ -105,19 +105,14 @@
                         </button>
                     </div>
                     
-                    <!-- INLINE PROGRESS: DISASTER RECOVERY -->
+                    <!-- INLINE PROGRESS: DISASTER RECOVERY (Sin botón duplicado) -->
                     <div id="progress-container-disaster_recovery" class="d-none mt-3 p-3 bg-light rounded border">
                         <div class="d-flex justify-content-between small text-muted mb-1">
                             <span id="msg-disaster_recovery" class="fw-semibold">Iniciando empaquetado del sistema...</span>
                             <span id="pct-disaster_recovery" class="fw-bold text-primary">0%</span>
                         </div>
-                        <div class="progress mb-2" style="height: 8px;">
+                        <div class="progress" style="height: 8px;">
                             <div id="bar-disaster_recovery" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
-                        </div>
-                        <div class="d-flex justify-content-end">
-                            <button class="btn btn-danger btn-sm text-white fw-semibold py-1 px-3 shadow-sm" style="font-size: 0.78rem;" onclick="cancelBackup(this)">
-                                🛑 Cancelar Copia
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -148,19 +143,14 @@
                                     </button>
                                 </div>
                                 
-                                <!-- INLINE PROGRESS: APP INDIVIDUAL -->
+                                <!-- INLINE PROGRESS: APP INDIVIDUAL (Sin botón duplicado) -->
                                 <div id="progress-container-{{ app.name }}" class="d-none mt-3 w-100 bg-light p-2 rounded border">
                                     <div class="d-flex justify-content-between small text-muted mb-1">
                                         <span id="msg-{{ app.name }}">Iniciando copia...</span>
                                         <span id="pct-{{ app.name }}" class="fw-bold text-primary">0%</span>
                                     </div>
-                                    <div class="progress mb-2" style="height: 6px;">
+                                    <div class="progress" style="height: 6px;">
                                         <div id="bar-{{ app.name }}" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
-                                    </div>
-                                    <div class="d-flex justify-content-end">
-                                        <button class="btn btn-danger btn-sm text-white fw-semibold py-1 px-3 shadow-sm" style="font-size: 0.75rem;" onclick="cancelBackup(this)">
-                                            🛑 Cancelar Copia
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -248,7 +238,7 @@
         </div>
     </div>
 
-    <!-- CONTENEDOR DE TOASTS (NOTIFICACIÓN FLOTANTE) -->
+    <!-- CONTENEDOR DE TOASTS (ÚNICO BOTÓN PRINCIPAL DE CANCELACIÓN) -->
     <div class="toast-container position-fixed bottom-0 end-0 p-4" style="z-index: 1100;">
         <div id="wsToast" class="toast text-bg-primary border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
             <div class="toast-body p-3">
@@ -351,7 +341,7 @@
         </div>
     </div>
 
-    <!-- MODAL CONFIGURACIÓN & NOTIFICACIONES -->
+    <!-- MODAL CONFIGURACIÓN -->
     <div class="modal fade" id="modalSettings" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
@@ -405,6 +395,8 @@
     <script>
         let progressSocket = null;
         let toastTimeout = null;
+        let progressInterval = null;
+        let currentPercent = 0;
 
         function initProgressWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -427,9 +419,7 @@
         }
 
         async function cancelBackup(btnElement) {
-            let originalText = "🛑 Cancelar Copia";
             if (btnElement) {
-                originalText = btnElement.innerText;
                 btnElement.disabled = true;
                 btnElement.innerText = "Cancelando...";
             }
@@ -444,7 +434,7 @@
                     alert(`🔴 Error: ${data.detail || 'No se pudo cancelar la copia'}`);
                     if (btnElement) {
                         btnElement.disabled = false;
-                        btnElement.innerText = originalText;
+                        btnElement.innerText = "🛑 Cancelar Copia";
                     }
                 }
             } catch (err) {
@@ -452,12 +442,26 @@
                 alert("🔴 Error de conexión al intentar cancelar.");
                 if (btnElement) {
                     btnElement.disabled = false;
-                    btnElement.innerText = originalText;
+                    btnElement.innerText = "🛑 Cancelar Copia";
                 }
             }
         }
 
-        function updateFloatingProgressUI(jobId, percentage, message) {
+        function startSmoothProgressTimer(jobId) {
+            if (progressInterval) clearInterval(progressInterval);
+            currentPercent = 10;
+
+            progressInterval = setInterval(() => {
+                if (currentPercent < 90) {
+                    currentPercent += Math.floor(Math.random() * 3) + 1;
+                    const msg = "Empaquetando datos y configuraciones...";
+                    updateFloatingProgressUI(jobId, currentPercent, msg, false);
+                    updateInlineProgressUI(jobId, currentPercent, msg, false);
+                }
+            }, 1800);
+        }
+
+        function updateFloatingProgressUI(jobId, percentage, message, resetTimer = true) {
             const toastEl = document.getElementById('wsToast');
             const toast = bootstrap.Toast.getOrCreateInstance(toastEl, { autohide: false });
             
@@ -471,20 +475,27 @@
             toast.show();
             titleEl.innerText = jobId.includes('disaster') ? 'Disaster Recovery' : `Copia: ${jobId.replace('backup_', '')}`;
             
-            bar.style.width = `${percentage}%`;
-            percentBadge.innerText = `${percentage}%`;
+            if (resetTimer && percentage > currentPercent) {
+                currentPercent = percentage;
+            }
+
+            const displayPct = Math.max(percentage, currentPercent);
+            bar.style.width = `${displayPct}%`;
+            percentBadge.innerText = `${displayPct}%`;
             msgEl.innerText = message;
 
             const isErrorOrCancel = message.toLowerCase().includes('error') || 
-                                    message.toLowerCase().includes('cancel');
+                                    message.toLowerCase().includes('cancel') ||
+                                    message.toLowerCase().includes('abortad');
 
             if (toastTimeout) clearTimeout(toastTimeout);
 
-            if (percentage === 100 || (percentage === 0 && isErrorOrCancel)) {
+            if (displayPct === 100 || (displayPct < 100 && isErrorOrCancel)) {
+                if (progressInterval) clearInterval(progressInterval);
                 spinner.classList.add('d-none');
                 if (cancelBtn) cancelBtn.classList.add('d-none');
 
-                if (percentage === 100) {
+                if (displayPct === 100) {
                     bar.classList.replace('bg-white', 'bg-success');
                 } else {
                     bar.classList.replace('bg-white', 'bg-warning');
@@ -495,6 +506,10 @@
                     spinner.classList.remove('d-none');
                     bar.classList.replace('bg-success', 'bg-white');
                     bar.classList.replace('bg-warning', 'bg-white');
+                    if (cancelBtn) {
+                        cancelBtn.disabled = false;
+                        cancelBtn.innerText = "🛑 Cancelar Copia";
+                    }
                 }, 3500);
             } else {
                 spinner.classList.remove('d-none');
@@ -502,7 +517,7 @@
             }
         }
 
-        function updateInlineProgressUI(jobId, percentage, message) {
+        function updateInlineProgressUI(jobId, percentage, message, resetTimer = true) {
             const suffix = jobId.replace('backup_', ''); 
             const container = document.getElementById(`progress-container-${suffix}`);
             const bar = document.getElementById(`bar-${suffix}`);
@@ -511,34 +526,35 @@
 
             if (container && bar && pctText && msgText) {
                 container.classList.remove('d-none');
-                bar.style.width = `${percentage}%`;
-                pctText.innerText = `${percentage}%`;
+
+                if (resetTimer && percentage > currentPercent) {
+                    currentPercent = percentage;
+                }
+
+                const displayPct = Math.max(percentage, currentPercent);
+                bar.style.width = `${displayPct}%`;
+                pctText.innerText = `${displayPct}%`;
                 msgText.innerText = message;
 
                 const isErrorOrCancel = message.toLowerCase().includes('error') || 
-                                        message.toLowerCase().includes('cancel');
+                                        message.toLowerCase().includes('cancel') ||
+                                        message.toLowerCase().includes('abortad');
 
-                if (percentage === 0 && isErrorOrCancel) {
+                if (isErrorOrCancel) {
                     bar.classList.replace('bg-primary', 'bg-warning');
                     pctText.classList.replace('text-primary', 'text-warning');
-                } else if (percentage === 100) {
+                } else if (displayPct === 100) {
                     bar.classList.replace('bg-primary', 'bg-success');
                     pctText.classList.replace('text-primary', 'text-success');
                 }
 
-                if (percentage === 100 || (percentage === 0 && isErrorOrCancel)) {
+                if (displayPct === 100 || isErrorOrCancel) {
                     setTimeout(() => {
                         container.classList.add('d-none');
                         bar.classList.remove('bg-success', 'bg-danger', 'bg-warning');
                         bar.classList.add('bg-primary');
                         pctText.classList.remove('text-success', 'text-danger', 'text-warning');
                         pctText.classList.add('text-primary');
-
-                        const btn = container.querySelector('button');
-                        if (btn) {
-                            btn.disabled = false;
-                            btn.innerText = "🛑 Cancelar Copia";
-                        }
                     }, 3500);
                 }
             }
@@ -702,7 +718,10 @@
         }
 
         async function triggerAppBackup(appName) {
-            updateInlineProgressUI(`backup_${appName}`, 5, `Iniciando petición...`);
+            const jobId = `backup_${appName}`;
+            updateInlineProgressUI(jobId, 5, `Iniciando petición...`);
+            updateFloatingProgressUI(jobId, 5, `Iniciando petición...`);
+            startSmoothProgressTimer(jobId);
             try {
                 await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
             } catch (err) { console.error(err); }
@@ -710,7 +729,10 @@
 
         async function triggerFullBackup() {
             if (confirm('¿Iniciar copia de seguridad completa del sistema?')) {
-                updateInlineProgressUI('backup_disaster_recovery', 5, 'Iniciando petición...');
+                const jobId = 'backup_disaster_recovery';
+                updateInlineProgressUI(jobId, 5, 'Iniciando petición...');
+                updateFloatingProgressUI(jobId, 5, 'Iniciando petición...');
+                startSmoothProgressTimer(jobId);
                 try {
                     await fetch('/api/v1/backups/run-full', { method: 'POST' });
                 } catch (err) { console.error(err); }
