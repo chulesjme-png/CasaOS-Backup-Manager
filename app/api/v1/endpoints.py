@@ -177,7 +177,7 @@ async def test_notification(settings: NotificationSettings):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- TAREAS DE RESPALDO (ASÍNCRONAS CON HISTORIAL) ---
+# --- TAREAS DE RESPALDO (ASÍNCRONAS CON HISTORIAL Y CANCELACIÓN) ---
 
 async def task_run_app_backup(app_name: str, app_path: str):
     start_time = time.time()
@@ -217,11 +217,11 @@ async def task_run_app_backup(app_name: str, app_path: str):
         await ws_manager.broadcast({
             "job_id": f"backup_{app_name}",
             "percentage": 0,
-            "message": f"Error respaldando {app_name}."
+            "message": f"Error o cancelación respaldando {app_name}."
         })
         await notification_service.send_notification(
             title=f"❌ Error en Copia: {app_name}",
-            message=f"Ocurrió un fallo al respaldar <b>{app_name}</b>.",
+            message=f"Ocurrió un fallo o cancelación al respaldar <b>{app_name}</b>.",
             status="error"
         )
         _record_audit_log(job_type="Backup App", target=app_name, status="failed", duration=duration_str)
@@ -274,11 +274,11 @@ async def task_run_full_backup():
         await ws_manager.broadcast({
             "job_id": "backup_disaster_recovery",
             "percentage": 0,
-            "message": "Error en Disaster Recovery."
+            "message": "Error o cancelación en Disaster Recovery."
         })
         await notification_service.send_notification(
             title="❌ Error en Disaster Recovery",
-            message="Falló el proceso de copia integral.",
+            message="Falló o se canceló el proceso de copia integral.",
             status="error"
         )
         _record_audit_log(job_type="Disaster Recovery", target="Sistema Completo", status="failed", duration=duration_str)
@@ -287,6 +287,19 @@ async def task_run_full_backup():
 async def run_full_backup(background_tasks: BackgroundTasks):
     background_tasks.add_task(task_run_full_backup)
     return {"status": "started", "message": "Disaster recovery iniciado en segundo plano."}
+
+@router.post("/backups/cancel")
+async def cancel_backup_operation():
+    """Cancela inmediatamente el respaldo que esté en ejecución."""
+    cancelled = duplicati_service.cancel_current_backup()
+    if cancelled:
+        await ws_manager.broadcast({
+            "job_id": "backup_disaster_recovery",
+            "percentage": 0,
+            "message": "Copia cancelada por el usuario."
+        })
+        return {"status": "ok", "message": "Proceso de respaldo cancelado con éxito."}
+    return {"status": "ignored", "message": "No había ningún proceso activo para cancelar."}
 
 
 # --- RESTO DE ENDPOINTS & SINCRO HISTORIAL <-> DISCO ---
@@ -320,16 +333,15 @@ def list_available_backups():
             if os.path.exists(d):
                 for root, _, files in os.walk(d):
                     for file in files:
-                        if file.endswith(".tar.gz") or file.endswith(".zip"):
+                        if (file.endswith(".tar.gz") or file.endswith(".zip")) and not file.endswith(".tmp"):
                             file_path = os.path.join(root, file)
                             stats = os.stat(file_path)
                             size_bytes = stats.st_size
 
-                            # Ignorar archivos totalmente vacíos (0 bytes)
+                            # Ignorar archivos vacíos
                             if size_bytes == 0:
                                 continue
 
-                            # Calcular tamaño formateado adecuadamente (KB o MB)
                             size_mb = round(size_bytes / (1024 * 1024), 2)
                             if size_mb < 0.1:
                                 size_kb = round(size_bytes / 1024, 2)
@@ -358,7 +370,6 @@ def get_execution_logs():
     formatted_logs = []
     seen_targets = set()
 
-    # 1. Leer registros explícitos en memoria de audit_service
     raw_logs = []
     try:
         if hasattr(audit_service, "get_logs") and callable(getattr(audit_service, "get_logs")):
@@ -384,7 +395,6 @@ def get_execution_logs():
             status = getattr(l, "status", "success")
             duration = str(getattr(l, "duration", "Completado"))
 
-        # Descartar registros vacíos o fantasma con etiqueta 'Sistema'
         if not target or target.strip().lower() in ["sistema", "none", "n/a"]:
             continue
 
@@ -404,7 +414,6 @@ def get_execution_logs():
                 "duration": duration
             })
 
-    # 2. Escanear archivos físicos reales del disco sin generar 'Sistema'
     target_disk = config_manager.config.selected_target_disk
     if target_disk and os.path.exists(target_disk):
         try:
@@ -414,12 +423,11 @@ def get_execution_logs():
                     continue
                 for root, _, files in os.walk(d):
                     for file in files:
-                        if file.endswith(".tar.gz"):
+                        if file.endswith(".tar.gz") and not file.endswith(".tmp"):
                             file_path = os.path.join(root, file)
                             stats = os.stat(file_path)
                             ts_str = datetime.fromtimestamp(stats.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
 
-                            # Extraer nombre exacto de la aplicación
                             if "_backup" in file:
                                 app_target = file.split("_backup")[0]
                             else:
@@ -438,7 +446,6 @@ def get_execution_logs():
         except Exception as e:
             logger.warning(f"[Audit] Error deduciendo historial desde disco: {e}")
 
-    # Ordenar por fecha decreciente
     formatted_logs.sort(key=lambda x: x["timestamp"], reverse=True)
     return formatted_logs
 
