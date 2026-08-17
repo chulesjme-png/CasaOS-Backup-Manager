@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 from typing import Optional, Dict, Any
 
 from app.core.backends.duplicati_backend import DuplicatiBackend
@@ -6,7 +7,6 @@ from app.models.backup_execution_request import BackupExecutionRequest
 from app.models.backend_configuration import BackendConfiguration
 from app.models.backup_configuration import BackupConfiguration
 from app.models.backup_operation import BackupOperationType
-from app.models.manifest import BackupManifest
 from app.services.preflight_service import preflight_service
 from app.services.db_hook_service import db_hook_service
 
@@ -55,11 +55,7 @@ class DuplicatiOrchestratorService:
             # 3. Solicitud de ejecución a Duplicati
             request = BackupExecutionRequest(
                 operation=BackupOperationType.RUN_BACKUP,
-                manifest=BackupManifest(
-                    application=app_name,
-                    version="1.0",
-                    sources=[app_path]
-                ),
+                manifest=SimpleNamespace(application=app_name),
                 backend_configuration=BackendConfiguration(
                     backend="duplicati",
                     configuration={
@@ -82,7 +78,7 @@ class DuplicatiOrchestratorService:
             logger.info(f"✅ [Orchestrator] Tarea {duplicati_job_id} iniciada correctamente en Duplicati.")
             return {
                 "success": True,
-                "execution_reference": result.execution_reference.dict() if result.execution_reference else None,
+                "execution_reference": result.execution_reference.dict() if (result.execution_reference and hasattr(result.execution_reference, "dict")) else str(result.execution_reference),
                 "metadata": result.metadata
             }
 
@@ -95,3 +91,4 @@ class DuplicatiOrchestratorService:
             db_hook_service.cleanup_db_dump(app_path=app_path)
 
 duplicati_orchestrator = DuplicatiOrchestratorService()
+duplicati_service = duplicati_orchestrator
