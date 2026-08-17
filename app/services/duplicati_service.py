@@ -57,7 +57,6 @@ class DuplicatiOrchestratorService:
                 operation=BackupOperationType.RUN_BACKUP,
                 manifest=SimpleNamespace(application=app_name),
                 backend_configuration=BackendConfiguration(
-                    backend="duplicati",
                     configuration={
                         "url": duplicati_url,
                         "password": duplicati_password,
