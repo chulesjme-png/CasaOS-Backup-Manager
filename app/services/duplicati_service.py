@@ -54,6 +54,7 @@ class DuplicatiOrchestratorService:
 
             # 3. Solicitud de ejecución a Duplicati
             request = BackupExecutionRequest(
+                backend_name="duplicati",
                 operation=BackupOperationType.RUN_BACKUP,
                 manifest=SimpleNamespace(application=app_name),
                 backend_configuration=BackendConfiguration(
