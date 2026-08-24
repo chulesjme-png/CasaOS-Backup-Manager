@@ -391,6 +391,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/app.js"></script>
 
     <script>
         let progressSocket = null;
@@ -591,7 +592,7 @@
             const tbody = document.getElementById('logsTableBody');
             tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Buscando registros...</td></tr>';
             try {
-                const res = await fetch('/api/v1/logs');
+                const res = await fetch('/api/v1/executions?limit=50');
                 const logs = await res.json();
                 tbody.innerHTML = '';
                 
@@ -601,15 +602,15 @@
                 }
                 
                 logs.forEach(log => {
-                    let fecha = (log.timestamp && !isNaN(log.timestamp)) ? new Date(log.timestamp * 1000).toLocaleString() : (log.timestamp || 'Fecha desconocida');
+                    let fecha = (log.start_time) ? new Date(log.start_time).toLocaleString() : 'Fecha desconocida';
                     let statusClass = (log.status && log.status.toLowerCase() === 'success') ? 'bg-success' : 'bg-danger';
                     
                     tbody.innerHTML += `<tr>
                         <td class="text-nowrap">${fecha}</td>
-                        <td class="fw-semibold">${log.type || 'Backup'}</td>
-                        <td><code>${log.target || 'Sistema'}</code></td>
+                        <td class="fw-semibold">${log.backend_type || 'Backup'}</td>
+                        <td><code>${log.app_name || 'Sistema'}</code></td>
                         <td><span class="badge ${statusClass}">${log.status || 'success'}</span></td>
-                        <td>${log.duration || '0s'}</td>
+                        <td>${log.progress_percentage || 0}%</td>
                     </tr>`;
                 });
             } catch (err) {
@@ -668,17 +669,49 @@
             }
         });
 
+        // RESTAURACIÓN CON SOPORTE PARA DELEGACIÓN A DUPLICATI (PUERTO 8200)
         async function triggerRestore(filename) {
             if (confirm(`¿Estás seguro de que deseas restaurar la copia: ${filename}?`)) {
-                bootstrap.Modal.getInstance(document.getElementById('modalRestore')).hide();
-                updateFloatingProgressUI('Restauración', 10, `Iniciando despliegue...`);
+                const modalEl = document.getElementById('modalRestore');
+                if (modalEl) {
+                    const modalInst = bootstrap.Modal.getInstance(modalEl);
+                    if (modalInst) modalInst.hide();
+                }
+
+                updateFloatingProgressUI('Restauración', 10, `Iniciando proceso...`);
+                
                 try {
-                    await fetch('/api/v1/backups/restore', { 
+                    const res = await fetch('/api/v1/executions/restore', { 
                         method: 'POST', 
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ backup_file: filename, target_app: "all" })
+                        body: JSON.stringify({ 
+                            backend_name: "duplicati",
+                            application: filename,
+                            version: "latest" 
+                        })
                     });
-                } catch (err) { console.error(err); }
+                    
+                    const data = await res.json();
+
+                    // Si la API indica que es una tarea delegada al panel completo
+                    if (data.delegated) {
+                        const port = data.target_port || 8200;
+                        const path = data.target_path || '/ngclient/restore';
+                        const targetUrl = `${window.location.protocol}//${window.location.hostname}:${port}${path}`;
+                        
+                        updateFloatingProgressUI('Restauración', 100, `Redirigiendo a Duplicati...`);
+                        setTimeout(() => {
+                            window.open(targetUrl, '_blank');
+                        }, 800);
+                        return;
+                    }
+
+                    if (!res.ok) {
+                        alert(`🔴 Error en la restauración: ${data.detail || 'Fallo inesperado'}`);
+                    }
+                } catch (err) { 
+                    console.error("Error al ejecutar la restauración:", err); 
+                }
             }
         }
 

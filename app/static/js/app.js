@@ -7,8 +7,19 @@ window.fetch = async function(...args) {
     const response = await originalFetch.apply(this, args);
     
     // Si la petición a la ruta de restauración finaliza con éxito
-    if (typeof url === 'string' && url.includes('/api/v1/backups/restore')) {
+    if (typeof url === 'string' && (url.includes('/api/v1/backups/restore') || url.includes('/api/v1/executions/restore'))) {
         if (response.ok) {
+            try {
+                const clonedResp = response.clone();
+                const data = await clonedResp.json();
+                
+                // Si la respuesta es delegada, NO recargamos la interfaz
+                if (data && data.delegated) {
+                    console.log("Restauración delegada a panel externo (Duplicati). Omitiendo recarga de página.");
+                    return response;
+                }
+            } catch (e) {}
+
             console.log("Restauración finalizada con éxito. Forzando limpieza de interfaz...");
             setTimeout(() => {
                 destruirBarraProgresoForzosa();
