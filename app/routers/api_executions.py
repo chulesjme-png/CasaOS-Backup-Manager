@@ -87,10 +87,14 @@ async def run_execution(
 
 
 @router.get("", response_model=List[ExecutionResponse])
-def list_execution_history(limit: int = 20, db: Session = Depends(get_db)):
+def list_execution_history(
+    limit: int = 20, 
+    backend_type: Optional[str] = None, 
+    db: Session = Depends(get_db)
+):
     """Obtiene el historial de ejecuciones registradas en la base de datos."""
     history_service = ExecutionHistoryService(db)
-    return history_service.list_executions(limit=limit)
+    return history_service.list_executions(limit=limit, backend_type=backend_type)
 
 
 @router.get("/snapshots")
@@ -131,10 +135,16 @@ def restore_backup(req: RestoreApiRequest):
     """Ciclo de vida de restauración: apaga contenedor -> restaura volúmenes -> reinicia contenedor."""
     app_name = req.application.lower().strip()
 
-    if app_name in ["disaster_recovery", "casaos", "system_disaster_recovery"]:
+    # --------------------------------------------------------------------------
+    # PATRÓN DE DELEGACIÓN: Redirección transparente a Duplicati para Disaster Recovery
+    # --------------------------------------------------------------------------
+    if app_name in ["disaster_recovery", "casaos", "system_disaster_recovery", "casaos system"]:
         return {
-            "success": False,
-            "message": "La restauración del sistema completo debe ejecutarse por consola por razones de seguridad."
+            "success": True,
+            "delegated": True,
+            "target_port": 8200,
+            "target_path": "/ngclient/restore",
+            "message": "Abriendo panel de recuperación avanzada (Duplicati)..."
         }
 
     logs = []

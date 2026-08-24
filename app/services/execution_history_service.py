@@ -50,9 +50,15 @@ class ExecutionHistoryService:
     def get_execution(self, execution_id: str) -> Optional[ExecutionRecordModel]:
         return self.db.query(ExecutionRecordModel).filter(ExecutionRecordModel.id == execution_id).first()
 
-    def list_executions(self, limit: int = 50) -> List[ExecutionRecordModel]:
+    def list_executions(self, limit: int = 50, backend_type: Optional[str] = None) -> List[ExecutionRecordModel]:
+        """Obtiene la lista de ejecuciones, permitiendo filtrar por backend opcionalmente."""
+        query = self.db.query(ExecutionRecordModel)
+        
+        if backend_type:
+            query = query.filter(ExecutionRecordModel.backend_type == backend_type)
+            
         return (
-            self.db.query(ExecutionRecordModel)
+            query
             .order_by(ExecutionRecordModel.start_time.desc())
             .limit(limit)
             .all()
