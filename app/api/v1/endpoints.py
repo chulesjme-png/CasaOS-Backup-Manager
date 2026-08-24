@@ -45,7 +45,7 @@ def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     """
     now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     log_entry = {
-        "timestamp": now_str,
+        "date": now_str,
         "type": job_type,
         "target": target,
         "status": status,
@@ -73,13 +73,11 @@ def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     if not recorded and hasattr(audit_service, "logs") and isinstance(audit_service.logs, list):
         audit_service.logs.append(log_entry)
         recorded = True
-        logger.info(f"[Audit] Evento añadido directamente a audit_service.logs: {target}")
 
     if not recorded:
         if not hasattr(audit_service, "_runtime_logs"):
             setattr(audit_service, "_runtime_logs", [])
         getattr(audit_service, "_runtime_logs").append(log_entry)
-        logger.info(f"[Audit] Evento guardado en _runtime_logs del sistema: {target}")
 
 
 # --- CONFIGURACIÓN & ESTADO ---
@@ -177,7 +175,7 @@ async def test_notification(settings: NotificationSettings):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- TAREAS DE RESPALDO (ASÍNCRONAS CON HISTORIAL Y CANCELACIÓN) ---
+# --- TAREAS DE RESPALDO ---
 
 async def task_run_app_backup(app_name: str, app_path: str):
     start_time = time.time()
@@ -194,12 +192,12 @@ async def task_run_app_backup(app_name: str, app_path: str):
     })
 
     target_disk = config_manager.config.selected_target_disk or "/media"
-    execution_ref = f"app_backup_{app_name}_{int(start_time)}"
 
+    # Se pasa None en duplicati_job_id para evitar errores de tipo int
     if asyncio.iscoroutinefunction(duplicati_service.run_app_backup):
-        success = await duplicati_service.run_app_backup(app_name, app_path, target_disk, execution_ref)
+        success = await duplicati_service.run_app_backup(app_name, app_path, target_disk, None)
     else:
-        success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path, target_disk, execution_ref)
+        success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path, target_disk, None)
 
     elapsed = round(time.time() - start_time, 1)
     duration_str = f"{elapsed}s"
@@ -215,7 +213,7 @@ async def task_run_app_backup(app_name: str, app_path: str):
             message=f"La aplicación <b>{app_name}</b> se ha respaldado con éxito en {duration_str}.",
             status="success"
         )
-        _record_audit_log(job_type="Backup App", target=app_name, status="success", duration=duration_str)
+        _record_audit_log(job_type="Aplicación", target=app_name, status="success", duration=duration_str)
     else:
         await ws_manager.broadcast({
             "job_id": f"backup_{app_name}",
@@ -227,7 +225,7 @@ async def task_run_app_backup(app_name: str, app_path: str):
             message=f"Ocurrió un fallo o cancelación al respaldar <b>{app_name}</b>.",
             status="error"
         )
-        _record_audit_log(job_type="Backup App", target=app_name, status="failed", duration=duration_str)
+        _record_audit_log(job_type="Aplicación", target=app_name, status="failed", duration=duration_str)
 
 @router.post("/backups/run-app/{app_name}")
 async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
@@ -272,7 +270,7 @@ async def task_run_full_backup():
             message=f"El respaldo integral del sistema se completó correctamente en {duration_str}.",
             status="success"
         )
-        _record_audit_log(job_type="Disaster Recovery", target="Sistema Completo", status="success", duration=duration_str)
+        _record_audit_log(job_type="Sistema", target="Disaster Recovery", status="success", duration=duration_str)
     else:
         await ws_manager.broadcast({
             "job_id": "backup_disaster_recovery",
@@ -284,7 +282,7 @@ async def task_run_full_backup():
             message="Falló o se canceló el proceso de copia integral.",
             status="error"
         )
-        _record_audit_log(job_type="Disaster Recovery", target="Sistema Completo", status="failed", duration=duration_str)
+        _record_audit_log(job_type="Sistema", target="Disaster Recovery", status="failed", duration=duration_str)
 
 @router.post("/backups/run-full")
 async def run_full_backup(background_tasks: BackgroundTasks):
@@ -305,7 +303,7 @@ async def cancel_backup_operation():
     return {"status": "ignored", "message": "No había ningún proceso activo para cancelar."}
 
 
-# --- RESTO DE ENDPOINTS & SINCRO HISTORIAL <-> DISCO ---
+# --- HISTORIAL & RESTAURACIÓN ---
 
 @router.get("/schedules")
 def get_schedule():
@@ -341,7 +339,6 @@ def list_available_backups():
                             stats = os.stat(file_path)
                             size_bytes = stats.st_size
 
-                            # Ignorar archivos vacíos
                             if size_bytes == 0:
                                 continue
 
@@ -369,10 +366,10 @@ def list_available_backups():
 @router.get("/executions")
 def get_execution_logs(limit: Optional[int] = 50):
     """
-    Obtiene los logs de auditoría sin duplicidades 'Sistema'.
+    Obtiene el historial de ejecuciones formateado estrictamente para la interfaz.
     """
     formatted_logs = []
-    seen_targets = set()
+    seen_keys = set()
 
     raw_logs = []
     try:
@@ -387,35 +384,32 @@ def get_execution_logs(limit: Optional[int] = 50):
 
     for l in raw_logs:
         if isinstance(l, dict):
-            ts = l.get("timestamp", l.get("time", ""))
-            target = l.get("target", l.get("app_name", l.get("name", "")))
-            job_type = l.get("type", l.get("action", l.get("job_type", "Backup App")))
-            status = l.get("status", l.get("result", "success"))
-            duration = str(l.get("duration", l.get("time_taken", "Completado")))
+            date_val = l.get("date", l.get("timestamp", l.get("time", "")))
+            target_val = l.get("target", l.get("app_name", l.get("name", "")))
+            type_val = l.get("type", l.get("action", l.get("job_type", "Aplicación")))
+            status_val = l.get("status", l.get("result", "success"))
+            duration_val = str(l.get("duration", l.get("time_taken", "Completado")))
         else:
-            ts = getattr(l, "timestamp", "")
-            target = getattr(l, "target", getattr(l, "app_name", ""))
-            job_type = getattr(l, "type", getattr(l, "action", "Backup App"))
-            status = getattr(l, "status", "success")
-            duration = str(getattr(l, "duration", "Completado"))
+            date_val = getattr(l, "date", getattr(l, "timestamp", ""))
+            target_val = getattr(l, "target", getattr(l, "app_name", ""))
+            type_val = getattr(l, "type", getattr(l, "action", "Aplicación"))
+            status_val = getattr(l, "status", "success")
+            duration_val = str(getattr(l, "duration", "Completado"))
 
-        if not target or target.strip().lower() in ["sistema", "none", "n/a"]:
-            continue
-
-        if isinstance(ts, (int, float)):
-            ts_str = datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M:%S")
+        if isinstance(date_val, (int, float)):
+            date_str = datetime.fromtimestamp(date_val).strftime("%d/%m/%Y %H:%M:%S")
         else:
-            ts_str = str(ts) if ts else datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            date_str = str(date_val) if date_val else datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-        key = f"{ts_str}_{target}"
-        if key not in seen_targets:
-            seen_targets.add(key)
+        key = f"{date_str}_{target_val}"
+        if key not in seen_keys:
+            seen_keys.add(key)
             formatted_logs.append({
-                "timestamp": ts_str,
-                "type": job_type,
-                "target": target,
-                "status": status,
-                "duration": duration
+                "date": date_str,
+                "type": type_val,
+                "target": target_val,
+                "status": status_val,
+                "duration": duration_val
             })
 
     target_disk = config_manager.config.selected_target_disk
@@ -430,19 +424,19 @@ def get_execution_logs(limit: Optional[int] = 50):
                         if file.endswith(".tar.gz") and not file.endswith(".tmp"):
                             file_path = os.path.join(root, file)
                             stats = os.stat(file_path)
-                            ts_str = datetime.fromtimestamp(stats.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+                            date_str = datetime.fromtimestamp(stats.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
 
                             if "_backup" in file:
                                 app_target = file.split("_backup")[0]
                             else:
                                 app_target = os.path.basename(root)
 
-                            key = f"{ts_str}_{app_target}"
-                            if key not in seen_targets and app_target.lower() != "sistema":
-                                seen_targets.add(key)
+                            key = f"{date_str}_{app_target}"
+                            if key not in seen_keys:
+                                seen_keys.add(key)
                                 formatted_logs.append({
-                                    "timestamp": ts_str,
-                                    "type": "Backup App",
+                                    "date": date_str,
+                                    "type": "Aplicación",
                                     "target": app_target,
                                     "status": "success",
                                     "duration": "Completado"
@@ -450,7 +444,7 @@ def get_execution_logs(limit: Optional[int] = 50):
         except Exception as e:
             logger.warning(f"[Audit] Error deduciendo historial desde disco: {e}")
 
-    formatted_logs.sort(key=lambda x: x["timestamp"], reverse=True)
+    formatted_logs.sort(key=lambda x: x["date"], reverse=True)
     return formatted_logs
 
 @router.delete("/logs")
