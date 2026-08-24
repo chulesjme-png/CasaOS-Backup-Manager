@@ -193,13 +193,13 @@ async def task_run_app_backup(app_name: str, app_path: str):
         "message": f"Realizando empaquetado de {app_name}..."
     })
 
-    # Obtener el disco destino activo desde la configuración
     target_disk = config_manager.config.selected_target_disk or "/media"
+    execution_ref = f"app_backup_{app_name}_{int(start_time)}"
 
     if asyncio.iscoroutinefunction(duplicati_service.run_app_backup):
-        success = await duplicati_service.run_app_backup(app_name, app_path, target_disk, None)
+        success = await duplicati_service.run_app_backup(app_name, app_path, target_disk, execution_ref)
     else:
-        success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path, target_disk, None)
+        success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path, target_disk, execution_ref)
 
     elapsed = round(time.time() - start_time, 1)
     duration_str = f"{elapsed}s"
@@ -366,7 +366,8 @@ def list_available_backups():
     return {"target_disk": target_disk, "backups": backups}
 
 @router.get("/logs")
-def get_execution_logs():
+@router.get("/executions")
+def get_execution_logs(limit: Optional[int] = 50):
     """
     Obtiene los logs de auditoría sin duplicidades 'Sistema'.
     """
@@ -376,7 +377,7 @@ def get_execution_logs():
     raw_logs = []
     try:
         if hasattr(audit_service, "get_logs") and callable(getattr(audit_service, "get_logs")):
-            raw_logs = audit_service.get_logs(limit=50)
+            raw_logs = audit_service.get_logs(limit=limit)
         elif hasattr(audit_service, "logs") and isinstance(audit_service.logs, list):
             raw_logs = audit_service.logs
         elif hasattr(audit_service, "_runtime_logs") and isinstance(audit_service._runtime_logs, list):
