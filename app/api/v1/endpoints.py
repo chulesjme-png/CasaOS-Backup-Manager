@@ -41,7 +41,7 @@ class NotificationSettings(BaseModel):
 
 def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     """
-    Registra de forma segura un evento de backup en audit_service.
+    Registra un evento de backup para que sea consumido directamente por el frontend.
     """
     now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     log_entry = {
@@ -52,32 +52,21 @@ def _record_audit_log(job_type: str, target: str, status: str, duration: str):
         "duration": duration
     }
     
-    recorded = False
-    candidate_methods = ["add_log", "log_event", "record_log", "log_action", "create_log", "add_entry"]
-
+    if not hasattr(audit_service, "_runtime_logs"):
+        setattr(audit_service, "_runtime_logs", [])
+    
+    getattr(audit_service, "_runtime_logs").append(log_entry)
+    
+    candidate_methods = ["add_log", "log_event", "record_log", "log_action"]
     for method_name in candidate_methods:
         if hasattr(audit_service, method_name):
             method = getattr(audit_service, method_name)
             if callable(method):
                 try:
-                    try:
-                        method(log_entry)
-                    except TypeError:
-                        method(job_type, target, status, duration)
-                    recorded = True
-                    logger.info(f"[Audit] Evento registrado vía {method_name}: {target} ({status})")
+                    method(log_entry)
                     break
-                except Exception as e:
-                    logger.warning(f"[Audit] Error al ejecutar {method_name}: {e}")
-
-    if not recorded and hasattr(audit_service, "logs") and isinstance(audit_service.logs, list):
-        audit_service.logs.append(log_entry)
-        recorded = True
-
-    if not recorded:
-        if not hasattr(audit_service, "_runtime_logs"):
-            setattr(audit_service, "_runtime_logs", [])
-        getattr(audit_service, "_runtime_logs").append(log_entry)
+                except Exception:
+                    pass
 
 
 # --- CONFIGURACIÓN & ESTADO ---
@@ -193,7 +182,6 @@ async def task_run_app_backup(app_name: str, app_path: str):
 
     target_disk = config_manager.config.selected_target_disk or "/media"
 
-    # Se envía 1 como backup_id válido para Duplicati
     if asyncio.iscoroutinefunction(duplicati_service.run_app_backup):
         success = await duplicati_service.run_app_backup(app_name, app_path, target_disk, 1)
     else:
@@ -325,83 +313,51 @@ def list_available_backups():
 
     backups = []
     try:
-        search_dirs = [target_disk]
-        sub_backup_dir = os.path.join(target_disk, "casaos-backups")
-        if os.path.exists(sub_backup_dir):
-            search_dirs.append(sub_backup_dir)
+        if os.path.exists(target_disk):
+            for root, _, files in os.walk(target_disk):
+                for file in files:
+                    if (file.endswith(".tar.gz") or file.endswith(".zip")) and not file.endswith(".tmp"):
+                        file_path = os.path.join(root, file)
+                        stats = os.stat(file_path)
+                        size_bytes = stats.st_size
 
-        for d in search_dirs:
-            if os.path.exists(d):
-                for root, _, files in os.walk(d):
-                    for file in files:
-                        if (file.endswith(".tar.gz") or file.endswith(".zip")) and not file.endswith(".tmp"):
-                            file_path = os.path.join(root, file)
-                            stats = os.stat(file_path)
-                            size_bytes = stats.st_size
+                        if size_bytes == 0:
+                            continue
 
-                            if size_bytes == 0:
-                                continue
+                        size_mb = round(size_bytes / (1024 * 1024), 2)
+                        size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
 
-                            size_mb = round(size_bytes / (1024 * 1024), 2)
-                            if size_mb < 0.1:
-                                size_kb = round(size_bytes / 1024, 2)
-                                size_str = f"{size_kb} KB"
-                            else:
-                                size_str = f"{size_mb} MB"
-
-                            backups.append({
-                                "filename": file,
-                                "path": file_path,
-                                "size_mb": size_mb,
-                                "size_str": size_str,
-                                "created_at": stats.st_mtime
-                            })
+                        backups.append({
+                            "filename": file,
+                            "path": file_path,
+                            "size_mb": size_mb,
+                            "size_str": size_str,
+                            "created_at": stats.st_mtime
+                        })
     except Exception as e:
         logger.error(f"[Backend] Error escaneando backups: {e}")
         raise HTTPException(status_code=500, detail=f"Error leyendo almacenamiento: {str(e)}")
 
+    backups.sort(key=lambda x: x["created_at"], reverse=True)
     return {"target_disk": target_disk, "backups": backups}
 
 @router.get("/logs")
 @router.get("/executions")
 def get_execution_logs(limit: Optional[int] = 50):
     """
-    Obtiene el historial de ejecuciones formateado estrictamente para la interfaz.
+    Entrega los logs formateados con las claves exactas requeridas por la UI.
     """
     formatted_logs = []
     seen_keys = set()
 
-    raw_logs = []
-    try:
-        if hasattr(audit_service, "get_logs") and callable(getattr(audit_service, "get_logs")):
-            raw_logs = audit_service.get_logs(limit=limit)
-        elif hasattr(audit_service, "logs") and isinstance(audit_service.logs, list):
-            raw_logs = audit_service.logs
-        elif hasattr(audit_service, "_runtime_logs") and isinstance(audit_service._runtime_logs, list):
-            raw_logs = audit_service._runtime_logs
-    except Exception as e:
-        logger.warning(f"[Audit] No se pudieron obtener logs en memoria: {e}")
-
-    for l in raw_logs:
-        if isinstance(l, dict):
-            date_val = l.get("date", l.get("timestamp", l.get("time")))
-            target_val = l.get("target", l.get("app_name", l.get("name", "Desconocido")))
-            type_val = l.get("type", l.get("job_type", "Aplicación"))
-            status_val = l.get("status", "success")
-            duration_val = str(l.get("duration", "Completado"))
-        else:
-            date_val = getattr(l, "date", getattr(l, "timestamp", None))
-            target_val = getattr(l, "target", getattr(l, "app_name", "Desconocido"))
-            type_val = getattr(l, "type", "Aplicación")
-            status_val = getattr(l, "status", "success")
-            duration_val = str(getattr(l, "duration", "Completado"))
-
-        if isinstance(date_val, (int, float)):
-            date_str = datetime.fromtimestamp(date_val).strftime("%d/%m/%Y %H:%M:%S")
-        elif date_val:
-            date_str = str(date_val)
-        else:
-            date_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    # 1. Priorizar registros generados en la sesión actual
+    runtime_logs = getattr(audit_service, "_runtime_logs", [])
+    for l in runtime_logs:
+        date_str = l.get("date", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+        target_val = l.get("target", "Desconocido")
+        type_val = l.get("type", "Aplicación")
+        status_val = l.get("status", "success")
+        duration_val = str(l.get("duration", "Completado"))
 
         key = f"{date_str}_{target_val}"
         if key not in seen_keys:
@@ -414,6 +370,7 @@ def get_execution_logs(limit: Optional[int] = 50):
                 "duration": duration_val
             })
 
+    # 2. Escaneo en disco para registrar ejecuciones basadas en archivos generados
     target_disk = config_manager.config.selected_target_disk
     if target_disk and os.path.exists(target_disk):
         try:
@@ -442,7 +399,7 @@ def get_execution_logs(limit: Optional[int] = 50):
             logger.warning(f"[Audit] Error leyendo backups en disco: {e}")
 
     formatted_logs.sort(key=lambda x: x["date"], reverse=True)
-    return formatted_logs
+    return formatted_logs[:limit]
 
 @router.delete("/logs")
 def clear_execution_logs():
