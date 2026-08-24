@@ -193,10 +193,13 @@ async def task_run_app_backup(app_name: str, app_path: str):
         "message": f"Realizando empaquetado de {app_name}..."
     })
 
+    # Obtener el disco destino activo desde la configuración
+    target_disk = config_manager.config.selected_target_disk or "/media"
+
     if asyncio.iscoroutinefunction(duplicati_service.run_app_backup):
-        success = await duplicati_service.run_app_backup(app_name, app_path)
+        success = await duplicati_service.run_app_backup(app_name, app_path, target_disk, None)
     else:
-        success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path)
+        success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path, target_disk, None)
 
     elapsed = round(time.time() - start_time, 1)
     duration_str = f"{elapsed}s"
