@@ -681,12 +681,13 @@
                 updateFloatingProgressUI('Restauración', 10, `Iniciando proceso...`);
                 
                 try {
-                    const res = await fetch('/api/v1/executions/restore', { 
+                    const res = await fetch('/api/v1/backups/restore', { 
                         method: 'POST', 
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
                             backend_name: "duplicati",
                             application: filename,
+                            filename: filename,
                             version: "latest" 
                         })
                     });
