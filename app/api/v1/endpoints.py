@@ -193,11 +193,11 @@ async def task_run_app_backup(app_name: str, app_path: str):
 
     target_disk = config_manager.config.selected_target_disk or "/media"
 
-    # Se pasa None en duplicati_job_id para evitar errores de tipo int
+    # Se envía 1 como backup_id válido para Duplicati
     if asyncio.iscoroutinefunction(duplicati_service.run_app_backup):
-        success = await duplicati_service.run_app_backup(app_name, app_path, target_disk, None)
+        success = await duplicati_service.run_app_backup(app_name, app_path, target_disk, 1)
     else:
-        success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path, target_disk, None)
+        success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path, target_disk, 1)
 
     elapsed = round(time.time() - start_time, 1)
     duration_str = f"{elapsed}s"
@@ -384,22 +384,24 @@ def get_execution_logs(limit: Optional[int] = 50):
 
     for l in raw_logs:
         if isinstance(l, dict):
-            date_val = l.get("date", l.get("timestamp", l.get("time", "")))
-            target_val = l.get("target", l.get("app_name", l.get("name", "")))
-            type_val = l.get("type", l.get("action", l.get("job_type", "Aplicación")))
-            status_val = l.get("status", l.get("result", "success"))
-            duration_val = str(l.get("duration", l.get("time_taken", "Completado")))
+            date_val = l.get("date", l.get("timestamp", l.get("time")))
+            target_val = l.get("target", l.get("app_name", l.get("name", "Desconocido")))
+            type_val = l.get("type", l.get("job_type", "Aplicación"))
+            status_val = l.get("status", "success")
+            duration_val = str(l.get("duration", "Completado"))
         else:
-            date_val = getattr(l, "date", getattr(l, "timestamp", ""))
-            target_val = getattr(l, "target", getattr(l, "app_name", ""))
-            type_val = getattr(l, "type", getattr(l, "action", "Aplicación"))
+            date_val = getattr(l, "date", getattr(l, "timestamp", None))
+            target_val = getattr(l, "target", getattr(l, "app_name", "Desconocido"))
+            type_val = getattr(l, "type", "Aplicación")
             status_val = getattr(l, "status", "success")
             duration_val = str(getattr(l, "duration", "Completado"))
 
         if isinstance(date_val, (int, float)):
             date_str = datetime.fromtimestamp(date_val).strftime("%d/%m/%Y %H:%M:%S")
+        elif date_val:
+            date_str = str(date_val)
         else:
-            date_str = str(date_val) if date_val else datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            date_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
         key = f"{date_str}_{target_val}"
         if key not in seen_keys:
@@ -415,34 +417,29 @@ def get_execution_logs(limit: Optional[int] = 50):
     target_disk = config_manager.config.selected_target_disk
     if target_disk and os.path.exists(target_disk):
         try:
-            search_dirs = [os.path.join(target_disk, "Backups", "Apps")]
-            for d in search_dirs:
-                if not os.path.exists(d):
-                    continue
-                for root, _, files in os.walk(d):
-                    for file in files:
-                        if file.endswith(".tar.gz") and not file.endswith(".tmp"):
-                            file_path = os.path.join(root, file)
-                            stats = os.stat(file_path)
-                            date_str = datetime.fromtimestamp(stats.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+            for root, _, files in os.walk(target_disk):
+                for file in files:
+                    if file.endswith(".tar.gz") and not file.endswith(".tmp"):
+                        stats = os.stat(os.path.join(root, file))
+                        date_str = datetime.fromtimestamp(stats.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+                        
+                        if "_backup" in file:
+                            app_target = file.split("_backup")[0]
+                        else:
+                            app_target = file.replace(".tar.gz", "")
 
-                            if "_backup" in file:
-                                app_target = file.split("_backup")[0]
-                            else:
-                                app_target = os.path.basename(root)
-
-                            key = f"{date_str}_{app_target}"
-                            if key not in seen_keys:
-                                seen_keys.add(key)
-                                formatted_logs.append({
-                                    "date": date_str,
-                                    "type": "Aplicación",
-                                    "target": app_target,
-                                    "status": "success",
-                                    "duration": "Completado"
-                                })
+                        key = f"{date_str}_{app_target}"
+                        if key not in seen_keys:
+                            seen_keys.add(key)
+                            formatted_logs.append({
+                                "date": date_str,
+                                "type": "Aplicación",
+                                "target": app_target,
+                                "status": "success",
+                                "duration": "Completado"
+                            })
         except Exception as e:
-            logger.warning(f"[Audit] Error deduciendo historial desde disco: {e}")
+            logger.warning(f"[Audit] Error leyendo backups en disco: {e}")
 
     formatted_logs.sort(key=lambda x: x["date"], reverse=True)
     return formatted_logs
