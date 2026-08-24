@@ -500,7 +500,14 @@
             const cancelBtn = document.getElementById('ws-cancel-btn');
 
             toast.show();
-            titleEl.innerText = jobId.includes('disaster') ? 'Disaster Recovery' : `Copia: ${jobId.replace('backup_', '')}`;
+            
+            if (jobId === 'Restauración' || jobId.includes('restore')) {
+                titleEl.innerText = 'Restauración de Copia';
+            } else if (jobId.includes('disaster')) {
+                titleEl.innerText = 'Disaster Recovery';
+            } else {
+                titleEl.innerText = `Copia: ${jobId.replace('backup_', '')}`;
+            }
             
             if (resetTimer && percentage > currentPercent) {
                 currentPercent = percentage;
@@ -513,6 +520,7 @@
 
             const isErrorOrCancel = message.toLowerCase().includes('error') || 
                                     message.toLowerCase().includes('cancel') ||
+                                    message.toLowerCase().includes('fallo') ||
                                     message.toLowerCase().includes('abortad');
 
             if (toastTimeout) clearTimeout(toastTimeout);
@@ -537,7 +545,7 @@
                         cancelBtn.disabled = false;
                         cancelBtn.innerText = "🛑 Cancelar Copia";
                     }
-                }, 3500);
+                }, 4000);
             } else {
                 spinner.classList.remove('d-none');
                 if (cancelBtn) cancelBtn.classList.remove('d-none');
@@ -565,6 +573,7 @@
 
                 const isErrorOrCancel = message.toLowerCase().includes('error') || 
                                         message.toLowerCase().includes('cancel') ||
+                                        message.toLowerCase().includes('fallo') ||
                                         message.toLowerCase().includes('abortad');
 
                 if (isErrorOrCancel) {
@@ -669,7 +678,7 @@
             }
         });
 
-        // RESTAURACIÓN CON SOPORTE PARA DELEGACIÓN A DUPLICATI (PUERTO 8200)
+        // RESTAURACIÓN CON CONFIRMACIÓN VISUAL EN LA INTERFAZ
         async function triggerRestore(filename) {
             if (confirm(`¿Estás seguro de que deseas restaurar la copia: ${filename}?`)) {
                 const modalEl = document.getElementById('modalRestore');
@@ -678,7 +687,7 @@
                     if (modalInst) modalInst.hide();
                 }
 
-                updateFloatingProgressUI('Restauración', 10, `Iniciando proceso...`);
+                updateFloatingProgressUI('Restauración', 15, `Restaurando ${filename}...`);
                 
                 try {
                     const res = await fetch('/api/v1/backups/restore', { 
@@ -707,11 +716,16 @@
                         return;
                     }
 
-                    if (!res.ok) {
+                    if (res.ok) {
+                        updateFloatingProgressUI('Restauración', 100, `🟢 ¡${filename} restaurado con éxito!`);
+                    } else {
+                        updateFloatingProgressUI('Restauración', 0, `🔴 Fallo en la restauración`);
                         alert(`🔴 Error en la restauración: ${data.detail || 'Fallo inesperado'}`);
                     }
                 } catch (err) { 
                     console.error("Error al ejecutar la restauración:", err); 
+                    updateFloatingProgressUI('Restauración', 0, `🔴 Error de conexión`);
+                    alert("🔴 Error de conexión al intentar restaurar.");
                 }
             }
         }
