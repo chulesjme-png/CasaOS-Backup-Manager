@@ -256,9 +256,12 @@
                     <div id="ws-progress-bar" class="progress-bar bg-white progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
                 </div>
                 <div id="ws-progress-message" class="text-white-50 small text-truncate mb-2" style="font-size: 0.8rem;">Iniciando proceso...</div>
-                <div class="d-flex justify-content-end">
+                <div class="d-flex justify-content-end gap-2">
                     <button id="ws-cancel-btn" class="btn btn-light btn-sm text-danger fw-bold py-1 px-3 shadow-sm" style="font-size: 0.75rem;" onclick="cancelBackup(this)">
                         🛑 Cancelar Copia
+                    </button>
+                    <button id="ws-close-btn" class="btn btn-light btn-sm text-dark fw-bold py-1 px-3 shadow-sm d-none" style="font-size: 0.75rem;" data-bs-dismiss="toast">
+                        ✅ Entendido / Cerrar
                     </button>
                 </div>
             </div>
@@ -499,6 +502,7 @@
             const titleEl = document.getElementById('ws-job-title');
             const spinner = document.getElementById('ws-spinner');
             const cancelBtn = document.getElementById('ws-cancel-btn');
+            const closeBtn = document.getElementById('ws-close-btn');
 
             if (percentage <= 5) {
                 bar.classList.remove('bg-success', 'bg-warning');
@@ -506,7 +510,9 @@
                 if (cancelBtn) {
                     cancelBtn.disabled = false;
                     cancelBtn.innerText = "🛑 Cancelar Copia";
+                    cancelBtn.classList.remove('d-none');
                 }
+                if (closeBtn) closeBtn.classList.add('d-none');
             }
 
             toast.show();
@@ -537,6 +543,7 @@
                 if (progressInterval) clearInterval(progressInterval);
                 spinner.classList.add('d-none');
                 if (cancelBtn) cancelBtn.classList.add('d-none');
+                if (closeBtn) closeBtn.classList.remove('d-none');
 
                 if (displayPct === 100) {
                     bar.classList.replace('bg-white', 'bg-success');
@@ -546,6 +553,7 @@
             } else {
                 spinner.classList.remove('d-none');
                 if (cancelBtn) cancelBtn.classList.remove('d-none');
+                if (closeBtn) closeBtn.classList.add('d-none');
             }
         }
 
