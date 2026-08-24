@@ -238,16 +238,20 @@
         </div>
     </div>
 
-    <!-- CONTENEDOR DE TOASTS -->
+    <!-- CONTENEDOR DE TOAST PERSISTENTE -->
     <div class="toast-container position-fixed bottom-0 end-0 p-4" style="z-index: 1100;">
-        <div id="wsToast" class="toast text-bg-primary border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
+        <div id="wsToast" class="toast text-bg-primary border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
             <div class="toast-body p-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="d-flex align-items-center gap-2">
                         <div id="ws-spinner" class="spinner-border spinner-border-sm text-light" role="status"></div>
                         <span id="ws-job-title" class="fw-bold text-white small text-truncate" style="max-width: 180px;">Procesando...</span>
                     </div>
-                    <span id="ws-progress-percent" class="badge bg-light text-primary rounded-pill">0%</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="ws-progress-percent" class="badge bg-light text-primary rounded-pill">0%</span>
+                        <!-- Botón para cerrar manualmente -->
+                        <button type="button" class="btn-close btn-close-white ms-1" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+                    </div>
                 </div>
                 <div class="progress mb-2" style="height: 6px; border-radius: 3px; background-color: rgba(255,255,255,0.3);">
                     <div id="ws-progress-bar" class="progress-bar bg-white progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
@@ -395,7 +399,6 @@
 
     <script>
         let progressSocket = null;
-        let toastTimeout = null;
         let progressInterval = null;
         let currentPercent = 0;
 
@@ -419,7 +422,6 @@
             progressSocket.onclose = () => setTimeout(initProgressWebSocket, 3000);
         }
 
-        // FUNCIÓN DE POLLING PARA MONITOREAR DUPLICATI EN TIEMPO REAL
         function trackBackupProgress(taskId, jobIdLabel) {
             if (progressInterval) clearInterval(progressInterval);
 
@@ -499,6 +501,16 @@
             const spinner = document.getElementById('ws-spinner');
             const cancelBtn = document.getElementById('ws-cancel-btn');
 
+            // Restablecer los estilos si inicia un nuevo proceso
+            if (percentage <= 5) {
+                bar.classList.remove('bg-success', 'bg-warning');
+                bar.classList.add('bg-white');
+                if (cancelBtn) {
+                    cancelBtn.disabled = false;
+                    cancelBtn.innerText = "🛑 Cancelar Copia";
+                }
+            }
+
             toast.show();
             
             if (jobId === 'Restauración' || jobId.includes('restore')) {
@@ -523,8 +535,6 @@
                                     message.toLowerCase().includes('fallo') ||
                                     message.toLowerCase().includes('abortad');
 
-            if (toastTimeout) clearTimeout(toastTimeout);
-
             if (displayPct === 100 || (displayPct < 100 && isErrorOrCancel)) {
                 if (progressInterval) clearInterval(progressInterval);
                 spinner.classList.add('d-none');
@@ -535,17 +545,7 @@
                 } else {
                     bar.classList.replace('bg-white', 'bg-warning');
                 }
-
-                toastTimeout = setTimeout(() => {
-                    toast.hide();
-                    spinner.classList.remove('d-none');
-                    bar.classList.replace('bg-success', 'bg-white');
-                    bar.classList.replace('bg-warning', 'bg-white');
-                    if (cancelBtn) {
-                        cancelBtn.disabled = false;
-                        cancelBtn.innerText = "🛑 Cancelar Copia";
-                    }
-                }, 4000);
+                // Se ha retirado el setTimeout automático para que la notificación se quede fija.
             } else {
                 spinner.classList.remove('d-none');
                 if (cancelBtn) cancelBtn.classList.remove('d-none');
@@ -596,7 +596,6 @@
             }
         }
 
-        // CARGAR HISTORIAL CORRECTAMENTE MAPEADO
         document.getElementById('modalLogs').addEventListener('show.bs.modal', async () => {
             const tbody = document.getElementById('logsTableBody');
             tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Buscando registros...</td></tr>';
@@ -634,7 +633,6 @@
             }
         }
 
-        // CARGAR COPIAS DESDE EL DISCO MONTADO
         document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
             const list = document.getElementById('restoreBackupsList');
             list.innerHTML = '<div class="p-4 text-center text-muted">Buscando copias en el disco destino...</div>';
@@ -678,7 +676,6 @@
             }
         });
 
-        // RESTAURACIÓN CON CONFIRMACIÓN VISUAL EN LA INTERFAZ
         async function triggerRestore(filename) {
             if (confirm(`¿Estás seguro de que deseas restaurar la copia: ${filename}?`)) {
                 const modalEl = document.getElementById('modalRestore');
@@ -703,7 +700,6 @@
                     
                     const data = await res.json();
 
-                    // Si la API indica que es una tarea delegada al panel completo
                     if (data.delegated) {
                         const port = data.target_port || 8200;
                         const path = data.target_path || '/ngclient/restore';
