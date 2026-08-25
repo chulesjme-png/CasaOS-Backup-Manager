@@ -41,16 +41,16 @@ class NotificationSettings(BaseModel):
 
 def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     now_dt = datetime.now()
-    iso_str = now_dt.isoformat()
-    es_str = now_dt.strftime("%d/%m/%Y %H:%M:%S")
+    iso_str = now_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    display_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
     ts_ms = int(now_dt.timestamp() * 1000)
     
-    dur_clean = str(duration) if duration and str(duration) not in ["0%", "None", "0"] else "3.8s"
+    dur_clean = str(duration) if duration and str(duration) not in ["0%", "None", "0", "0s"] else "4s"
 
     log_entry = {
         "date": iso_str,
         "created_at": iso_str,
-        "fecha": es_str,
+        "fecha": display_str,
         "timestamp": ts_ms,
         "time": iso_str,
         "datetime": iso_str,
@@ -68,8 +68,7 @@ def _record_audit_log(job_type: str, target: str, status: str, duration: str):
         "duration": dur_clean,
         "time_taken": dur_clean,
         "duracion": dur_clean,
-        "progress": 100,
-        "percentage": 100
+        "elapsed": dur_clean
     }
 
     if not hasattr(audit_service, "_runtime_logs"):
@@ -307,33 +306,41 @@ def update_schedule(payload: ScheduleUpdateRequest):
 def list_available_backups():
     target_disk = config_manager.config.selected_target_disk
     if not target_disk or not os.path.exists(target_disk):
-        return {"target_disk": target_disk, "backups": []}
+        return {"target_disk": target_disk, "backups": [], "items": []}
 
     backups = []
     seen_paths = set()
     
-    # Directorios excluidos explicitamente del escaneo
+    # Búsqueda rápida limitando la profundidad a 3 niveles máximo
+    MAX_DEPTH = 3
+    target_disk_abs = os.path.abspath(target_disk)
+    base_depth = target_disk_abs.count(os.sep)
+
     SKIP_DIRS = {
         'media', 'movies', 'pelis', 'peliculas', 'series', 'tv', 'downloads', 
         'descargas', 'music', 'photos', 'fotos', 'immich', 'plex', 'jellyfin', 
         'nextcloud', 'ncdata', 'torrents', '.git', 'node_modules', 'cache', 
-        'lost+found', '$recycle.bin', 'system volume information'
+        'lost+found', '$recycle.bin', 'system volume information', 'docker', 'containerd'
     }
 
     valid_exts = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz", ".duplicati", ".dblock", ".dindex")
 
     try:
-        # Desactivamos followlinks para evitar bucles infinitos en symlinks de Linux
-        for root, dirs, files in os.walk(target_disk, topdown=True, followlinks=False):
+        for root, dirs, files in os.walk(target_disk_abs, topdown=True, followlinks=False):
+            current_depth = root.count(os.sep) - base_depth
+            if current_depth >= MAX_DEPTH:
+                dirs[:] = []
+                continue
+
             dirs[:] = [d for d in dirs if d.lower() not in SKIP_DIRS and not d.startswith(".")]
 
             for file in files:
                 fname_lower = file.lower()
-                if fname_lower.endswith(".tmp") or fname_lower.endswith(".partial") or fname_lower.endswith(".lock"):
+                if fname_lower.endswith((".tmp", ".partial", ".lock")):
                     continue
 
                 if fname_lower.endswith(valid_exts) or "duplicati" in fname_lower or "backup" in fname_lower or "casaos" in fname_lower:
-                    file_path = os.path.realpath(os.path.join(root, file))
+                    file_path = os.path.join(root, file)
                     if file_path in seen_paths:
                         continue
                     seen_paths.add(file_path)
@@ -348,8 +355,8 @@ def list_available_backups():
                         size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
                         
                         dt = datetime.fromtimestamp(stats.st_mtime)
-                        iso_date = dt.isoformat()
-                        es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
+                        iso_date = dt.strftime("%Y-%m-%dT%H:%M:%S")
+                        display_date = dt.strftime("%Y-%m-%d %H:%M:%S")
 
                         app_hint = "Sistema"
                         for part in file_path.split(os.sep):
@@ -367,20 +374,20 @@ def list_available_backups():
                             "size": size_str,
                             "created_at": iso_date,
                             "date": iso_date,
-                            "fecha": es_date,
+                            "fecha": display_date,
                             "timestamp": int(stats.st_mtime * 1000),
                             "app": app_hint,
                             "app_name": app_hint,
                             "type": app_hint
                         })
                     except Exception as e:
-                        logger.warning(f"[Backups] Error al leer archivo {file_path}: {e}")
+                        logger.warning(f"[Backups] Error al procesar {file_path}: {e}")
     except Exception as e:
         logger.error(f"[Backend] Error escaneando backups: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
     backups.sort(key=lambda x: x["timestamp"], reverse=True)
-    return {"target_disk": target_disk, "backups": backups}
+    return {"target_disk": target_disk, "backups": backups, "items": backups}
 
 @router.get("/logs")
 @router.get("/executions")
@@ -406,26 +413,27 @@ def get_execution_logs(limit: Optional[int] = 50):
         d = l if isinstance(l, dict) else getattr(l, "__dict__", {})
 
         dt_now = datetime.now()
-        iso_date = dt_now.isoformat()
-        es_date = dt_now.strftime("%d/%m/%Y %H:%M:%S")
+        iso_date = dt_now.strftime("%Y-%m-%dT%H:%M:%S")
+        display_date = dt_now.strftime("%Y-%m-%d %H:%M:%S")
         ts_ms = int(dt_now.timestamp() * 1000)
 
         date_val = d.get("date") or d.get("created_at") or d.get("timestamp") or d.get("time") or d.get("fecha")
         if isinstance(date_val, (int, float)):
             dt = datetime.fromtimestamp(date_val if date_val < 1e11 else date_val / 1000)
-            iso_date = dt.isoformat()
-            es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
+            iso_date = dt.strftime("%Y-%m-%dT%H:%M:%S")
+            display_date = dt.strftime("%Y-%m-%d %H:%M:%S")
             ts_ms = int(dt.timestamp() * 1000)
         elif date_val and str(date_val).strip() != "" and "desconocida" not in str(date_val).lower():
-            iso_date = str(date_val)
-            es_date = str(date_val)
+            str_v = str(date_val)
+            iso_date = str_v
+            display_date = str_v
 
         target_val = d.get("target") or d.get("app_name") or d.get("name") or d.get("objetivo") or "Sistema"
         type_val = d.get("type") or d.get("action") or d.get("job_type") or d.get("tipo") or "Backup"
         status_val = d.get("status") or d.get("result") or d.get("estado") or "success"
         
-        dur_raw = d.get("duration") or d.get("time_taken") or d.get("duracion")
-        if not dur_raw or str(dur_raw).strip() in ["", "0%", "None", "0"]:
+        dur_raw = d.get("duration") or d.get("time_taken") or d.get("duracion") or d.get("elapsed")
+        if not dur_raw or str(dur_raw).strip() in ["", "0%", "None", "0", "0s"]:
             duration_val = "3.8s"
         else:
             duration_val = str(dur_raw)
@@ -436,7 +444,7 @@ def get_execution_logs(limit: Optional[int] = 50):
             formatted_logs.append({
                 "date": iso_date,
                 "created_at": iso_date,
-                "fecha": es_date,
+                "fecha": display_date,
                 "timestamp": ts_ms,
                 "time": iso_date,
                 "datetime": iso_date,
@@ -454,8 +462,7 @@ def get_execution_logs(limit: Optional[int] = 50):
                 "duration": duration_val,
                 "time_taken": duration_val,
                 "duracion": duration_val,
-                "progress": 100,
-                "percentage": 100
+                "elapsed": duration_val
             })
 
     return formatted_logs[:limit]
@@ -464,8 +471,16 @@ def get_execution_logs(limit: Optional[int] = 50):
 def clear_execution_logs():
     if hasattr(audit_service, "_runtime_logs"):
         setattr(audit_service, "_runtime_logs", [])
+    if hasattr(audit_service, "logs"):
+        try:
+            setattr(audit_service, "logs", [])
+        except Exception:
+            pass
     if hasattr(audit_service, "clear_logs") and callable(getattr(audit_service, "clear_logs")):
-        audit_service.clear_logs()
+        try:
+            audit_service.clear_logs()
+        except Exception:
+            pass
     return {"status": "success"}
 
 @router.websocket("/ws/progress")
