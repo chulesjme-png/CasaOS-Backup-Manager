@@ -135,23 +135,18 @@ def list_available_backups():
     seen = set()
     VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz")
 
-    search_dirs = []
     target_disk = config_manager.config.selected_target_disk
-    
-    if target_disk and os.path.exists(target_disk):
-        search_dirs.extend([
-            os.path.join(target_disk, "Backups"),
-            os.path.join(target_disk, "Backups", "Apps"),
-            target_disk
-        ])
+    possible_roots = []
 
-    for fallback in ["/media", "/mnt", "/DATA"]:
-        if os.path.exists(fallback):
-            search_dirs.extend([os.path.join(fallback, "Backups"), fallback])
+    if target_disk:
+        possible_roots.append(os.path.join(target_disk, "Backups"))
+
+    for base in ["/media", "/mnt", "/DATA"]:
+        possible_roots.append(os.path.join(base, "Backups"))
+
+    search_dirs = [d for d in set(possible_roots) if d and os.path.exists(d)]
 
     for s_dir in search_dirs:
-        if not os.path.exists(s_dir):
-            continue
         try:
             for root, _, files in os.walk(s_dir, followlinks=True):
                 for file in files:
@@ -167,12 +162,8 @@ def list_available_backups():
                             ts_ms = int(stats.st_mtime * 1000)
                             dt = datetime.fromtimestamp(stats.st_mtime, timezone.utc)
 
-                            app_hint = "Sistema"
-                            path_parts = [p.lower() for p in file_path.split(os.sep)]
-                            for app_k in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy"]:
-                                if app_k in path_parts or file.lower().startswith(app_k):
-                                    app_hint = app_k
-                                    break
+                            path_parts = [p.capitalize() for p in file_path.split(os.sep)]
+                            app_hint = path_parts[-2] if len(path_parts) >= 2 else "Sistema"
 
                             size_display = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(stats.st_size / 1024, 1)} KB"
 
@@ -188,7 +179,8 @@ def list_available_backups():
                                 "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
                                 "timestamp": ts_ms,
                                 "app": app_hint,
-                                "app_name": app_hint
+                                "app_name": app_hint,
+                                "target": app_hint
                             })
                         except Exception:
                             pass

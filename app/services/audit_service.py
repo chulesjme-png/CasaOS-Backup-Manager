@@ -37,7 +37,7 @@ class AuditService:
 
     def log_execution(self, job_type: str, target_name: str, status: str, duration_seconds: float, message: str):
         try:
-            dur_val = round(duration_seconds, 2) if duration_seconds > 0 else 3.5
+            dur_val = round(duration_seconds, 2) if duration_seconds > 0 else 1.0
             now_ms = int(time.time() * 1000)
 
             with self._get_connection() as conn:
@@ -72,19 +72,20 @@ class AuditService:
                         dt = datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
                     except Exception:
                         dt = datetime.now(timezone.utc)
-                        ts_ms = int(dt.timestamp() * 1000)
 
                     iso_str = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     display_str = dt.strftime("%Y-%m-%d %H:%M:%S")
 
                     raw_dur = r.get("duration_seconds")
                     try:
-                        dur_sec = float(raw_dur) if raw_dur is not None else 3.5
+                        dur_sec = float(raw_dur) if raw_dur is not None else 1.0
                     except (ValueError, TypeError):
-                        dur_sec = 3.5
+                        dur_sec = 1.0
 
                     dur_formatted = f"{round(dur_sec, 1)}s"
                     target = str(r.get("target_name") or "Sistema")
+                    st = str(r.get("status") or "success").lower()
+                    status_display = "Éxito" if st in ["success", "ok", "completado"] else "Error"
 
                     formatted.append({
                         "id": r.get("id"),
@@ -92,20 +93,18 @@ class AuditService:
                         "date": iso_str,
                         "created_at": iso_str,
                         "fecha": display_str,
-                        "time": iso_str,
                         "type": str(r.get("job_type") or "Backup"),
                         "tipo": str(r.get("job_type") or "Backup"),
                         "target": target,
                         "target_name": target,
                         "app_name": target,
                         "objetivo": target,
-                        "status": str(r.get("status") or "success").lower(),
+                        "status": st,
+                        "estado": status_display,
                         "duration": dur_formatted,
                         "duration_seconds": dur_sec,
                         "duracion": dur_formatted,
-                        "time_taken": dur_formatted,
-                        "progress": 100,
-                        "percentage": 100
+                        "message": str(r.get("message") or "")
                     })
                 return formatted
         except Exception as e:
