@@ -19,6 +19,7 @@ services:
       # Acceso dinámico a unidades y discos externos de backup (con propagación de montajes)
       - /media:/media:rshared
       - /mnt:/mnt:rshared
+      - /run/media:/run/media:rshared
     environment:
       - TZ=Europe/Madrid
       - PYTHONUNBUFFERED=1
