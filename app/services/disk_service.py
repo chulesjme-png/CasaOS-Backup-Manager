@@ -6,11 +6,11 @@ import psutil
 logger = logging.getLogger("casaos_backup_manager")
 
 class DiskService:
-    """Servicio para gestión y análisis de almacenamiento en el Host y CasaOS."""
+    """Servicio de detección de discos compatible con entornos Docker y Host."""
 
     IGNORED_FSTYPES = {
-        'tmpfs', 'devtmpfs', 'sysfs', 'proc', 'overlay',
-        'squashfs', 'cgroup', 'pstore', 'bpf', 'tracefs', 'debugfs', 'mqueue', 'devpts', 'ecryptfs'
+        'tmpfs', 'devtmpfs', 'sysfs', 'proc', 'overlay', 'squashfs', 
+        'cgroup', 'pstore', 'bpf', 'tracefs', 'debugfs', 'mqueue', 'devpts', 'ecryptfs'
     }
 
     IGNORED_PATHS = {
@@ -20,11 +20,12 @@ class DiskService:
 
     def get_system_disks(self) -> list:
         disks = []
-        seen_mounts = set()
-        seen_device_ids = set()
+        seen_devices = set()
 
         try:
-            partitions = psutil.disk_partitions(all=False)
+            # Inspeccionar particiones montadas en el sistema
+            partitions = psutil.disk_partitions(all=True)
+            
             for part in partitions:
                 mountpoint = part.mountpoint
                 device = part.device
@@ -36,14 +37,15 @@ class DiskService:
                 if mountpoint in self.IGNORED_PATHS or any(mountpoint.startswith(p + '/') for p in self.IGNORED_PATHS):
                     continue
 
-                if os.path.isfile(mountpoint) or mountpoint in seen_mounts:
+                if os.path.isfile(mountpoint):
                     continue
 
                 try:
-                    # Deduplicación por ID de dispositivo físico
+                    # Deduplicación por ID de dispositivo del Kernel
                     stat_info = os.stat(mountpoint)
                     dev_id = stat_info.st_dev
-                    if dev_id in seen_device_ids:
+
+                    if dev_id in seen_devices:
                         continue
 
                     usage = shutil.disk_usage(mountpoint)
@@ -55,6 +57,7 @@ class DiskService:
                     if total_gb == 0:
                         continue
 
+                    # Etiquetado descriptivo
                     if mountpoint == '/':
                         name = "Almacenamiento Raíz (/)"
                     elif mountpoint.startswith('/media/'):
@@ -64,9 +67,7 @@ class DiskService:
                     else:
                         name = f"Disco ({mountpoint})"
 
-                    seen_device_ids.add(dev_id)
-                    seen_mounts.add(mountpoint)
-
+                    seen_devices.add(dev_id)
                     disks.append({
                         "device": device,
                         "mountpoint": mountpoint,
@@ -82,11 +83,11 @@ class DiskService:
                 except (PermissionError, FileNotFoundError):
                     continue
                 except Exception as e:
-                    logger.warning(f"Error leyendo disco en {mountpoint}: {e}")
+                    logger.warning(f"Error analizando {mountpoint}: {e}")
                     continue
 
         except Exception as e:
-            logger.error(f"Error al obtener particiones: {e}")
+            logger.error(f"Error al obtener discos del sistema: {e}")
 
         disks.sort(key=lambda x: x['total_gb'], reverse=True)
         return disks
