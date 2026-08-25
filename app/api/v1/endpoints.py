@@ -298,6 +298,8 @@ def list_available_backups():
         return {"target_disk": target_disk, "backups": []}
 
     backups = []
+    seen_paths = set()
+
     try:
         search_dirs = [target_disk]
         # Por si el empaquetador lo coloca en una subcarpeta de forma asíncrona:
@@ -310,11 +312,24 @@ def list_available_backups():
             if os.path.exists(d):
                 for root, _, files in os.walk(d):
                     for file in files:
-                        if (file.endswith(".tar.gz") or file.endswith(".zip")) and not file.endswith(".tmp"):
-                            file_path = os.path.join(root, file)
+                        fname_lower = file.lower()
+                        
+                        # Excluir temporales y bloques cifrados/propios del servicio de Duplicati (.zip.aes, duplicati-*)
+                        if fname_lower.endswith(".tmp") or fname_lower.endswith(".aes") or fname_lower.startswith("duplicati-"):
+                            continue
+
+                        if fname_lower.endswith(".tar.gz") or fname_lower.endswith(".zip"):
+                            file_path = os.path.realpath(os.path.join(root, file))
+
+                            # Evitar triplicados registrando solo rutas físicas únicas
+                            if file_path in seen_paths:
+                                continue
+                            seen_paths.add(file_path)
+
                             stats = os.stat(file_path)
                             size_bytes = stats.st_size
-                            if size_bytes == 0: continue
+                            if size_bytes == 0: 
+                                continue
 
                             size_mb = round(size_bytes / (1024 * 1024), 2)
                             size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
