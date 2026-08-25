@@ -1,10 +1,3 @@
-"""
-Servicio principal del Backup Engine.
-
-Orquesta la preparación de backups, la retención automática de archivos
-y la ejecución automatizada de restauraciones "1-Click" (parada de contenedor, descompresión, arranque y notificación).
-"""
-
 import os
 import glob
 import json
@@ -25,19 +18,13 @@ from app.core.ws_manager import ws_manager
 
 logger = logging.getLogger("casaos-backup")
 
-
 class BackupEngineService:
-    """
-    Orquestador principal del motor de backup y restauración.
-    """
-
     def __init__(
         self,
         manifest_builder: Optional[BackupManifestBuilderService] = None,
     ):
         self.manifest_builder = (
-            manifest_builder
-            or BackupManifestBuilderService()
+            manifest_builder or BackupManifestBuilderService()
         )
         try:
             self.docker_client = docker.from_env()
@@ -47,16 +34,10 @@ class BackupEngineService:
 
     @staticmethod
     def apply_retention_policy(target_dir: str, prefix: str = "", max_copies: int = 3) -> None:
-        """
-        Revisa el directorio `target_dir` y conserva solo las `max_copies` más recientes (por defecto 3).
-        Elimina automáticamente los archivos .tar.gz o .zip antiguos sobrantes.
-        """
         try:
             if not target_dir or not os.path.exists(target_dir):
-                logger.warning(f"[Retención] El directorio objetivo '{target_dir}' no existe.")
                 return
 
-            # Buscar respaldos .tar.gz y .zip en la carpeta
             if prefix:
                 pattern_tar = os.path.join(target_dir, f"*{prefix}*.tar.gz")
                 pattern_zip = os.path.join(target_dir, f"*{prefix}*.zip")
@@ -66,33 +47,20 @@ class BackupEngineService:
 
             files = list(set(glob.glob(pattern_tar) + glob.glob(pattern_zip)))
 
-            # Si excedemos el número máximo de copias permitidas
             if len(files) > max_copies:
-                # Ordenar por fecha de modificación (el más reciente primero)
                 files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-
                 files_to_delete = files[max_copies:]
-                logger.info(
-                    f"🧹 [Retención] Se encontraron {len(files)} copias en '{target_dir}' para '{prefix or 'general'}'. "
-                    f"Aplicando límite de {max_copies} copias..."
-                )
 
                 for file_path in files_to_delete:
                     try:
                         os.remove(file_path)
                         logger.info(f"🗑️ [Retención] Backup antiguo eliminado: {os.path.basename(file_path)}")
                     except Exception as err:
-                        logger.error(f"❌ [Retención Error] No se pudo eliminar '{file_path}': {err}")
-            else:
-                logger.info(f"ℹ️ [Retención] {len(files)}/{max_copies} copias conservadas en '{target_dir}'.")
+                        logger.error(f"❌ [Retención Error] Error al eliminar '{file_path}': {err}")
         except Exception as e:
             logger.error(f"❌ [Retención Error] Error aplicando política de retención: {e}")
 
     async def _broadcast_ws(self, data: Dict[str, Any]) -> None:
-        """
-        Envia actualizaciones de progreso por WebSocket de forma ultra-segura,
-        soportando tanto broadcast_json como broadcast con texto JSON.
-        """
         try:
             if hasattr(ws_manager, "broadcast_json"):
                 fn = getattr(ws_manager, "broadcast_json")
@@ -108,25 +76,12 @@ class BackupEngineService:
                 else:
                     fn(msg)
         except Exception as e:
-            logger.warning(f"[WebSocket] No se pudo transmitir evento de progreso: {e}")
+            logger.warning(f"[WebSocket] Error transmitiendo progreso: {e}")
 
-    def prepare(
-        self,
-        backup_job: BackupJob,
-    ) -> BackupManifest:
-        """
-        Prepara un manifiesto a partir de un BackupJob.
-        """
+    def prepare(self, backup_job: BackupJob) -> BackupManifest:
         return self.manifest_builder.build(backup_job)
 
     async def execute_restore_1click(self, app_name: str, file_path: str, target_path: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Flujo Automatizado de Restauración 1-Click:
-        1. Detener el contenedor objetivo (si existe).
-        2. Descomprimir los datos en /DATA/AppData/<app_name> (o ruta configurada).
-        3. Volver a arrancar el contenedor.
-        4. Notificar progreso vía WebSocket y Telegram.
-        """
         if not target_path:
             target_path = f"/DATA/AppData/{app_name}"
 
@@ -140,7 +95,6 @@ class BackupEngineService:
         container_obj = None
         was_running = False
 
-        # --- FASE 1: Detención de Contenedor ---
         if self.docker_client:
             try:
                 containers = self.docker_client.containers.list(all=True)
@@ -158,10 +112,9 @@ class BackupEngineService:
                             c.stop(timeout=15)
                         break
             except Exception as e:
-                logger.error(f"[Restore] Error gestionando contenedor Docker para {app_name}: {e}")
+                logger.error(f"[Restore] Error gestionando Docker para {app_name}: {e}")
 
-        # --- FASE 2: Descompresión/Restauración ---
-        logger.info(f"[Restore] Restaurando archivo {archive_path} en {dest_dir}...")
+        logger.info(f"[Restore] Extrayendo {archive_path} en {dest_dir}...")
         await self._broadcast_ws({
             "type": "restore_progress",
             "app": app_name,
@@ -176,10 +129,9 @@ class BackupEngineService:
                 with zipfile.ZipFile(archive_path, 'r') as zip_ref:
                     zip_ref.extractall(dest_dir)
             else:
-                raise ValueError(f"Formato de archivo no soportado: {archive_path.name}")
+                raise ValueError(f"Formato no soportado: {archive_path.name}")
         except Exception as e:
-            logger.error(f"[Restore] Error descomprimiendo backup para {app_name}: {e}")
-            # Si falló, intentar rearmar el contenedor si estaba corriendo
+            logger.error(f"[Restore] Error en la extracción para {app_name}: {e}")
             if container_obj and was_running:
                 try:
                     container_obj.start()
@@ -187,7 +139,6 @@ class BackupEngineService:
                     pass
             raise RuntimeError(f"Error en la extracción de datos: {e}")
 
-        # --- FASE 3: Rearranque de Contenedor ---
         if container_obj and was_running:
             try:
                 logger.info(f"[Restore] Reiniciando contenedor '{app_name}'...")
@@ -200,8 +151,7 @@ class BackupEngineService:
             except Exception as e:
                 logger.error(f"[Restore] Error reanudando contenedor {app_name}: {e}")
 
-        # --- FASE 4: Notificación ---
-        msg = f"Restauración completada con éxito para '{app_name}' en {dest_dir}"
+        msg = f"Restauración completada con éxito para '{app_name}'"
         logger.info(f"[Restore] {msg}")
 
         await self._broadcast_ws({
@@ -227,6 +177,5 @@ class BackupEngineService:
             "target_path": str(dest_dir),
             "snapshot_id": archive_path.name
         }
-
 
 backup_engine_service = BackupEngineService()

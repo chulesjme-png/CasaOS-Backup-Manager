@@ -32,21 +32,24 @@ class NotificationSettings(BaseModel):
 
 @router.get("/config", response_model=AppConfig)
 def get_config():
+    # Solo asigna disco por defecto si la configuración está completamente vacía
     if not config_manager.config.selected_target_disk:
         try:
             disks = disk_service.get_system_disks()
             if disks:
-                first_disk = disks[0].get("mountpoint") or disks[0].get("path")
+                first_disk = disks[0].get("mountpoint")
                 if first_disk:
                     config_manager.update_key("selected_target_disk", first_disk)
+                    config_manager.save_config()
         except Exception as e:
-            logger.warning(f"[Config] Error al seleccionar disco: {e}")
+            logger.warning(f"[Config] Error al seleccionar disco por defecto: {e}")
     return config_manager.config
 
 @router.post("/config", response_model=AppConfig)
 def update_config(payload: Dict[str, str]):
     for key, value in payload.items():
         config_manager.update_key(key, value)
+    config_manager.save_config()
     if "schedule_frequency" in payload or "schedule_time" in payload:
         scheduler_service.reload_schedule()
     return config_manager.config
@@ -75,7 +78,7 @@ def _prune_old_backups(folder_path: str, max_keep: int = 3):
     try:
         if not os.path.exists(folder_path):
             return
-        VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz")
+        VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".tar", ".gz")
         files = []
         for f in os.listdir(folder_path):
             if f.lower().endswith(VALID_EXTS):
@@ -89,20 +92,20 @@ def _prune_old_backups(folder_path: str, max_keep: int = 3):
             for old_fp, _ in files[max_keep:]:
                 try:
                     os.remove(old_fp)
-                    logger.info(f"[Prune] Eliminada copia antigua: {old_fp}")
+                    logger.info(f"[Prune] Rotación exitosa, eliminado: {old_fp}")
                 except Exception as err:
                     logger.error(f"[Prune] Error eliminando {old_fp}: {err}")
     except Exception as e:
-        logger.error(f"[Prune] Error al procesar rotación en {folder_path}: {e}")
+        logger.error(f"[Prune] Error procesando rotación en {folder_path}: {e}")
 
 async def task_run_app_backup(app_name: str, app_path: str):
-    start_time = time.time()
+    start_time = time.perf_counter()
+    
     await notification_service.send_notification(
         title=f"⏳ Inicio de Copia: {app_name}",
         message=f"Se ha iniciado la copia de seguridad de <b>{app_name}</b>.",
         status="info"
     )
-
     await ws_manager.broadcast({"job_id": f"backup_{app_name}", "percentage": 20, "message": f"Empaquetando {app_name}..."})
 
     target_disk = config_manager.config.selected_target_disk or "/media"
@@ -113,28 +116,29 @@ async def task_run_app_backup(app_name: str, app_path: str):
     output_filename = f"{app_name}_backup_{timestamp_file}.tar.gz"
     full_output_path = os.path.join(backup_folder, output_filename)
 
+    success = False
     try:
         if os.path.exists(app_path):
             await asyncio.to_thread(_compress_directory, app_path, full_output_path)
             success = True
         else:
-            logger.error(f"[Backup] La ruta {app_path} no existe.")
-            success = False
+            logger.error(f"[Backup] La ruta origen {app_path} no existe.")
     except Exception as e:
-        logger.error(f"[Backup] Error creando comprimido: {e}")
-        success = False
+        logger.error(f"[Backup] Error en compresión: {e}")
 
-    elapsed = round(time.time() - start_time, 1)
+    # Cálculo exacto de duración real
+    elapsed = round(time.perf_counter() - start_time, 2)
+    duration_str = f"{elapsed}s"
 
     if success:
         _prune_old_backups(backup_folder, max_keep=3)
         await ws_manager.broadcast({"job_id": f"backup_{app_name}", "percentage": 100, "message": f"¡Copia de {app_name} finalizada!"})
         await notification_service.send_notification(
             title=f"✅ Copia Completada: {app_name}",
-            message=f"Respaldo generado en: {output_filename} ({elapsed}s)",
+            message=f"Respaldo generado: {output_filename} ({duration_str})",
             status="success"
         )
-        audit_service.log_execution("Backup", app_name, "success", elapsed, f"Archivo generado: {output_filename}")
+        audit_service.log_execution("Backup", app_name, "success", duration_str, f"Archivo: {output_filename}")
     else:
         await ws_manager.broadcast({"job_id": f"backup_{app_name}", "percentage": 0, "message": f"Error respaldando {app_name}"})
         await notification_service.send_notification(
@@ -142,7 +146,7 @@ async def task_run_app_backup(app_name: str, app_path: str):
             message=f"No se pudo respaldar <b>{app_name}</b>.",
             status="error"
         )
-        audit_service.log_execution("Backup", app_name, "failed", elapsed, "Error en el empaquetado")
+        audit_service.log_execution("Backup", app_name, "failed", duration_str, "Error en empaquetado")
 
 @router.post("/backups/run-app/{app_name}")
 async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
@@ -158,51 +162,27 @@ async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
 @router.get("/backups")
 def list_available_backups():
     backups = []
-    seen = set()
-    VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz")
+    VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".tar", ".gz")
 
     target_disk = config_manager.config.selected_target_disk or "/media"
     disk_uuid = os.path.basename(target_disk.rstrip(os.sep))
-
     apps_dir = os.path.join(target_disk, "Backups", "Apps")
+
     if os.path.exists(apps_dir):
         for app_folder in os.listdir(apps_dir):
             full_app_path = os.path.join(apps_dir, app_folder)
             if os.path.isdir(full_app_path):
+                # Aplicar política de rotación antes de listar
                 _prune_old_backups(full_app_path, max_keep=3)
-
-    possible_roots = [
-        os.path.join(target_disk, "Backups"),
-        target_disk,
-        "/media",
-        "/mnt"
-    ]
-
-    search_dirs = [d for d in possible_roots if d and os.path.exists(d)]
-
-    for s_dir in search_dirs:
-        try:
-            for root, _, files in os.walk(s_dir, followlinks=True):
-                for file in files:
+                
+                for file in os.listdir(full_app_path):
                     if file.lower().endswith(VALID_EXTS):
-                        file_path = os.path.join(root, file)
-                        if file_path in seen:
-                            continue
-                        seen.add(file_path)
-
+                        file_path = os.path.join(full_app_path, file)
                         try:
                             stats = os.stat(file_path)
                             size_mb = round(stats.st_size / (1024 * 1024), 2)
                             ts_ms = int(stats.st_mtime * 1000)
                             dt = datetime.fromtimestamp(stats.st_mtime, timezone.utc)
-
-                            path_parts = file_path.split(os.sep)
-                            app_hint = "Sistema"
-                            for part in path_parts:
-                                if part.lower() in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy"]:
-                                    app_hint = part
-                                    break
-
                             size_display = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(stats.st_size / 1024, 1)} KB"
 
                             backups.append({
@@ -212,29 +192,20 @@ def list_available_backups():
                                 "path": file_path,
                                 "file_path": file_path,
                                 "disk": disk_uuid,
-                                "disk_id": disk_uuid,
-                                "disk_name": disk_uuid,
                                 "disk_path": target_disk,
-                                "mountpoint": target_disk,
-                                "target_disk": target_disk,
-                                "selected_target_disk": target_disk,
                                 "size_mb": size_mb,
                                 "size_str": size_display,
                                 "size": size_display,
                                 "created_at": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                 "date": dt.strftime("%Y-%m-%d %H:%M:%S"),
-                                "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
                                 "timestamp": ts_ms,
-                                "app": app_hint,
-                                "app_name": app_hint,
-                                "target": app_hint,
+                                "app": app_folder,
+                                "app_name": app_folder,
                                 "status": "success",
                                 "valid": True
                             })
                         except Exception:
-                            pass
-        except Exception as e:
-            logger.error(f"[Backups] Error escaneando {s_dir}: {e}")
+                            continue
 
     backups.sort(key=lambda x: x["timestamp"], reverse=True)
     return backups
