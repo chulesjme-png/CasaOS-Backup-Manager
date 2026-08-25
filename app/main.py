@@ -34,7 +34,7 @@ init_db()
 
 app = FastAPI(title="CasaOS Backup Manager")
 
-# Silenciar peticiones de favicon
+# Silenciar peticiones favicon
 @app.get("/favicon.ico", include_in_schema=False)
 @app.get("/apple-touch-icon.png", include_in_schema=False)
 @app.get("/apple-touch-icon-precomposed.png", include_in_schema=False)
@@ -58,7 +58,7 @@ def read_root():
             return path.read_text(encoding="utf-8")
     return "<h1>Error: No se encontró index.html</h1>"
 
-# Nuevo endpoint: Escaneo dinámico de Apps en CasaOS
+# Escaneo dinámico de Apps reales
 @app.get("/api/v1/apps")
 def get_apps():
     appdata_dir = Path("/DATA/AppData")
@@ -72,6 +72,7 @@ def get_apps():
                 })
     return {"apps": apps}
 
+# Historial de ejecuciones
 @app.get("/api/v1/executions")
 @app.get("/api/v1/logs")
 def get_logs(limit: int = 50):
@@ -101,27 +102,35 @@ def clear_logs():
         conn.commit()
     return {"status": "ok"}
 
+# Listado de copias filtrado (Sin trozos dblock/dindex de Duplicati)
 @app.get("/api/v1/backups/list")
 @app.get("/api/v1/backups")
 def list_backups():
     target_disk = "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa"
     backups = []
-    VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".aes")
 
     if os.path.exists(target_disk):
         for root, _, files in os.walk(target_disk):
             for file in files:
-                if file.lower().endswith(VALID_EXTS):
+                fn_lower = file.lower()
+                
+                # Ignorar fragmentos internos de Duplicati (.dblock, .dindex, .dlist)
+                if fn_lower.startswith("duplicati-") or "dblock" in fn_lower or "dindex" in fn_lower or "dlist" in fn_lower:
+                    continue
+                
+                if fn_lower.endswith((".tar.gz", ".tgz", ".zip", ".tar")):
                     fp = os.path.join(root, file)
                     stats = os.stat(fp)
                     dt = datetime.fromtimestamp(stats.st_mtime)
                     size_mb = round(stats.st_size / (1024 * 1024), 2)
                     size_str = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(stats.st_size/1024, 1)} KB"
                     
+                    # Extraer el nombre limpio de la app
                     app_name = "Sistema"
-                    for part in fp.split(os.sep):
-                        if part.lower() not in ["media", "pichules", "backups", "apps"]:
-                            app_name = part.capitalize()
+                    if "_" in file:
+                        raw_app = file.split("_")[0]
+                        if raw_app.lower() not in ["backup", "casaos", "system"]:
+                            app_name = raw_app.capitalize()
 
                     backups.append({
                         "filename": file,
@@ -130,6 +139,7 @@ def list_backups():
                         "size_str": size_str,
                         "timestamp": stats.st_mtime
                     })
+
     backups.sort(key=lambda x: x["timestamp"], reverse=True)
     return {"backups": backups}
 
