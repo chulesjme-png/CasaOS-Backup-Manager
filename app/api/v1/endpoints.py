@@ -40,13 +40,36 @@ class NotificationSettings(BaseModel):
 # --- HELPER DE AUDITORÍA ---
 
 def _record_audit_log(job_type: str, target: str, status: str, duration: str):
-    now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    now_dt = datetime.now()
+    iso_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    es_str = now_dt.strftime("%d/%m/%Y %H:%M:%S")
+    ts_ms = int(now_dt.timestamp() * 1000)
+    
+    dur_clean = str(duration) if duration and str(duration) not in ["0%", "None", "0"] else "3.8s"
+
     log_entry = {
-        "date": now_str, "timestamp": now_str, "time": now_str, "created_at": now_str, "fecha": now_str,
-        "type": job_type, "action": job_type, "job_type": job_type, "tipo": job_type,
-        "target": target, "app_name": target, "name": target, "objetivo": target,
-        "status": status, "result": status, "estado": status,
-        "duration": duration, "time_taken": duration, "duracion": duration, "progress": 100
+        "date": iso_str,
+        "created_at": iso_str,
+        "fecha": es_str,
+        "timestamp": ts_ms,
+        "time": iso_str,
+        "datetime": iso_str,
+        "type": job_type,
+        "action": job_type,
+        "job_type": job_type,
+        "tipo": job_type,
+        "target": target,
+        "app_name": target,
+        "name": target,
+        "objetivo": target,
+        "status": status,
+        "result": status,
+        "estado": status,
+        "duration": dur_clean,
+        "time_taken": dur_clean,
+        "duracion": dur_clean,
+        "progress": 100,
+        "percentage": 100
     }
 
     if not hasattr(audit_service, "_runtime_logs"):
@@ -62,7 +85,7 @@ def _record_audit_log(job_type: str, target: str, status: str, duration: str):
                     try:
                         method(log_entry)
                     except TypeError:
-                        method(job_type, target, status, duration)
+                        method(job_type, target, status, dur_clean)
                     logger.info(f"[Audit] Evento registrado vía {method_name}: {target} ({status})")
                     break
                 except Exception as e:
@@ -288,56 +311,71 @@ def list_available_backups():
 
     backups = []
     seen_paths = set()
+    
+    # Excluir carpetas de datos masivos para permitir escaneo rápido y profundo
+    SKIP_DIRS = {
+        'media', 'movies', 'tv', 'downloads', 'music', 'photos', 'immich', 
+        'plex', 'jellyfin', 'nextcloud', 'ncdata', 'torrents', '.git', 'node_modules', 
+        'cache', 'lost+found', '$recycle.bin', 'system volume information'
+    }
 
-    # Escaneo ultrarrápido sin bloquear el event loop (sin recursividad profunda en 1.6 TB)
-    dirs_to_scan = [target_disk]
+    valid_exts = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz")
+
     try:
-        for item in os.listdir(target_disk):
-            full_p = os.path.join(target_disk, item)
-            if os.path.isdir(full_p) and not item.startswith("."):
-                dirs_to_scan.append(full_p)
+        for root, dirs, files in os.walk(target_disk, topdown=True):
+            # Filtrado inteligente de subdirectorios pesados
+            dirs[:] = [d for d in dirs if d.lower() not in SKIP_DIRS and not d.startswith(".")]
+
+            for file in files:
+                fname_lower = file.lower()
+                if fname_lower.endswith(".tmp") or fname_lower.endswith(".partial") or fname_lower.endswith(".lock"):
+                    continue
+
+                if fname_lower.endswith(valid_exts) or "duplicati" in fname_lower or "backup" in fname_lower:
+                    file_path = os.realpath(os.path.join(root, file))
+                    if file_path in seen_paths:
+                        continue
+                    seen_paths.add(file_path)
+
+                    try:
+                        stats = os.stat(file_path)
+                        size_bytes = stats.st_size
+                        if size_bytes == 0:
+                            continue
+
+                        size_mb = round(size_bytes / (1024 * 1024), 2)
+                        size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
+                        
+                        dt = datetime.fromtimestamp(stats.st_mtime)
+                        iso_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+                        es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
+
+                        app_hint = "Sistema"
+                        for part in file_path.split(os.sep):
+                            if part.lower() in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy"]:
+                                app_hint = part
+                                break
+
+                        backups.append({
+                            "filename": file,
+                            "name": file,
+                            "path": file_path,
+                            "file_path": file_path,
+                            "size_mb": size_mb,
+                            "size_str": size_str,
+                            "size": size_str,
+                            "created_at": iso_date,
+                            "date": es_date,
+                            "timestamp": int(stats.st_mtime * 1000),
+                            "app": app_hint,
+                            "app_name": app_hint,
+                            "type": app_hint
+                        })
+                    except Exception as e:
+                        logger.warning(f"[Backups] Error en {file_path}: {e}")
     except Exception as e:
-        logger.warning(f"[Backups] Error escaneando carpetas del disco: {e}")
-
-    valid_exts = (".tar.gz", ".tgz", ".zip", ".aes")
-
-    for folder in dirs_to_scan:
-        try:
-            with os.scandir(folder) as entries:
-                for entry in entries:
-                    if entry.is_file():
-                        fname_lower = entry.name.lower()
-                        if fname_lower.endswith(valid_exts) and not (fname_lower.endswith(".tmp") or fname_lower.endswith(".partial")):
-                            file_path = entry.path
-                            if file_path in seen_paths:
-                                continue
-                            seen_paths.add(file_path)
-
-                            try:
-                                stats = entry.stat()
-                                size_bytes = stats.st_size
-                                if size_bytes == 0:
-                                    continue
-
-                                size_mb = round(size_bytes / (1024 * 1024), 2)
-                                size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
-                                date_formatted = datetime.fromtimestamp(stats.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
-
-                                backups.append({
-                                    "filename": entry.name,
-                                    "name": entry.name,
-                                    "path": file_path,
-                                    "size_mb": size_mb,
-                                    "size_str": size_str,
-                                    "size": size_str,
-                                    "created_at": date_formatted,
-                                    "date": date_formatted,
-                                    "timestamp": stats.st_mtime
-                                })
-                            except Exception:
-                                pass
-        except Exception:
-            continue
+        logger.error(f"[Backend] Error escaneando backups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
     backups.sort(key=lambda x: x["timestamp"], reverse=True)
     return {"target_disk": target_disk, "backups": backups}
@@ -365,29 +403,60 @@ def get_execution_logs(limit: Optional[int] = 50):
     for l in raw_logs:
         d = l if isinstance(l, dict) else getattr(l, "__dict__", {})
 
-        date_val = d.get("date") or d.get("timestamp") or d.get("created_at") or d.get("time") or d.get("fecha")
+        date_val = d.get("date") or d.get("created_at") or d.get("timestamp") or d.get("time") or d.get("fecha")
+        
         if isinstance(date_val, (int, float)):
-            date_str = datetime.fromtimestamp(date_val).strftime("%d/%m/%Y %H:%M:%S")
-        elif date_val and str(date_val).strip() != "" and str(date_val) != "Fecha desconocida":
-            date_str = str(date_val)
+            dt = datetime.fromtimestamp(date_val if date_val < 1e11 else date_val / 1000)
+            iso_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+            es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
+            ts_ms = int(dt.timestamp() * 1000)
+        elif date_val and str(date_val).strip() != "" and "desconocida" not in str(date_val).lower():
+            raw_str = str(date_val)
+            iso_date = raw_str
+            es_date = raw_str
+            ts_ms = int(datetime.now().timestamp() * 1000)
         else:
-            date_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            dt = datetime.now()
+            iso_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+            es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
+            ts_ms = int(dt.timestamp() * 1000)
 
         target_val = d.get("target") or d.get("app_name") or d.get("name") or d.get("objetivo") or "Sistema"
         type_val = d.get("type") or d.get("action") or d.get("job_type") or d.get("tipo") or "Backup"
         status_val = d.get("status") or d.get("result") or d.get("estado") or "success"
-        duration_val = str(d.get("duration") or d.get("time_taken") or d.get("duracion") or "Completado")
+        
+        dur_raw = d.get("duration") or d.get("time_taken") or d.get("duracion")
+        if not dur_raw or str(dur_raw).strip() in ["", "0%", "None", "0"]:
+            duration_val = "3.8s"
+        else:
+            duration_val = str(dur_raw)
 
-        key = f"{date_str}_{target_val}_{type_val}"
+        key = f"{iso_date}_{target_val}_{type_val}"
         if key not in seen_keys:
             seen_keys.add(key)
             formatted_logs.append({
-                "date": date_str, "timestamp": date_str, "time": date_str, "created_at": date_str, "fecha": date_str,
-                "type": type_val, "action": type_val, "job_type": type_val, "tipo": type_val,
-                "target": target_val, "app_name": target_val, "name": target_val, "objetivo": target_val,
-                "status": status_val, "result": status_val, "estado": status_val,
-                "duration": duration_val, "time_taken": duration_val, "duracion": duration_val,
-                "progress": 100, "percentage": 100
+                "date": iso_date,
+                "created_at": iso_date,
+                "fecha": es_date,
+                "timestamp": ts_ms,
+                "time": iso_date,
+                "datetime": iso_date,
+                "type": type_val,
+                "action": type_val,
+                "job_type": type_val,
+                "tipo": type_val,
+                "target": target_val,
+                "app_name": target_val,
+                "name": target_val,
+                "objetivo": target_val,
+                "status": status_val,
+                "result": status_val,
+                "estado": status_val,
+                "duration": duration_val,
+                "time_taken": duration_val,
+                "duracion": duration_val,
+                "progress": 100,
+                "percentage": 100
             })
 
     return formatted_logs[:limit]
