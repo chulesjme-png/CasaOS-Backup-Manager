@@ -36,113 +36,6 @@ class NotificationSettings(BaseModel):
     webhook_enabled: bool
     webhook_url: Optional[str] = ""
 
-
-# --- HELPER DE FECHAS & AUDITORÍA ---
-
-def _parse_to_iso(date_val):
-    if not date_val or "desconocida" in str(date_val).lower():
-        dt = datetime.now(timezone.utc)
-        return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), dt.strftime("%Y-%m-%d %H:%M:%S"), int(dt.timestamp() * 1000)
-    
-    if isinstance(date_val, (int, float)):
-        ts = date_val / 1000.0 if date_val > 1e11 else float(date_val)
-        dt = datetime.fromtimestamp(ts, timezone.utc)
-        return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), dt.strftime("%Y-%m-%d %H:%M:%S"), int(dt.timestamp() * 1000)
-    
-    s = str(date_val).strip()
-    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
-        try:
-            dt = datetime.strptime(s.replace("Z", ""), fmt).replace(tzinfo=timezone.utc)
-            return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), dt.strftime("%Y-%m-%d %H:%M:%S"), int(dt.timestamp() * 1000)
-        except ValueError:
-            pass
-    
-    dt = datetime.now(timezone.utc)
-    return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), dt.strftime("%Y-%m-%d %H:%M:%S"), int(dt.timestamp() * 1000)
-
-
-def _sanitize_log_dict(d: Dict) -> Dict:
-    date_val = d.get("date") or d.get("created_at") or d.get("timestamp") or d.get("time") or d.get("fecha")
-    iso_date, display_date, ts_ms = _parse_to_iso(date_val)
-
-    target_val = d.get("target") or d.get("app_name") or d.get("name") or d.get("objetivo") or "Sistema"
-    type_val = d.get("type") or d.get("action") or d.get("job_type") or d.get("tipo") or "Backup"
-    status_val = d.get("status") or d.get("result") or d.get("estado") or "success"
-
-    dur_raw = d.get("duration") or d.get("time_taken") or d.get("duracion") or d.get("elapsed")
-    dur_str = str(dur_raw).strip() if dur_raw is not None else ""
-    if not dur_str or dur_str in ["0%", "0", "0s", "None", "null", "undefined"]:
-        duration_val = "3.3s"
-    else:
-        duration_val = dur_str
-
-    return {
-        "date": iso_date,
-        "created_at": iso_date,
-        "fecha": display_date,
-        "timestamp": ts_ms,
-        "time": iso_date,
-        "datetime": iso_date,
-        "type": type_val,
-        "action": type_val,
-        "job_type": type_val,
-        "tipo": type_val,
-        "target": target_val,
-        "app_name": target_val,
-        "name": target_val,
-        "objetivo": target_val,
-        "status": status_val,
-        "result": status_val,
-        "estado": status_val,
-        "duration": duration_val,
-        "duration_seconds": 3.3,
-        "time_taken": duration_val,
-        "duracion": duration_val,
-        "elapsed": duration_val,
-        "progress": 100,
-        "percentage": 100
-    }
-
-
-def _record_audit_log(job_type: str, target: str, status: str, duration: str):
-    now_dt = datetime.now(timezone.utc)
-    iso_str = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-    display_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
-    ts_ms = int(now_dt.timestamp() * 1000)
-    dur_clean = str(duration) if duration and str(duration) not in ["0%", "None", "0", "0s"] else "3.3s"
-
-    log_entry = {
-        "date": iso_str,
-        "created_at": iso_str,
-        "fecha": display_str,
-        "timestamp": ts_ms,
-        "time": iso_str,
-        "type": job_type,
-        "target": target,
-        "status": status,
-        "duration": dur_clean,
-        "duracion": dur_clean
-    }
-
-    if not hasattr(audit_service, "_runtime_logs"):
-        setattr(audit_service, "_runtime_logs", [])
-    getattr(audit_service, "_runtime_logs").append(log_entry)
-
-    candidate_methods = ["add_log", "log_event", "record_log", "log_action", "create_log"]
-    for method_name in candidate_methods:
-        if hasattr(audit_service, method_name):
-            method = getattr(audit_service, method_name)
-            if callable(method):
-                try:
-                    try:
-                        method(log_entry)
-                    except TypeError:
-                        method(job_type, target, status, dur_clean)
-                    break
-                except Exception as e:
-                    logger.warning(f"[Audit] Error en {method_name}: {e}")
-
-
 # --- CONFIGURACIÓN & ESTADO ---
 
 @router.get("/config", response_model=AppConfig)
@@ -176,7 +69,6 @@ def get_disks():
 @router.get("/apps")
 def get_apps():
     return discovery_service.scan_apps()
-
 
 # --- NOTIFICACIONES ---
 
@@ -217,7 +109,6 @@ async def test_notification(settings: NotificationSettings):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # --- TAREAS DE RESPALDO ---
 
 async def task_run_app_backup(app_name: str, app_path: str):
@@ -242,7 +133,7 @@ async def task_run_app_backup(app_name: str, app_path: str):
         success = await asyncio.to_thread(duplicati_service.run_app_backup, app_name, app_path, target_disk, 1)
 
     elapsed = round(time.time() - start_time, 1)
-    duration_str = f"{elapsed}s"
+    duration_seconds = max(elapsed, 0.5)
 
     if success:
         await ws_manager.broadcast({
@@ -252,10 +143,16 @@ async def task_run_app_backup(app_name: str, app_path: str):
         })
         await notification_service.send_notification(
             title=f"✅ Copia Completada: {app_name}",
-            message=f"Respaldo completado con éxito en {duration_str}.",
+            message=f"Respaldo completado con éxito en {duration_seconds}s.",
             status="success"
         )
-        _record_audit_log(job_type="Aplicación", target=app_name, status="success", duration=duration_str)
+        audit_service.log_execution(
+            job_type="Backup",
+            target_name=app_name,
+            status="success",
+            duration_seconds=duration_seconds,
+            message=f"Copia de {app_name} realizada correctamente"
+        )
     else:
         await ws_manager.broadcast({
             "job_id": f"backup_{app_name}",
@@ -267,7 +164,13 @@ async def task_run_app_backup(app_name: str, app_path: str):
             message=f"Fallo al respaldar <b>{app_name}</b>.",
             status="error"
         )
-        _record_audit_log(job_type="Aplicación", target=app_name, status="failed", duration=duration_str)
+        audit_service.log_execution(
+            job_type="Backup",
+            target_name=app_name,
+            status="failed",
+            duration_seconds=duration_seconds,
+            message=f"Fallo al respaldar {app_name}"
+        )
 
 @router.post("/backups/run-app/{app_name}")
 async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
@@ -299,7 +202,7 @@ async def task_run_full_backup():
         success = await asyncio.to_thread(duplicati_service.run_full_disaster_recovery)
 
     elapsed = round(time.time() - start_time, 1)
-    duration_str = f"{elapsed}s"
+    duration_seconds = max(elapsed, 0.5)
 
     if success:
         await ws_manager.broadcast({
@@ -309,23 +212,34 @@ async def task_run_full_backup():
         })
         await notification_service.send_notification(
             title="✅ Disaster Recovery Finalizado",
-            message=f"Respaldo completado en {duration_str}.",
+            message=f"Respaldo completado en {duration_seconds}s.",
             status="success"
         )
-        _record_audit_log(job_type="Sistema", target="Disaster Recovery", status="success", duration=duration_str)
+        audit_service.log_execution(
+            job_type="Backup",
+            target_name="Sistema Completo",
+            status="success",
+            duration_seconds=duration_seconds,
+            message="Disaster Recovery completado"
+        )
     else:
         await ws_manager.broadcast({
             "job_id": "backup_disaster_recovery",
             "percentage": 0,
             "message": "Error en Disaster Recovery."
         })
-        _record_audit_log(job_type="Sistema", target="Disaster Recovery", status="failed", duration=duration_str)
+        audit_service.log_execution(
+            job_type="Backup",
+            target_name="Sistema Completo",
+            status="failed",
+            duration_seconds=duration_seconds,
+            message="Error en Disaster Recovery"
+        )
 
 @router.post("/backups/run-full")
 async def run_full_backup(background_tasks: BackgroundTasks):
     background_tasks.add_task(task_run_full_backup)
     return {"status": "started", "message": "Disaster recovery iniciado."}
-
 
 # --- PROGRAMACIÓN, HISTORIAL Y LISTADO DE COPIAS ---
 
@@ -362,15 +276,8 @@ def list_available_backups():
     )
 
     for base_path in search_paths:
-        base_abs = os.path.abspath(base_path)
-        base_depth = base_abs.count(os.sep)
-
         try:
-            for root, dirs, files in os.walk(base_abs, topdown=True):
-                if (root.count(os.sep) - base_depth) > 6:
-                    dirs[:] = []
-                    continue
-
+            for root, dirs, files in os.walk(base_path, topdown=True, followlinks=True):
                 dirs[:] = [d for d in dirs if d.lower() not in SKIP_DIRS]
 
                 for file in files:
@@ -403,11 +310,18 @@ def list_available_backups():
                             display_date = dt.strftime("%Y-%m-%d %H:%M:%S")
 
                             app_hint = "Sistema"
-                            for part in file_path.split(os.sep):
+                            parts = file_path.split(os.sep)
+                            for part in parts:
                                 p_lower = part.lower()
                                 if p_lower in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy", "jellyfin", "nextcloud", "immich"]:
                                     app_hint = part
                                     break
+                            
+                            if app_hint == "Sistema":
+                                for known in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy", "jellyfin", "nextcloud", "immich"]:
+                                    if known in fname_lower:
+                                        app_hint = known
+                                        break
 
                             backups.append({
                                 "filename": file,
@@ -436,54 +350,11 @@ def list_available_backups():
 @router.get("/logs")
 @router.get("/executions")
 def get_execution_logs(limit: Optional[int] = 50):
-    formatted_logs = []
-    seen_keys = set()
-    raw_logs = []
-
-    if hasattr(audit_service, "_runtime_logs"):
-        raw_logs.extend(getattr(audit_service, "_runtime_logs"))
-
-    try:
-        if hasattr(audit_service, "get_logs") and callable(getattr(audit_service, "get_logs")):
-            logs_from_service = audit_service.get_logs(limit=limit)
-            if logs_from_service:
-                raw_logs.extend(logs_from_service)
-        elif hasattr(audit_service, "logs") and getattr(audit_service, "logs"):
-            raw_logs.extend(getattr(audit_service, "logs"))
-    except Exception as e:
-        logger.warning(f"[Audit] Error al obtener logs: {e}")
-
-    for l in raw_logs:
-        d = l if isinstance(l, dict) else getattr(l, "__dict__", {})
-        sanitized = _sanitize_log_dict(d)
-
-        key = f"{sanitized['date']}_{sanitized['target']}_{sanitized['type']}"
-        if key not in seen_keys:
-            seen_keys.add(key)
-            formatted_logs.append(sanitized)
-
-    return formatted_logs[:limit]
+    return audit_service.get_logs(limit=limit)
 
 @router.delete("/logs")
 def clear_execution_logs():
-    if hasattr(audit_service, "_runtime_logs"):
-        setattr(audit_service, "_runtime_logs", [])
-    if hasattr(audit_service, "logs"):
-        try:
-            setattr(audit_service, "logs", [])
-        except Exception:
-            pass
-            
-    for attr in ["logs_file", "file_path", "log_file", "db_path"]:
-        if hasattr(audit_service, attr):
-            filepath = getattr(audit_service, attr)
-            if filepath and os.path.exists(filepath):
-                try:
-                    with open(filepath, "w") as f:
-                        f.write("[]")
-                except Exception:
-                    pass
-
+    audit_service.clear_logs()
     return {"status": "success"}
 
 @router.websocket("/ws/progress")
