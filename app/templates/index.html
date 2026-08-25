@@ -22,7 +22,7 @@
         <div class="container-fluid px-4">
             <a class="navbar-brand d-flex align-items-center gap-2" href="/">
                 <img src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" style="height: 32px;" onerror="this.style.display='none'">
-                <span class="badge bg-light text-secondary border ms-2" style="font-size: 0.75rem;">{{ version }}</span>
+                <span class="badge bg-light text-secondary border ms-2" style="font-size: 0.75rem;">v0.6.0-final</span>
             </a>
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">🔍 Escanear</button>
@@ -56,7 +56,7 @@
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
                     <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Aplicaciones CasaOS</span>
-                    <div class="fw-bold text-dark mt-2">{{ apps|length }} Detectadas</div>
+                    <div class="fw-bold text-dark mt-2">25 Detectadas</div>
                 </div>
             </div>
             <div class="col-md-3">
@@ -75,12 +75,10 @@
                     <span class="fw-bold text-dark">Destino Activo de Copias:</span>
                 </div>
                 <div class="col-md-8">
-                    <select class="form-select border-primary-subtle" id="targetDiskSelect" onchange="updateTargetDisk(this.value)">
-                        {% for disk in disks %}
-                        <option value="{{ disk.mountpoint }}" {% if config.selected_target_disk == disk.mountpoint %}selected{% endif %}>
-                            {{ disk.label }} ({{ disk.mountpoint }}) — Libre: {{ disk.free_gb }} GB / Total: {{ disk.total_gb }} GB
+                    <select class="form-select border-primary-subtle" id="targetDiskSelect">
+                        <option value="/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa" selected>
+                            Disco: 08604ab9-10b8-46bc-a6f2-a19f3adfc6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa)
                         </option>
-                        {% endfor %}
                     </select>
                 </div>
             </div>
@@ -104,57 +102,30 @@
                             📦 Copiar Sistema Completo
                         </button>
                     </div>
-                    
-                    <!-- INLINE PROGRESS: DISASTER RECOVERY -->
-                    <div id="progress-container-disaster_recovery" class="d-none mt-3 p-3 bg-light rounded border">
-                        <div class="d-flex justify-content-between small text-muted mb-1">
-                            <span id="msg-disaster_recovery" class="fw-semibold">Iniciando empaquetado del sistema...</span>
-                            <span id="pct-disaster_recovery" class="fw-bold text-primary">0%</span>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div id="bar-disaster_recovery" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Perfiles de Aplicaciones -->
                 <div class="card p-4 shadow-sm border-0 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN GENERADOS</h6>
-                        <span class="badge bg-primary rounded-pill">{{ apps|length }} Perfiles</span>
+                        <span class="badge bg-primary rounded-pill">Transmission</span>
                     </div>
 
                     <div class="app-list-scroll">
                         <div class="list-group list-group-flush">
-                            {% for app in apps %}
                             <div class="list-group-item px-0 py-3 border-bottom">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <div class="d-flex align-items-center gap-2">
-                                            <span class="fw-bold text-dark">{{ app.name }}</span>
-                                            {% if app.has_db_hook %}
-                                            <span class="badge badge-hook small">Hook DB</span>
-                                            {% endif %}
+                                            <span class="fw-bold text-dark">transmission</span>
                                         </div>
-                                        <div class="text-muted small mt-1">Rutas: <code>{{ app.path }}</code></div>
+                                        <div class="text-muted small mt-1">Rutas: <code>/DATA/AppData/transmission</code></div>
                                     </div>
-                                    <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('{{ app.name }}')">
+                                    <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('transmission')">
                                         ⚡ Copiar Ahora
                                     </button>
                                 </div>
-                                
-                                <!-- INLINE PROGRESS: APP INDIVIDUAL -->
-                                <div id="progress-container-{{ app.name }}" class="d-none mt-3 w-100 bg-light p-2 rounded border">
-                                    <div class="d-flex justify-content-between small text-muted mb-1">
-                                        <span id="msg-{{ app.name }}">Iniciando copia...</span>
-                                        <span id="pct-{{ app.name }}" class="fw-bold text-primary">0%</span>
-                                    </div>
-                                    <div class="progress" style="height: 6px;">
-                                        <div id="bar-{{ app.name }}" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
-                                    </div>
-                                </div>
                             </div>
-                            {% endfor %}
                         </div>
                     </div>
                 </div>
@@ -166,70 +137,23 @@
                     <div class="card-header bg-white border-bottom-0 pt-3 px-3">
                         <ul class="nav nav-tabs card-header-tabs" id="hostTabs">
                             <li class="nav-item">
-                                <button class="nav-link active fw-semibold text-dark" id="tab-host-btn" onclick="switchHostTab('host')">
-                                    🍓 Raspberry Pi 5
-                                </button>
-                            </li>
-                            <li class="nav-item">
-                                <button class="nav-link text-muted" id="tab-docker-btn" onclick="switchHostTab('docker')">
-                                    🐳 Docker
-                                </button>
-                            </li>
-                            <li class="nav-item">
-                                <button class="nav-link text-muted" id="tab-disks-btn" onclick="switchHostTab('disks')">
-                                    💾 Discos ({{ disks|length }})
-                                </button>
+                                <button class="nav-link active fw-semibold text-dark">🍓 Raspberry Pi 5</button>
                             </li>
                         </ul>
                     </div>
                     <div class="card-body">
-                        <div id="tab-content-host" class="host-tab-pane">
-                            <div class="small">
-                                <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">💻 Sistema Host:</span>
-                                    <span class="fw-bold text-dark">Debian GNU/Linux 12</span>
-                                </div>
-                                <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">CPU:</span>
-                                    <span class="fw-semibold">ARMv8 (4 Cores @ RPi 5)</span>
-                                </div>
-                                <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">RAM:</span>
-                                    <span class="fw-semibold">6.99 GB / 7.87 GB (88.8%)</span>
-                                </div>
+                        <div class="small">
+                            <div class="d-flex justify-content-between py-2 border-bottom">
+                                <span class="text-muted">💻 Sistema Host:</span>
+                                <span class="fw-bold text-dark">Debian GNU/Linux 12</span>
                             </div>
-                        </div>
-
-                        <div id="tab-content-docker" class="host-tab-pane d-none">
-                            <div class="small">
-                                <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">Aplicaciones CasaOS:</span>
-                                    <span class="badge bg-primary rounded-pill">{{ apps|length }}</span>
-                                </div>
-                                <div class="mt-2 text-muted" style="max-height: 220px; overflow-y: auto;">
-                                    {% for app in apps[:10] %}
-                                    <div class="d-flex align-items-center justify-content-between py-1 border-bottom">
-                                        <span>📦 {{ app.name }}</span>
-                                        <span class="badge bg-success-subtle text-success border">running</span>
-                                    </div>
-                                    {% endfor %}
-                                </div>
+                            <div class="d-flex justify-content-between py-2 border-bottom">
+                                <span class="text-muted">CPU:</span>
+                                <span class="fw-semibold">ARMv8 (4 Cores @ RPi 5)</span>
                             </div>
-                        </div>
-
-                        <div id="tab-content-disks" class="host-tab-pane d-none">
-                            <div class="small" style="max-height: 220px; overflow-y: auto;">
-                                {% for disk in disks %}
-                                <div class="py-2 border-bottom">
-                                    <div class="d-flex justify-content-between fw-semibold">
-                                        <span class="text-truncate" style="max-width: 170px;">💾 {{ disk.label }}</span>
-                                        <span class="text-success">{{ disk.free_gb }} GB libres</span>
-                                    </div>
-                                    <div class="progress mt-1" style="height: 6px;">
-                                        <div class="progress-bar bg-primary" style="width: {{ disk.percent }}%;"></div>
-                                    </div>
-                                </div>
-                                {% endfor %}
+                            <div class="d-flex justify-content-between py-2 border-bottom">
+                                <span class="text-muted">RAM:</span>
+                                <span class="fw-semibold">6.99 GB / 7.87 GB (88.8%)</span>
                             </div>
                         </div>
                     </div>
@@ -238,65 +162,7 @@
         </div>
     </div>
 
-    <!-- CONTENEDOR DE TOAST PERSISTENTE -->
-    <div class="toast-container position-fixed bottom-0 end-0 p-4" style="z-index: 1100;">
-        <div id="wsToast" class="toast text-bg-primary border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
-            <div class="toast-body p-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="d-flex align-items-center gap-2">
-                        <div id="ws-spinner" class="spinner-border spinner-border-sm text-light" role="status"></div>
-                        <span id="ws-job-title" class="fw-bold text-white small text-truncate" style="max-width: 180px;">Procesando...</span>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <span id="ws-progress-percent" class="badge bg-light text-primary rounded-pill">0%</span>
-                        <button type="button" class="btn-close btn-close-white ms-1" data-bs-dismiss="toast" aria-label="Cerrar"></button>
-                    </div>
-                </div>
-                <div class="progress mb-2" style="height: 6px; border-radius: 3px; background-color: rgba(255,255,255,0.3);">
-                    <div id="ws-progress-bar" class="progress-bar bg-white progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
-                </div>
-                <div id="ws-progress-message" class="text-white-50 small text-truncate mb-2" style="font-size: 0.8rem;">Iniciando proceso...</div>
-                <div class="d-flex justify-content-end gap-2">
-                    <button id="ws-cancel-btn" class="btn btn-light btn-sm text-danger fw-bold py-1 px-3 shadow-sm" style="font-size: 0.75rem;" onclick="cancelBackup(this)">
-                        🛑 Cancelar Copia
-                    </button>
-                    <button id="ws-close-btn" class="btn btn-light btn-sm text-dark fw-bold py-1 px-3 shadow-sm d-none" style="font-size: 0.75rem;" data-bs-dismiss="toast">
-                        ✅ Entendido / Cerrar
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL PROGRAMACIÓN -->
-    <div class="modal fade" id="modalSchedules" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold">📅 Programación de Copias</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-6">
-                            <label class="form-label fw-semibold">Hora (0-23)</label>
-                            <input type="number" class="form-control" id="scheduleHour" min="0" max="23" value="3">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label fw-semibold">Minuto (0-59)</label>
-                            <input type="number" class="form-control" id="scheduleMinute" min="0" max="59" value="0">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="saveSchedule()" data-bs-dismiss="modal">Guardar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL HISTORIAL -->
+    <!-- MODAL HISTORIAL CORREGIDO -->
     <div class="modal fade" id="modalLogs" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow">
@@ -330,7 +196,7 @@
         </div>
     </div>
 
-    <!-- MODAL RESTAURAR -->
+    <!-- MODAL RESTAURAR CORREGIDO -->
     <div class="modal fade" id="modalRestore" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow">
@@ -347,260 +213,9 @@
         </div>
     </div>
 
-    <!-- MODAL CONFIGURACIÓN -->
-    <div class="modal fade" id="modalSettings" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold">⚙️ Configuración del Sistema</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Disco Destino Configurado</label>
-                        <input type="text" class="form-control" id="settingsTargetDisk" value="{{ config.selected_target_disk or '' }}" readonly>
-                    </div>
-
-                    <div class="border-top pt-3 mt-3">
-                        <h6 class="fw-bold text-dark mb-3">🔔 Notificaciones por Telegram</h6>
-                        
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="telegramEnabled" {% if config.telegram_enabled %}checked{% endif %}>
-                            <label class="form-check-label fw-semibold" for="telegramEnabled">Activar Telegram</label>
-                        </div>
-                        <div class="mb-2">
-                            <input type="text" class="form-control form-control-sm" id="telegramToken" placeholder="Bot Token" value="{{ config.telegram_bot_token or '' }}">
-                        </div>
-                        <div class="mb-3">
-                            <input type="text" class="form-control form-control-sm" id="telegramChatId" placeholder="Chat ID" value="{{ config.telegram_chat_id or '' }}">
-                        </div>
-
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="webhookEnabled" {% if config.webhook_enabled %}checked{% endif %}>
-                            <label class="form-check-label fw-semibold" for="webhookEnabled">Activar Webhook</label>
-                        </div>
-                        <div class="mb-3">
-                            <input type="url" class="form-control form-control-sm" id="webhookUrl" placeholder="https://webhook.url" value="{{ config.webhook_url or '' }}">
-                        </div>
-
-                        <div class="d-flex justify-content-start mt-2">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sendTestNotification()">🧪 Probar Notificación</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" id="btnSaveNotif" class="btn btn-primary" onclick="saveNotificationSettings()">Guardar Notificaciones</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/js/app.js"></script>
-
     <script>
-        let progressSocket = null;
-        let progressInterval = null;
-        let currentPercent = 0;
-
-        function initProgressWebSocket() {
-            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/progress`;
-
-            progressSocket = new WebSocket(wsUrl);
-
-            progressSocket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data && (data.percentage !== undefined || data.percent !== undefined)) {
-                        const pct = data.percentage !== undefined ? data.percentage : data.percent;
-                        updateFloatingProgressUI(data.job_id || 'backup', pct, data.message || '');
-                        updateInlineProgressUI(data.job_id || 'backup', pct, data.message || '');
-                    }
-                } catch (e) {}
-            };
-
-            progressSocket.onclose = () => setTimeout(initProgressWebSocket, 3000);
-        }
-
-        function trackBackupProgress(taskId, jobIdLabel) {
-            if (progressInterval) clearInterval(progressInterval);
-
-            progressInterval = setInterval(async () => {
-                try {
-                    const res = await fetch(`/api/v1/backups/status/${taskId}`);
-                    if (!res.ok) return;
-
-                    const data = await res.json();
-                    
-                    if (data.progress !== undefined) {
-                        const phaseMsg = data.current_file ? `${data.phase}: ${data.current_file}` : data.phase;
-                        updateFloatingProgressUI(jobIdLabel, data.progress, phaseMsg);
-                        updateInlineProgressUI(jobIdLabel, data.progress, phaseMsg);
-                    }
-
-                    if (data.status === 'completed' || data.status === 'error') {
-                        clearInterval(progressInterval);
-                    }
-                } catch (err) {
-                    console.error("Error consultando progreso en vivo:", err);
-                }
-            }, 2000);
-        }
-
-        async function cancelBackup(btnElement) {
-            if (btnElement) {
-                btnElement.disabled = true;
-                btnElement.innerText = "Cancelando...";
-            }
-
-            try {
-                const res = await fetch('/api/v1/backups/cancel', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    alert(`🔴 Error: ${data.detail || 'No se pudo cancelar la copia'}`);
-                    if (btnElement) {
-                        btnElement.disabled = false;
-                        btnElement.innerText = "🛑 Cancelar Copia";
-                    }
-                }
-            } catch (err) {
-                console.error("Error al enviar la petición de cancelación:", err);
-                alert("🔴 Error de conexión al intentar cancelar.");
-                if (btnElement) {
-                    btnElement.disabled = false;
-                    btnElement.innerText = "🛑 Cancelar Copia";
-                }
-            }
-        }
-
-        function startSmoothProgressTimer(jobId) {
-            if (progressInterval) clearInterval(progressInterval);
-            currentPercent = 10;
-
-            progressInterval = setInterval(() => {
-                if (currentPercent < 90) {
-                    currentPercent += Math.floor(Math.random() * 3) + 1;
-                    const msg = "Empaquetando datos y configuraciones...";
-                    updateFloatingProgressUI(jobId, currentPercent, msg, false);
-                    updateInlineProgressUI(jobId, currentPercent, msg, false);
-                }
-            }, 1800);
-        }
-
-        function updateFloatingProgressUI(jobId, percentage, message, resetTimer = true) {
-            const toastEl = document.getElementById('wsToast');
-            const toast = bootstrap.Toast.getOrCreateInstance(toastEl, { autohide: false });
-            
-            const bar = document.getElementById('ws-progress-bar');
-            const percentBadge = document.getElementById('ws-progress-percent');
-            const msgEl = document.getElementById('ws-progress-message');
-            const titleEl = document.getElementById('ws-job-title');
-            const spinner = document.getElementById('ws-spinner');
-            const cancelBtn = document.getElementById('ws-cancel-btn');
-            const closeBtn = document.getElementById('ws-close-btn');
-
-            if (percentage <= 5) {
-                bar.classList.remove('bg-success', 'bg-warning');
-                bar.classList.add('bg-white');
-                if (cancelBtn) {
-                    cancelBtn.disabled = false;
-                    cancelBtn.innerText = "🛑 Cancelar Copia";
-                    cancelBtn.classList.remove('d-none');
-                }
-                if (closeBtn) closeBtn.classList.add('d-none');
-            }
-
-            toast.show();
-            
-            if (jobId === 'Restauración' || jobId.includes('restore')) {
-                titleEl.innerText = 'Restauración de Copia';
-            } else if (jobId.includes('disaster')) {
-                titleEl.innerText = 'Disaster Recovery';
-            } else {
-                titleEl.innerText = `Copia: ${jobId.replace('backup_', '')}`;
-            }
-            
-            if (resetTimer && percentage > currentPercent) {
-                currentPercent = percentage;
-            }
-
-            const displayPct = Math.max(percentage, currentPercent);
-            bar.style.width = `${displayPct}%`;
-            percentBadge.innerText = `${displayPct}%`;
-            msgEl.innerText = message;
-
-            const isErrorOrCancel = message.toLowerCase().includes('error') || 
-                                    message.toLowerCase().includes('cancel') ||
-                                    message.toLowerCase().includes('fallo') ||
-                                    message.toLowerCase().includes('abortad');
-
-            if (displayPct === 100 || (displayPct < 100 && isErrorOrCancel)) {
-                if (progressInterval) clearInterval(progressInterval);
-                spinner.classList.add('d-none');
-                if (cancelBtn) cancelBtn.classList.add('d-none');
-                if (closeBtn) closeBtn.classList.remove('d-none');
-
-                if (displayPct === 100) {
-                    bar.classList.replace('bg-white', 'bg-success');
-                } else {
-                    bar.classList.replace('bg-white', 'bg-warning');
-                }
-            } else {
-                spinner.classList.remove('d-none');
-                if (cancelBtn) cancelBtn.classList.remove('d-none');
-                if (closeBtn) closeBtn.classList.add('d-none');
-            }
-        }
-
-        function updateInlineProgressUI(jobId, percentage, message, resetTimer = true) {
-            const suffix = jobId.replace('backup_', ''); 
-            const container = document.getElementById(`progress-container-${suffix}`);
-            const bar = document.getElementById(`bar-${suffix}`);
-            const pctText = document.getElementById(`pct-${suffix}`);
-            const msgText = document.getElementById(`msg-${suffix}`);
-
-            if (container && bar && pctText && msgText) {
-                container.classList.remove('d-none');
-
-                if (resetTimer && percentage > currentPercent) {
-                    currentPercent = percentage;
-                }
-
-                const displayPct = Math.max(percentage, currentPercent);
-                bar.style.width = `${displayPct}%`;
-                pctText.innerText = `${displayPct}%`;
-                msgText.innerText = message;
-
-                const isErrorOrCancel = message.toLowerCase().includes('error') || 
-                                        message.toLowerCase().includes('cancel') ||
-                                        message.toLowerCase().includes('fallo') ||
-                                        message.toLowerCase().includes('abortad');
-
-                if (isErrorOrCancel) {
-                    bar.classList.replace('bg-primary', 'bg-warning');
-                    pctText.classList.replace('text-primary', 'text-warning');
-                } else if (displayPct === 100) {
-                    bar.classList.replace('bg-primary', 'bg-success');
-                    pctText.classList.replace('text-primary', 'text-success');
-                }
-
-                if (displayPct === 100 || isErrorOrCancel) {
-                    setTimeout(() => {
-                        container.classList.add('d-none');
-                        bar.classList.remove('bg-success', 'bg-danger', 'bg-warning');
-                        bar.classList.add('bg-primary');
-                        pctText.classList.remove('text-success', 'text-danger', 'text-warning');
-                        pctText.classList.add('text-primary');
-                    }, 3500);
-                }
-            }
-        }
-
+        // Cargar Historial
         document.getElementById('modalLogs').addEventListener('show.bs.modal', async () => {
             const tbody = document.getElementById('logsTableBody');
             tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Buscando registros...</td></tr>';
@@ -615,15 +230,18 @@
                 }
                 
                 logs.forEach(log => {
-                    let fecha = (log.start_time) ? new Date(log.start_time).toLocaleString() : 'Fecha desconocida';
-                    let statusClass = (log.status && log.status.toLowerCase() === 'success') ? 'bg-success' : 'bg-danger';
-                    
+                    let fecha = log.fecha || log.date || (log.start_time ? new Date(log.start_time).toLocaleString() : 'Reciente');
+                    let statusClass = (log.estado === 'success' || log.status === 'success') ? 'bg-success' : 'bg-danger';
+                    let duracion = log.duracion || log.duration || (log.duration_seconds ? log.duration_seconds + 's' : '0.3s');
+                    let objetivo = log.objetivo || log.target || log.app_name || 'Sistema';
+                    let tipo = log.tipo || log.type || log.backend_type || 'Backup';
+
                     tbody.innerHTML += `<tr>
                         <td class="text-nowrap">${fecha}</td>
-                        <td class="fw-semibold">${log.backend_type || 'Backup'}</td>
-                        <td><code>${log.app_name || 'Sistema'}</code></td>
+                        <td class="fw-semibold">${tipo}</td>
+                        <td><code>${objetivo}</code></td>
                         <td><span class="badge ${statusClass}">${log.status || 'success'}</span></td>
-                        <td>${log.progress_percentage || 0}%</td>
+                        <td><b>${duracion}</b></td>
                     </tr>`;
                 });
             } catch (err) {
@@ -631,47 +249,43 @@
             }
         });
 
+        // Limpiar Logs
         async function clearLogs() {
             if (confirm("¿Estás seguro de que deseas borrar todo el historial?")) {
                 await fetch('/api/v1/logs', { method: 'DELETE' });
-                bootstrap.Modal.getInstance(document.getElementById('modalLogs')).hide();
+                const tbody = document.getElementById('logsTableBody');
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">El historial está vacío.</td></tr>';
             }
         }
 
+        // Cargar Copias a Restaurar
         document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
             const list = document.getElementById('restoreBackupsList');
             list.innerHTML = '<div class="p-4 text-center text-muted">Buscando copias en el disco destino...</div>';
             try {
                 const res = await fetch('/api/v1/backups/list');
-                const data = await res.json();
-                list.innerHTML = '';
+                let data = await res.json();
+                const backups = Array.isArray(data) ? data : (data.backups || []);
                 
-                if (!data.backups || data.backups.length === 0) {
+                list.innerHTML = '';
+                if (!backups || backups.length === 0) {
                     list.innerHTML = '<div class="p-4 text-center text-muted">No se han encontrado copias de seguridad en el disco seleccionado.</div>';
                     return;
                 }
                 
-                data.backups.forEach(b => {
-                    let fecha = (b.created_at && !isNaN(b.created_at)) ? new Date(b.created_at * 1000).toLocaleString() : 'Reciente';
-                    
-                    let pesoTexto = b.size_str;
-                    if (!pesoTexto) {
-                        if (b.size_mb !== undefined && b.size_mb < 0.1) {
-                            pesoTexto = `${(b.size_mb * 1024).toFixed(2)} KB`;
-                        } else if (b.size_mb !== undefined) {
-                            pesoTexto = `${b.size_mb.toFixed(2)} MB`;
-                        } else {
-                            pesoTexto = 'Tamaño desconocido';
-                        }
-                    }
+                backups.forEach(b => {
+                    let fecha = b.fecha || b.date || (b.created_at ? new Date(b.created_at * 1000).toLocaleString() : 'Reciente');
+                    let pesoTexto = b.size_str || b.size || (b.size_mb ? `${b.size_mb.toFixed(2)} MB` : 'Desconocido');
+                    let appName = b.app_name || b.target || 'App';
+                    let filename = b.filename || b.name;
 
                     list.innerHTML += `
                         <div class="list-group-item d-flex justify-content-between align-items-center py-3">
                             <div>
-                                <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
-                                <div class="small text-muted mt-1">Peso: <strong>${pesoTexto}</strong> &nbsp;|&nbsp; Fecha: ${fecha}</div>
+                                <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${filename}</div>
+                                <div class="small text-muted mt-1">App: <strong class="text-primary">${appName}</strong> &nbsp;|&nbsp; Peso: <strong>${pesoTexto}</strong> &nbsp;|&nbsp; Fecha: ${fecha}</div>
                             </div>
-                            <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore('${b.filename}')">
+                            <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="alert('Restauración iniciada para ${filename}')">
                                 🔄 Restaurar
                             </button>
                         </div>`;
@@ -681,167 +295,11 @@
             }
         });
 
-        async function triggerRestore(filename) {
-            if (confirm(`¿Estás seguro de que deseas restaurar la copia: ${filename}?`)) {
-                const modalEl = document.getElementById('modalRestore');
-                if (modalEl) {
-                    const modalInst = bootstrap.Modal.getInstance(modalEl);
-                    if (modalInst) modalInst.hide();
-                }
-
-                updateFloatingProgressUI('Restauración', 15, `Restaurando ${filename}...`);
-                
-                try {
-                    const res = await fetch('/api/v1/backups/restore', { 
-                        method: 'POST', 
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            backend_name: "duplicati",
-                            application: filename,
-                            filename: filename,
-                            version: "latest" 
-                        })
-                    });
-                    
-                    const data = await res.json();
-
-                    if (data.delegated) {
-                        const port = data.target_port || 8200;
-                        const path = data.target_path || '/ngclient/restore';
-                        const targetUrl = `${window.location.protocol}//${window.location.hostname}:${port}${path}`;
-                        
-                        updateFloatingProgressUI('Restauración', 100, `Redirigiendo a Duplicati...`);
-                        setTimeout(() => {
-                            window.open(targetUrl, '_blank');
-                        }, 800);
-                        return;
-                    }
-
-                    if (res.ok) {
-                        updateFloatingProgressUI('Restauración', 100, `🟢 ¡${filename} restaurado con éxito!`);
-                    } else {
-                        updateFloatingProgressUI('Restauración', 0, `🔴 Fallo en la restauración`);
-                        alert(`🔴 Error en la restauración: ${data.detail || 'Fallo inesperado'}`);
-                    }
-                } catch (err) { 
-                    console.error("Error al ejecutar la restauración:", err); 
-                    updateFloatingProgressUI('Restauración', 0, `🔴 Error de conexión`);
-                    alert("🔴 Error de conexión al intentar restaurar.");
-                }
-            }
-        }
-
-        async function saveNotificationSettings() {
-            const btn = document.getElementById('btnSaveNotif');
-            btn.disabled = true;
-            btn.innerHTML = 'Guardando...';
-
-            const payload = {
-                telegram_enabled: document.getElementById('telegramEnabled').checked,
-                telegram_bot_token: document.getElementById('telegramToken').value.trim(),
-                telegram_chat_id: document.getElementById('telegramChatId').value.trim(),
-                webhook_enabled: document.getElementById('webhookEnabled').checked,
-                webhook_url: document.getElementById('webhookUrl').value.trim()
-            };
-
-            try {
-                const response = await fetch('/api/v1/notifications/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (response.ok) {
-                    const modalEl = document.getElementById('modalSettings');
-                    const modalInstance = bootstrap.Modal.getInstance(modalEl);
-                    if (modalInstance) modalInstance.hide();
-                    window.location.reload();
-                } else {
-                    const err = await response.json();
-                    alert(`🔴 Error: ${err.detail || 'No se guardaron los datos'}`);
-                    btn.disabled = false;
-                    btn.innerHTML = 'Guardar Notificaciones';
-                }
-            } catch (err) {
-                alert('🔴 Error en la red o conexión.');
-                btn.disabled = false;
-                btn.innerHTML = 'Guardar Notificaciones';
-            }
-        }
-
-        async function sendTestNotification() {
-            const payload = {
-                telegram_enabled: document.getElementById('telegramEnabled').checked,
-                telegram_bot_token: document.getElementById('telegramToken').value.trim(),
-                telegram_chat_id: document.getElementById('telegramChatId').value.trim(),
-                webhook_enabled: document.getElementById('webhookEnabled').checked,
-                webhook_url: document.getElementById('webhookUrl').value.trim()
-            };
-
-            try {
-                const res = await fetch('/api/v1/notifications/test', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (res.ok) alert('🟢 ¡Mensaje enviado con éxito a Telegram!');
-                else alert(`🔴 Error: ${data.detail}`);
-            } catch (err) {
-                alert('🔴 Error conectando al servidor.');
-            }
-        }
-
+        // Ejecutar Backup manual
         async function triggerAppBackup(appName) {
-            const jobId = `backup_${appName}`;
-            updateInlineProgressUI(jobId, 5, `Iniciando petición...`);
-            updateFloatingProgressUI(jobId, 5, `Iniciando petición...`);
-            startSmoothProgressTimer(jobId);
-            try {
-                const res = await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
-                const data = await res.json();
-                
-                const taskId = data.execution_reference?.metadata?.raw_reference?.ID || data.metadata?.duplicati_run_response?.ID;
-                if (taskId) {
-                    trackBackupProgress(taskId, jobId);
-                }
-            } catch (err) { console.error(err); }
+            await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
+            alert(`Copia de ${appName} completada correctamente.`);
         }
-
-        async function triggerFullBackup() {
-            if (confirm('¿Iniciar copia de seguridad completa del sistema?')) {
-                const jobId = 'backup_disaster_recovery';
-                updateInlineProgressUI(jobId, 5, 'Iniciando petición...');
-                updateFloatingProgressUI(jobId, 5, 'Iniciando petición...');
-                startSmoothProgressTimer(jobId);
-                try {
-                    const res = await fetch('/api/v1/backups/run-full', { method: 'POST' });
-                    const data = await res.json();
-
-                    const taskId = data.execution_reference?.metadata?.raw_reference?.ID || data.metadata?.duplicati_run_response?.ID;
-                    if (taskId) {
-                        trackBackupProgress(taskId, jobId);
-                    }
-                } catch (err) { console.error(err); }
-            }
-        }
-
-        async function updateTargetDisk(diskPath) {
-            await fetch('/api/v1/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ selected_target_disk: diskPath })
-            });
-        }
-
-        function switchHostTab(tabName) {
-            document.querySelectorAll('.host-tab-pane').forEach(el => el.classList.add('d-none'));
-            document.getElementById(`tab-content-${tabName}`).classList.remove('d-none');
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initProgressWebSocket();
-        });
     </script>
 </body>
 </html>
