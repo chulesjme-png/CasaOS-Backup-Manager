@@ -71,6 +71,31 @@ def _compress_directory(source_path: str, dest_file: str):
     with tarfile.open(dest_file, "w:gz") as tar:
         tar.add(source_path, arcname=os.path.basename(source_path))
 
+def _prune_old_backups(folder_path: str, max_keep: int = 3):
+    """Mantiene solo las N copias más recientes en la carpeta dada."""
+    try:
+        if not os.path.exists(folder_path):
+            return
+        VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz")
+        files = []
+        for f in os.listdir(folder_path):
+            if f.lower().endswith(VALID_EXTS):
+                fp = os.path.join(folder_path, f)
+                if os.path.isfile(fp):
+                    files.append((fp, os.path.getmtime(fp)))
+
+        files.sort(key=lambda x: x[1], reverse=True)
+
+        if len(files) > max_keep:
+            for old_fp, _ in files[max_keep:]:
+                try:
+                    os.remove(old_fp)
+                    logger.info(f"[Prune] Eliminada copia antigua: {old_fp}")
+                except Exception as err:
+                    logger.error(f"[Prune] Error eliminando {old_fp}: {err}")
+    except Exception as e:
+        logger.error(f"[Prune] Error al procesar rotación en {folder_path}: {e}")
+
 async def task_run_app_backup(app_name: str, app_path: str):
     start_time = time.time()
     await notification_service.send_notification(
@@ -103,6 +128,7 @@ async def task_run_app_backup(app_name: str, app_path: str):
     elapsed = round(time.time() - start_time, 1)
 
     if success:
+        _prune_old_backups(backup_folder, max_keep=3)
         await ws_manager.broadcast({"job_id": f"backup_{app_name}", "percentage": 100, "message": f"¡Copia de {app_name} finalizada!"})
         await notification_service.send_notification(
             title=f"✅ Copia Completada: {app_name}",
@@ -130,12 +156,22 @@ async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
     return {"status": "started", "message": f"Copia de {app_name} iniciada."}
 
 @router.get("/backups/list")
+@router.get("/backups")
 def list_available_backups():
     backups = []
     seen = set()
     VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz")
 
     target_disk = config_manager.config.selected_target_disk or "/media"
+    disk_uuid = os.path.basename(target_disk.rstrip(os.sep))
+
+    apps_dir = os.path.join(target_disk, "Backups", "Apps")
+    if os.path.exists(apps_dir):
+        for app_folder in os.listdir(apps_dir):
+            full_app_path = os.path.join(apps_dir, app_folder)
+            if os.path.isdir(full_app_path):
+                _prune_old_backups(full_app_path, max_keep=3)
+
     possible_roots = [
         os.path.join(target_disk, "Backups"),
         target_disk,
@@ -158,7 +194,7 @@ def list_available_backups():
                         try:
                             stats = os.stat(file_path)
                             size_mb = round(stats.st_size / (1024 * 1024), 2)
-                            ts_ms = int(stats.st_mtime * 1000)
+                            ts_sec = int(stats.st_mtime)
                             dt = datetime.fromtimestamp(stats.st_mtime, timezone.utc)
 
                             path_parts = file_path.split(os.sep)
@@ -173,22 +209,28 @@ def list_available_backups():
                             backups.append({
                                 "filename": file,
                                 "name": file,
+                                "title": file,
                                 "path": file_path,
                                 "file_path": file_path,
-                                "disk": target_disk,
+                                "disk": disk_uuid,
+                                "disk_id": disk_uuid,
+                                "disk_name": disk_uuid,
                                 "disk_path": target_disk,
-                                "target_disk": target_disk,
                                 "mountpoint": target_disk,
+                                "target_disk": target_disk,
+                                "selected_target_disk": target_disk,
                                 "size_mb": size_mb,
                                 "size_str": size_display,
                                 "size": size_display,
                                 "created_at": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                 "date": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                 "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
-                                "timestamp": ts_ms,
+                                "timestamp": ts_sec,
                                 "app": app_hint,
                                 "app_name": app_hint,
-                                "target": app_hint
+                                "target": app_hint,
+                                "status": "success",
+                                "valid": True
                             })
                         except Exception:
                             pass
