@@ -72,7 +72,6 @@ def _compress_directory(source_path: str, dest_file: str):
         tar.add(source_path, arcname=os.path.basename(source_path))
 
 def _prune_old_backups(folder_path: str, max_keep: int = 3):
-    """Mantiene solo las N copias más recientes en la carpeta dada."""
     try:
         if not os.path.exists(folder_path):
             return
@@ -194,7 +193,7 @@ def list_available_backups():
                         try:
                             stats = os.stat(file_path)
                             size_mb = round(stats.st_size / (1024 * 1024), 2)
-                            ts_sec = int(stats.st_mtime)
+                            ts_ms = int(stats.st_mtime * 1000)
                             dt = datetime.fromtimestamp(stats.st_mtime, timezone.utc)
 
                             path_parts = file_path.split(os.sep)
@@ -223,9 +222,9 @@ def list_available_backups():
                                 "size_str": size_display,
                                 "size": size_display,
                                 "created_at": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                                "date": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                "date": dt.strftime("%Y-%m-%d %H:%M:%S"),
                                 "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
-                                "timestamp": ts_sec,
+                                "timestamp": ts_ms,
                                 "app": app_hint,
                                 "app_name": app_hint,
                                 "target": app_hint,

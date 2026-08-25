@@ -38,14 +38,14 @@ class AuditService:
     def log_execution(self, job_type: str, target_name: str, status: str, duration_seconds: float, message: str):
         try:
             dur_val = round(duration_seconds, 2) if duration_seconds > 0 else 1.0
-            now_sec = int(time.time())
+            now_ms = int(time.time() * 1000)
 
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp)
                     VALUES (?, ?, ?, ?, ?, ?)
-                """, (job_type, target_name, status.lower(), dur_val, message, now_sec))
+                """, (job_type, target_name, status.lower(), dur_val, message, now_ms))
                 conn.commit()
         except Exception as e:
             logger.error(f"[Audit Log Error] Error guardando registro: {e}")
@@ -64,23 +64,12 @@ class AuditService:
                     
                     raw_ts = r.get("timestamp")
                     try:
-                        val_ts = float(raw_ts) if raw_ts is not None else time.time()
+                        val_ts = float(raw_ts) if raw_ts is not None else time.time() * 1000
                     except (ValueError, TypeError):
-                        val_ts = time.time()
+                        val_ts = time.time() * 1000
 
-                    if val_ts > 1e11:
-                        ts_sec = int(val_ts / 1000.0)
-                        ts_ms = int(val_ts)
-                    else:
-                        ts_sec = int(val_ts)
-                        ts_ms = int(val_ts * 1000)
-
-                    try:
-                        dt = datetime.fromtimestamp(ts_sec, tz=timezone.utc)
-                    except Exception:
-                        dt = datetime.now(timezone.utc)
-                        ts_sec = int(dt.timestamp())
-                        ts_ms = int(ts_sec * 1000)
+                    ts_ms = int(val_ts if val_ts > 1e11 else val_ts * 1000)
+                    dt = datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
 
                     iso_str = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     display_str = dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -98,13 +87,11 @@ class AuditService:
 
                     formatted.append({
                         "id": r.get("id"),
-                        "timestamp": ts_sec,
-                        "timestamp_ms": ts_ms,
+                        "timestamp": ts_ms,
                         "created_at": iso_str,
-                        "date": iso_str,
+                        "date": display_str,
                         "fecha": display_str,
                         "time": display_str,
-                        "datetime": iso_str,
                         "type": str(r.get("job_type") or "Backup"),
                         "tipo": str(r.get("job_type") or "Backup"),
                         "target": target,
