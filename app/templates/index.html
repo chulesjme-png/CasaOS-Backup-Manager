@@ -10,13 +10,11 @@
         .card { border-radius: 12px; }
         .nav-tabs .nav-link { border: none; background: transparent; padding: 0.5rem 0.8rem; cursor: pointer; color: #6c757d; }
         .nav-tabs .nav-link.active { border-bottom: 2px solid #0d6efd; background: transparent; color: #0d6efd; font-weight: bold; }
-        /* Permite ver ~10 perfiles completos en pantalla antes de activar scroll */
         .app-list-scroll { max-height: 720px; overflow-y: auto; padding-right: 6px; }
     </style>
 </head>
 <body>
 
-    <!-- Header Navigation -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm py-2">
         <div class="container-fluid px-4">
             <a class="navbar-brand d-flex align-items-center gap-2" href="/">
@@ -26,18 +24,13 @@
             </a>
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-secondary btn-sm" onclick="loadApps()">🔍 Escanear</button>
-                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalSchedules">📅 Programación</button>
                 <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
                 <button class="btn btn-warning btn-sm text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
-                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalSettings">⚙️ Configuración</button>
             </div>
         </div>
     </nav>
 
-    <!-- Main Content -->
     <div class="container-fluid px-4 py-4">
-        
-        <!-- Tarjetas de estado general -->
         <div class="row g-3 mb-3">
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
@@ -51,7 +44,7 @@
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
                     <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Motores de Backup</span>
-                    <div class="fw-bold text-dark mt-2">Duplicati (OK)</div>
+                    <div class="fw-bold text-dark mt-2">Tar.gz Engine (OK)</div>
                 </div>
             </div>
             <div class="col-md-3">
@@ -68,7 +61,6 @@
             </div>
         </div>
 
-        <!-- Selector de Destino Activo -->
         <div class="card p-3 shadow-sm border-0 mb-4">
             <div class="row align-items-center">
                 <div class="col-md-4 d-flex align-items-center gap-2">
@@ -76,18 +68,13 @@
                     <span class="fw-bold text-dark">Destino Activo de Copias:</span>
                 </div>
                 <div class="col-md-8">
-                    <select class="form-select border-primary-subtle" id="targetDiskSelect">
-                        <option value="/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa" selected>
-                            Disco: 08604ab9-10b8-46bc-a6f2-a19f3adfc6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa)
-                        </option>
-                    </select>
+                    <select class="form-select border-primary-subtle" id="targetDiskSelect"></select>
                 </div>
             </div>
         </div>
 
         <div class="row">
             <div class="col-lg-8">
-                <!-- Disaster Recovery -->
                 <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex gap-3 align-items-center">
@@ -95,7 +82,7 @@
                             <div>
                                 <h5 class="fw-bold text-dark mb-1">Copia de Seguridad de la Raspberry Pi (Disaster Recovery)</h5>
                                 <p class="text-muted small mb-2">Resguarda la configuración de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>).</p>
-                                <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Incremental</span>
+                                <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Completa</span>
                                 <span class="badge bg-success-subtle text-success border border-success-subtle">🟢 Listo para resguardo</span>
                             </div>
                         </div>
@@ -105,68 +92,52 @@
                     </div>
                 </div>
 
-                <!-- Perfiles de Aplicación (Scroll para 10 de golpe) -->
                 <div class="card p-4 shadow-sm border-0 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN GENERADOS</h6>
                         <span class="badge bg-primary rounded-pill" id="appsCountBadge">0 Apps</span>
                     </div>
-
                     <div class="app-list-scroll">
-                        <div class="list-group list-group-flush" id="appsContainer">
-                            <div class="text-center py-4 text-muted">Buscando aplicaciones...</div>
-                        </div>
+                        <div class="list-group list-group-flush" id="appsContainer"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Columna derecha con Pestañas: RPi 5 / Docker / Discos -->
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-white border-bottom-0 pt-3 px-3">
                         <ul class="nav nav-tabs card-header-tabs" id="sideTabs">
                             <li class="nav-item">
-                                <button class="nav-link active" onclick="switchTab('rpi')">🍓 Raspberry Pi 5</button>
+                                <button class="nav-link active" onclick="switchTab(event, 'rpi')">🍓 Host</button>
                             </li>
                             <li class="nav-item">
-                                <button class="nav-link" onclick="switchTab('docker')">🐳 Docker</button>
+                                <button class="nav-link" onclick="switchTab(event, 'docker')">🐳 Docker</button>
                             </li>
                             <li class="nav-item">
-                                <button class="nav-link" onclick="switchTab('disks')">💾 Discos</button>
+                                <button class="nav-link" onclick="switchTab(event, 'disks')">💾 Discos</button>
                             </li>
                         </ul>
                     </div>
                     <div class="card-body">
-                        <!-- Pestaña Raspberry Pi -->
                         <div id="tabContentRpi" class="tab-pane-content">
                             <div class="small">
                                 <div class="d-flex justify-content-between py-2 border-bottom">
                                     <span class="text-muted">💻 Sistema Host:</span>
-                                    <span class="fw-bold text-dark">Debian GNU/Linux 12</span>
+                                    <span class="fw-bold text-dark">CasaOS Linux</span>
                                 </div>
                                 <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">CPU:</span>
-                                    <span class="fw-semibold">ARMv8 (4 Cores @ RPi 5)</span>
-                                </div>
-                                <div class="d-flex justify-content-between py-2">
-                                    <span class="text-muted">RAM:</span>
-                                    <span class="fw-semibold">6.99 GB / 7.87 GB (88.8%)</span>
+                                    <span class="text-muted">Estado AppData:</span>
+                                    <span class="fw-semibold text-success">Disponible</span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Pestaña Docker -->
                         <div id="tabContentDocker" class="tab-pane-content d-none">
-                            <div class="small" id="dockerList">
-                                <div class="text-muted py-2 text-center">Cargando contenedores...</div>
-                            </div>
+                            <div class="small" id="dockerList"></div>
                         </div>
 
-                        <!-- Pestaña Discos -->
                         <div id="tabContentDisks" class="tab-pane-content d-none">
-                            <div class="small" id="disksList">
-                                <div class="text-muted py-2 text-center">Cargando unidades de disco...</div>
-                            </div>
+                            <div class="small" id="disksList"></div>
                         </div>
                     </div>
                 </div>
@@ -174,7 +145,7 @@
         </div>
     </div>
 
-    <!-- Modal Barra de Progreso y Cancelación -->
+    <!-- Modal Progreso -->
     <div class="modal fade" id="modalProgress" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
@@ -206,18 +177,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="d-flex justify-content-between mb-3">
-                        <span class="text-muted small">Últimos registros en base de datos.</span>
+                        <span class="text-muted small">Últimos registros en la base de datos.</span>
                         <button class="btn btn-outline-danger btn-sm" onclick="clearLogs()">🗑️ Limpiar Historial</button>
                     </div>
                     <div class="table-responsive" style="max-height: 400px;">
                         <table class="table table-hover align-middle small mb-0">
                             <thead class="table-light sticky-top">
                                 <tr>
-                                    <th>Fecha</th>
-                                    <th>Tipo</th>
-                                    <th>Objetivo</th>
-                                    <th>Estado</th>
-                                    <th>Duración</th>
+                                    <th>Fecha</th><th>Tipo</th><th>Objetivo</th><th>Estado</th><th>Duración</th>
                                 </tr>
                             </thead>
                             <tbody id="logsTableBody"></tbody>
@@ -228,7 +195,7 @@
         </div>
     </div>
 
-    <!-- Modal Restaurar Copias -->
+    <!-- Modal Restauración -->
     <div class="modal fade" id="modalRestore" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow">
@@ -248,134 +215,144 @@
         let currentJobId = null;
         let jobInterval = null;
 
-        function switchTab(tabName) {
+        function switchTab(evt, tabName) {
             document.querySelectorAll('#sideTabs .nav-link').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-pane-content').forEach(pane => pane.classList.add('d-none'));
 
-            if (tabName === 'rpi') {
-                event.target.classList.add('active');
-                document.getElementById('tabContentRpi').classList.remove('d-none');
-            } else if (tabName === 'docker') {
-                event.target.classList.add('active');
-                document.getElementById('tabContentDocker').classList.remove('d-none');
-                loadDockerInfo();
-            } else if (tabName === 'disks') {
-                event.target.classList.add('active');
-                document.getElementById('tabContentDisks').classList.remove('d-none');
-                loadDisksInfo();
-            }
+            evt.target.classList.add('active');
+            if (tabName === 'rpi') document.getElementById('tabContentRpi').classList.remove('d-none');
+            if (tabName === 'docker') { document.getElementById('tabContentDocker').classList.remove('d-none'); loadDockerInfo(); }
+            if (tabName === 'disks') { document.getElementById('tabContentDisks').classList.remove('d-none'); loadDisksInfo(); }
         }
 
         async function loadApps() {
-            const container = document.getElementById('appsContainer');
-            const headerLabel = document.getElementById('appsCountHeader');
-            const badgeLabel = document.getElementById('appsCountBadge');
-
             try {
                 const res = await fetch('/api/v1/apps');
                 const data = await res.json();
                 const apps = data.apps || [];
+                document.getElementById('appsCountHeader').innerText = `${apps.length} Detectadas`;
+                document.getElementById('appsCountBadge').innerText = `${apps.length} Apps`;
                 
-                headerLabel.innerText = `${apps.length} Detectadas`;
-                badgeLabel.innerText = `${apps.length} Apps`;
-
-                if (apps.length === 0) {
-                    container.innerHTML = '<div class="p-3 text-muted text-center">No se encontraron carpetas en /DATA/AppData</div>';
-                    return;
-                }
-
-                container.innerHTML = apps.map(app => `
+                document.getElementById('appsContainer').innerHTML = apps.map(app => `
                     <div class="list-group-item px-0 py-3 border-bottom">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <div class="fw-bold text-dark text-capitalize fs-6">${app.name}</div>
                                 <div class="text-muted small mt-1">Rutas: <code>${app.path}</code></div>
                             </div>
-                            <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('${app.name}')">
-                                ⚡ Copiar Ahora
-                            </button>
+                            <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('${app.name}')">⚡ Copiar Ahora</button>
                         </div>
                     </div>
                 `).join('');
             } catch (err) {
-                container.innerHTML = '<div class="p-3 text-danger text-center">Error al conectar con la API de aplicaciones.</div>';
+                console.error("Error cargando aplicaciones:", err);
             }
         }
 
         async function loadDockerInfo() {
             const container = document.getElementById('dockerList');
-            const res = await fetch('/api/v1/system/docker');
-            const data = await res.json();
-            const list = data.containers || [];
-            
-            container.innerHTML = list.length ? list.map(c => `
-                <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
-                    <div>
-                        <div class="fw-bold text-dark">${c.name}</div>
-                        <div class="text-muted" style="font-size: 0.75rem;">${c.image}</div>
+            container.innerHTML = '<div class="text-muted py-2 text-center">Cargando contenedores...</div>';
+            try {
+                const res = await fetch('/api/v1/system/docker');
+                const data = await res.json();
+                const list = data.containers || [];
+                
+                container.innerHTML = list.length ? list.map(c => `
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                        <div>
+                            <div class="fw-bold text-dark">${c.name}</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">${c.image}</div>
+                        </div>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">${c.status}</span>
                     </div>
-                    <span class="badge bg-success-subtle text-success border border-success-subtle">${c.status}</span>
-                </div>
-            `).join('') : '<div class="text-muted py-2 text-center">No hay contenedores ejecutándose</div>';
+                `).join('') : '<div class="text-muted py-2 text-center">No hay contenedores ejecutándose</div>';
+            } catch (err) {
+                container.innerHTML = '<div class="text-danger py-2 text-center">Error al obtener Docker</div>';
+            }
         }
 
         async function loadDisksInfo() {
             const container = document.getElementById('disksList');
-            const res = await fetch('/api/v1/system/disks');
-            const data = await res.json();
-            const list = data.disks || [];
+            const select = document.getElementById('targetDiskSelect');
+            container.innerHTML = '<div class="text-muted py-2 text-center">Cargando discos...</div>';
+            
+            try {
+                const res = await fetch('/api/v1/system/disks');
+                const data = await res.json();
+                const list = data.disks || [];
 
-            container.innerHTML = list.length ? list.map(d => `
-                <div class="py-2 border-bottom">
-                    <div class="d-flex justify-content-between text-dark fw-bold mb-1">
-                        <span>${d.mount}</span>
-                        <span>${d.used_gb} GB / ${d.total_gb} GB</span>
+                select.innerHTML = list.map(d => `
+                    <option value="${d.mount}">Disco: ${d.name} (${d.mount}) - ${d.free_gb} GB libres</option>
+                `).join('');
+
+                container.innerHTML = list.length ? list.map(d => `
+                    <div class="py-2 border-bottom">
+                        <div class="d-flex justify-content-between text-dark fw-bold mb-1">
+                            <span>${d.mount}</span>
+                            <span>${d.used_gb} GB / ${d.total_gb} GB</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar ${d.percent > 85 ? 'bg-danger' : 'bg-primary'}" style="width: ${d.percent}%"></div>
+                        </div>
                     </div>
-                    <div class="progress" style="height: 10px;">
-                        <div class="progress-bar ${d.percent > 85 ? 'bg-danger' : 'bg-primary'}" style="width: ${d.percent}%"></div>
-                    </div>
-                </div>
-            `).join('') : '<div class="text-muted py-2 text-center">No se pudieron obtener unidades de disco</div>';
+                `).join('') : '<div class="text-muted py-2 text-center">No se encontraron discos montados</div>';
+            } catch (err) {
+                container.innerHTML = '<div class="text-danger py-2 text-center">Error al leer discos</div>';
+            }
         }
 
         async function triggerAppBackup(appName) {
-            const modalProgressEl = document.getElementById('modalProgress');
-            const modalProgress = new bootstrap.Modal(modalProgressEl);
+            const modalEl = document.getElementById('modalProgress');
+            const modalProgress = new bootstrap.Modal(modalEl);
+            const targetDisk = document.getElementById('targetDiskSelect').value || '';
             
             document.getElementById('progressTitle').innerText = `Copiando: ${appName}`;
-            document.getElementById('progressStatusText').innerText = "Iniciando proceso en backend...";
+            document.getElementById('progressStatusText').innerText = "Iniciando proceso...";
             const bar = document.getElementById('progressBar');
             bar.style.width = '5%';
             bar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
             bar.innerText = '5%';
+            
+            document.getElementById('btnCancelJob').style.display = 'inline-block';
             document.getElementById('btnCancelJob').disabled = false;
 
             modalProgress.show();
 
-            const res = await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
-            const data = await res.json();
-            currentJobId = data.job_id;
+            try {
+                const res = await fetch(`/api/v1/backups/run-app/${appName}?target_disk=${encodeURIComponent(targetDisk)}`, { method: 'POST' });
+                const data = await res.json();
+                currentJobId = data.job_id;
 
-            jobInterval = setInterval(async () => {
-                const stRes = await fetch(`/api/v1/backups/job-status/${currentJobId}`);
-                const stData = await stRes.json();
+                if (jobInterval) clearInterval(jobInterval);
 
-                bar.style.width = `${stData.progress}%`;
-                bar.innerText = `${stData.progress}%`;
-                document.getElementById('progressStatusText').innerText = stData.message;
+                jobInterval = setInterval(async () => {
+                    try {
+                        const stRes = await fetch(`/api/v1/backups/job-status/${currentJobId}`);
+                        const stData = await stRes.json();
 
-                if (stData.status === 'success') {
-                    clearInterval(jobInterval);
-                    bar.className = 'progress-bar bg-success';
-                    document.getElementById('progressStatusText').innerText = `✅ ¡Copia guardada con éxito! Archivo: ${stData.file}`;
-                    document.getElementById('btnCancelJob').disabled = true;
-                } else if (stData.status === 'failed' || stData.status === 'cancelled') {
-                    clearInterval(jobInterval);
-                    bar.className = 'progress-bar bg-danger';
-                    document.getElementById('progressStatusText').innerText = `❌ ${stData.message}`;
-                    document.getElementById('btnCancelJob').disabled = true;
-                }
-            }, 800);
+                        bar.style.width = `${stData.progress}%`;
+                        bar.innerText = `${stData.progress}%`;
+                        document.getElementById('progressStatusText').innerText = stData.message;
+
+                        if (stData.status === 'success') {
+                            clearInterval(jobInterval);
+                            bar.className = 'progress-bar bg-success';
+                            document.getElementById('progressStatusText').innerText = `✅ Copia finalizada: ${stData.file}`;
+                            document.getElementById('btnCancelJob').style.display = 'none';
+                        } else if (stData.status === 'failed' || stData.status === 'cancelled') {
+                            clearInterval(jobInterval);
+                            bar.className = 'progress-bar bg-danger';
+                            document.getElementById('progressStatusText').innerText = `❌ ${stData.message}`;
+                            document.getElementById('btnCancelJob').style.display = 'none';
+                        }
+                    } catch (e) {
+                        console.error("Error comprobando estado:", e);
+                    }
+                }, 800);
+            } catch (err) {
+                bar.className = 'progress-bar bg-danger';
+                document.getElementById('progressStatusText').innerText = '❌ Error al iniciar el backup.';
+            }
         }
 
         async function cancelCurrentJob() {
@@ -395,40 +372,49 @@
         document.getElementById('modalLogs').addEventListener('show.bs.modal', async () => {
             const tbody = document.getElementById('logsTableBody');
             tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3">Cargando...</td></tr>';
-            const res = await fetch('/api/v1/executions?limit=50');
-            const logs = await res.json();
-            tbody.innerHTML = logs.length ? logs.map(l => `
-                <tr>
-                    <td class="text-nowrap">${l.fecha}</td>
-                    <td class="fw-semibold">${l.tipo}</td>
-                    <td><code>${l.objetivo}</code></td>
-                    <td><span class="badge ${l.estado === 'success' ? 'bg-success' : 'bg-danger'}">${l.estado}</span></td>
-                    <td><b>${l.duracion}</b></td>
-                </tr>
-            `).join('') : '<tr><td colspan="5" class="text-center py-3 text-muted">No hay registros aún.</td></tr>';
+            try {
+                const res = await fetch('/api/v1/executions?limit=50');
+                const logs = await res.json();
+                tbody.innerHTML = logs.length ? logs.map(l => `
+                    <tr>
+                        <td class="text-nowrap">${l.fecha}</td>
+                        <td class="fw-semibold">${l.tipo}</td>
+                        <td><code>${l.objetivo}</code></td>
+                        <td><span class="badge ${l.estado === 'success' ? 'bg-success' : 'bg-danger'}">${l.estado}</span></td>
+                        <td><b>${l.duracion}</b></td>
+                    </tr>
+                `).join('') : '<tr><td colspan="5" class="text-center py-3 text-muted">No hay registros aún.</td></tr>';
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-danger">Error al cargar registros</td></tr>';
+            }
         });
 
         document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
             const list = document.getElementById('restoreBackupsList');
             list.innerHTML = '<div class="p-3 text-center text-muted">Buscando copias reales...</div>';
-            const res = await fetch('/api/v1/backups/list');
-            const data = await res.json();
-            const backups = data.backups || [];
-            
-            list.innerHTML = backups.length ? backups.map(b => `
-                <div class="list-group-item d-flex justify-content-between align-items-center py-3">
-                    <div>
-                        <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
-                        <div class="small text-muted mt-1">App: <strong class="text-primary">${b.app_name}</strong> &nbsp;|&nbsp; Peso: <strong>${b.size_str}</strong> &nbsp;|&nbsp; Fecha: ${b.fecha}</div>
+            try {
+                const res = await fetch('/api/v1/backups/list');
+                const data = await res.json();
+                const backups = data.backups || [];
+                
+                list.innerHTML = backups.length ? backups.map(b => `
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                        <div>
+                            <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
+                            <div class="small text-muted mt-1">App: <strong class="text-primary">${b.app_name}</strong> &nbsp;|&nbsp; Peso: <strong>${b.size_str}</strong> &nbsp;|&nbsp; Fecha: ${b.fecha}</div>
+                        </div>
+                        <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="alert('Iniciando restauración de ${b.filename}')">🔄 Restaurar</button>
                     </div>
-                    <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="alert('Iniciando restauración de ${b.filename}')">
-                        🔄 Restaurar
-                    </button>
-                </div>
-            `).join('') : '<div class="p-4 text-center text-muted">No hay archivos de copia de seguridad válidos en el disco.</div>';
+                `).join('') : '<div class="p-4 text-center text-muted">No hay copias válidas registradas.</div>';
+            } catch (e) {
+                list.innerHTML = '<div class="p-4 text-center text-danger">Error al obtener las copias de seguridad.</div>';
+            }
         });
 
-        document.addEventListener('DOMContentLoaded', loadApps);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadApps();
+            loadDisksInfo();
+        });
     </script>
 </body>
 </html>

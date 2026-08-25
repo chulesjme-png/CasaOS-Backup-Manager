@@ -5,11 +5,12 @@ import logging
 import tarfile
 import subprocess
 import shutil
-import threading
+import socket
+import json
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -19,7 +20,6 @@ logging.basicConfig(level=logging.INFO)
 DB_PATH = Path("/DATA/AppData/casaos-backup-manager/history.db")
 BASE_DIR = Path(__file__).resolve().parent
 
-# Estado global de tareas activas para barra de progreso y cancelación
 active_jobs = {}
 
 def get_db():
@@ -61,7 +61,6 @@ def read_root():
             return path.read_text(encoding="utf-8")
     return "<h1>Error: No se encontró index.html</h1>"
 
-# 1. Apps reales de CasaOS
 @app.get("/api/v1/apps")
 def get_apps():
     appdata_dir = Path("/DATA/AppData")
@@ -75,70 +74,133 @@ def get_apps():
                 })
     return {"apps": apps}
 
-# 2. Estado de Contenedores Docker
+# Detección de contenedores Docker
 @app.get("/api/v1/system/docker")
 def get_docker_containers():
+    containers = []
+    socket_path = "/var/run/docker.sock"
+    
+    if os.path.exists(socket_path):
+        try:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.connect(socket_path)
+            s.sendall(b"GET /containers/json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            
+            response = b""
+            while True:
+                data = s.recv(4096)
+                if not data:
+                    break
+                response += data
+            s.close()
+            
+            parts = response.split(b"\r\n\r\n", 1)
+            if len(parts) == 2:
+                body = parts[1].decode('utf-8', errors='ignore')
+                if "Transfer-Encoding: chunked" in parts[0].decode('utf-8', errors='ignore'):
+                    lines = body.split("\r\n")
+                    json_str = "".join([lines[i] for i in range(1, len(lines), 2) if i < len(lines)])
+                    data = json.loads(json_str)
+                else:
+                    data = json.loads(body)
+                
+                for c in data:
+                    names = [n.lstrip("/") for n in c.get("Names", [""])]
+                    containers.append({
+                        "name": names[0] if names else c.get("Id", "")[:12],
+                        "status": c.get("Status", "Running"),
+                        "image": c.get("Image", "")
+                    })
+                return {"containers": containers}
+        except Exception as e:
+            logger.error(f"Error socket Docker: {e}")
+
     try:
         cmd = ["docker", "ps", "--format", "{{.Names}}|{{.Status}}|{{.Image}}"]
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-        containers = []
         if res.returncode == 0 and res.stdout.strip():
             for line in res.stdout.strip().split("\n"):
                 parts = line.split("|")
                 if len(parts) == 3:
-                    containers.append({
-                        "name": parts[0],
-                        "status": parts[1],
-                        "image": parts[2]
-                    })
-        return {"containers": containers}
-    except Exception as e:
-        return {"containers": [], "error": str(e)}
+                    containers.append({"name": parts[0], "status": parts[1], "image": parts[2]})
+    except Exception:
+        pass
 
-# 3. Estado de Discos
+    return {"containers": containers}
+
+# Obtener puntos de montaje
+def get_all_mounts():
+    mounts = set()
+    search_dirs = ["/media", "/mnt"]
+    
+    if os.path.exists("/proc/mounts"):
+        with open("/proc/mounts", "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 3:
+                    mnt = parts[1]
+                    if mnt.startswith(("/media", "/mnt", "/DATA")) and not mnt.startswith(("/proc", "/sys", "/dev", "/run")):
+                        mounts.add(mnt)
+
+    for sd in search_dirs:
+        if os.path.exists(sd):
+            try:
+                for entry in os.scandir(sd):
+                    if entry.is_dir() and not entry.name.startswith("."):
+                        mounts.add(entry.path)
+            except Exception:
+                pass
+                
+    if os.path.exists("/DATA"):
+        mounts.add("/DATA")
+        
+    return sorted(list(mounts))
+
 @app.get("/api/v1/system/disks")
 def get_disks():
     disks = []
-    mounts = ["/DATA", "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa"]
-    for m in mounts:
+    for m in get_all_mounts():
         if os.path.exists(m):
-            usage = shutil.disk_usage(m)
-            total_gb = round(usage.total / (1024**3), 2)
-            used_gb = round(usage.used / (1024**3), 2)
-            free_gb = round(usage.free / (1024**3), 2)
-            percent = round((usage.used / usage.total) * 100, 1)
-            disks.append({
-                "mount": m,
-                "total_gb": total_gb,
-                "used_gb": used_gb,
-                "free_gb": free_gb,
-                "percent": percent
-            })
+            try:
+                usage = shutil.disk_usage(m)
+                if usage.total > 0:
+                    disks.append({
+                        "mount": m,
+                        "name": os.path.basename(m) or m,
+                        "total_gb": round(usage.total / (1024**3), 2),
+                        "used_gb": round(usage.used / (1024**3), 2),
+                        "free_gb": round(usage.free / (1024**3), 2),
+                        "percent": round((usage.used / usage.total) * 100, 1)
+                    })
+            except Exception:
+                pass
     return {"disks": disks}
 
-# 4. Compresión Real en Segundo Plano con Estado
-def perform_real_backup(app_name: str, job_id: str):
+def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
     active_jobs[job_id] = {"status": "running", "progress": 10, "message": "Preparando archivos...", "cancelled": False}
     
-    dest_dir = Path(f"/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa/Backups/Apps/{app_name}")
+    # Destino flexible: Si el disco seleccionado no existe, usa /DATA/Backups por defecto
+    if target_disk and os.path.exists(target_disk):
+        base_dest = Path(target_disk)
+    else:
+        base_dest = Path("/DATA/Backups")
+        
+    dest_dir = base_dest / "Backups" / "Apps" / app_name
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{app_name.lower()}_backup_{timestamp}.tar.gz"
     dest_file = dest_dir / filename
 
-    if app_name == "Sistema_Completo":
-        src_dir = Path("/DATA/AppData")
-    else:
-        src_dir = Path(f"/DATA/AppData/{app_name}")
+    src_dir = Path("/DATA/AppData") if app_name == "Sistema_Completo" else Path(f"/DATA/AppData/{app_name}")
 
     try:
         if not src_dir.exists():
             active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Origen {src_dir} no existe"}
             return
 
-        active_jobs[job_id]["progress"] = 30
+        active_jobs[job_id]["progress"] = 35
         active_jobs[job_id]["message"] = f"Comprimiendo {src_dir.name}..."
 
         with tarfile.open(dest_file, "w:gz") as tar:
@@ -172,9 +234,9 @@ def perform_real_backup(app_name: str, job_id: str):
             conn.commit()
 
 @app.post("/api/v1/backups/run-app/{app_name}")
-def run_backup(app_name: str, background_tasks: BackgroundTasks):
+def run_backup(app_name: str, background_tasks: BackgroundTasks, target_disk: str = Query(None)):
     job_id = f"job_{app_name}_{int(time.time())}"
-    background_tasks.add_task(perform_real_backup, app_name, job_id)
+    background_tasks.add_task(perform_real_backup, app_name, target_disk, job_id)
     return {"status": "started", "job_id": job_id}
 
 @app.get("/api/v1/backups/job-status/{job_id}")
@@ -188,40 +250,41 @@ def cancel_job(job_id: str):
         return {"status": "cancelled"}
     return {"status": "not_found"}
 
-# 5. Listado de Copias Restaurables
 @app.get("/api/v1/backups/list")
 @app.get("/api/v1/backups")
 def list_backups():
-    target_disk = "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa"
     backups = []
+    seen_files = set()
+    mounts = get_all_mounts()
 
-    if os.path.exists(target_disk):
-        for root, _, files in os.walk(target_disk):
-            for file in files:
-                fn_lower = file.lower()
-                if fn_lower.startswith("duplicati-") or "dblock" in fn_lower or "dindex" in fn_lower or "dlist" in fn_lower:
-                    continue
-                
-                if fn_lower.endswith((".tar.gz", ".tgz", ".zip", ".tar")):
-                    fp = os.path.join(root, file)
-                    stats = os.stat(fp)
-                    dt = datetime.fromtimestamp(stats.st_mtime)
-                    size_mb = round(stats.st_size / (1024 * 1024), 2)
-                    size_str = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(stats.st_size/1024, 1)} KB"
+    for m in mounts:
+        if os.path.exists(m):
+            for root, _, files in os.walk(m):
+                for file in files:
+                    fn_lower = file.lower()
+                    if fn_lower.startswith("duplicati-") or "dblock" in fn_lower or "dindex" in fn_lower or "dlist" in fn_lower:
+                        continue
                     
-                    app_name = "Sistema"
-                    if "_" in file:
-                        raw_app = file.split("_")[0]
-                        if raw_app.lower() not in ["backup", "casaos", "system"]:
-                            app_name = raw_app.capitalize()
+                    if fn_lower.endswith((".tar.gz", ".tgz", ".zip")) and fn_lower not in seen_files:
+                        fp = os.path.join(root, file)
+                        try:
+                            stats = os.stat(fp)
+                            dt = datetime.fromtimestamp(stats.st_mtime)
+                            size_mb = round(stats.st_size / (1024 * 1024), 2)
+                            size_str = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(stats.st_size/1024, 1)} KB"
+                            
+                            app_name = file.split("_")[0].capitalize() if "_" in file else "Sistema"
+                            seen_files.add(fn_lower)
 
-                    backups.append({
-                        "filename": file,
-                        "app_name": app_name,
-                        "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
-                        "size_str": size_str,
-                        "timestamp": stats.st_mtime
-                    })
+                            backups.append({
+                                "filename": file,
+                                "app_name": app_name,
+                                "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
+                                "size_str": size_str,
+                                "timestamp": stats.st_mtime
+                            })
+                        except Exception:
+                            pass
 
     backups.sort(key=lambda x: x["timestamp"], reverse=True)
     return {"backups": backups}
@@ -237,7 +300,7 @@ def get_logs(limit: int = 50):
             ts = r["timestamp"] or int(time.time() * 1000)
             dt = datetime.fromtimestamp(ts / 1000.0)
             st = "success" if str(r["status"]).lower() in ["success", "ok"] else "failed"
-            dur_val = round(r["duration_seconds"] or 0.3, 1)
+            dur_val = round(r["duration_seconds"] or 0.1, 1)
             result.append({
                 "id": r["id"],
                 "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
