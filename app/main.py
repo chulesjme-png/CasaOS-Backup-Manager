@@ -1,22 +1,19 @@
 import os
 import sqlite3
 import time
-import tarfile
 import logging
-import asyncio
-from datetime import datetime, timezone
-from typing import List, Dict, Optional
+from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
 
-# Configuración de Logging y DB
 logger = logging.getLogger("casaos-backup")
 logging.basicConfig(level=logging.INFO)
 
 DB_PATH = Path("/DATA/AppData/casaos-backup-manager/history.db")
+BASE_DIR = Path(__file__).resolve().parent
 
 def get_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -36,6 +33,26 @@ def init_db():
 init_db()
 
 app = FastAPI(title="CasaOS Backup Manager")
+
+# Servir archivos estáticos si existen
+static_dir = BASE_DIR / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# Ruta principal (Servir la interfaz Web)
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    possible_paths = [
+        BASE_DIR / "index.html",
+        BASE_DIR / "templates" / "index.html",
+        BASE_DIR.parent / "index.html",
+        BASE_DIR.parent / "templates" / "index.html",
+    ]
+    for path in possible_paths:
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    
+    return "<h1>Error: No se encontró el archivo index.html</h1>"
 
 # API Endpoints
 @app.get("/api/v1/executions")
