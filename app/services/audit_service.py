@@ -85,25 +85,28 @@ class AuditService:
                     dur_formatted = f"{round(dur_sec, 1)}s"
                     target = str(r.get("target_name") or "Sistema")
                     st = str(r.get("status") or "success").lower()
-                    status_display = "Éxito" if st in ["success", "ok", "completado"] else "Error"
+                    status_display = "success" if st in ["success", "ok", "completado"] else "failed"
 
                     formatted.append({
                         "id": r.get("id"),
                         "timestamp": int(ts_ms),
-                        "date": iso_str,
                         "created_at": iso_str,
+                        "date": iso_str,
                         "fecha": display_str,
+                        "time": iso_str,
                         "type": str(r.get("job_type") or "Backup"),
                         "tipo": str(r.get("job_type") or "Backup"),
                         "target": target,
                         "target_name": target,
                         "app_name": target,
                         "objetivo": target,
-                        "status": st,
+                        "status": status_display,
                         "estado": status_display,
                         "duration": dur_formatted,
                         "duration_seconds": dur_sec,
                         "duracion": dur_formatted,
+                        "elapsed": dur_formatted,
+                        "duration_str": dur_formatted,
                         "message": str(r.get("message") or "")
                     })
                 return formatted

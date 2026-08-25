@@ -135,16 +135,15 @@ def list_available_backups():
     seen = set()
     VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz")
 
-    target_disk = config_manager.config.selected_target_disk
-    possible_roots = []
+    target_disk = config_manager.config.selected_target_disk or "/media"
+    possible_roots = [
+        os.path.join(target_disk, "Backups"),
+        target_disk,
+        "/media",
+        "/mnt"
+    ]
 
-    if target_disk:
-        possible_roots.append(os.path.join(target_disk, "Backups"))
-
-    for base in ["/media", "/mnt", "/DATA"]:
-        possible_roots.append(os.path.join(base, "Backups"))
-
-    search_dirs = [d for d in set(possible_roots) if d and os.path.exists(d)]
+    search_dirs = [d for d in possible_roots if d and os.path.exists(d)]
 
     for s_dir in search_dirs:
         try:
@@ -162,8 +161,12 @@ def list_available_backups():
                             ts_ms = int(stats.st_mtime * 1000)
                             dt = datetime.fromtimestamp(stats.st_mtime, timezone.utc)
 
-                            path_parts = [p.capitalize() for p in file_path.split(os.sep)]
-                            app_hint = path_parts[-2] if len(path_parts) >= 2 else "Sistema"
+                            path_parts = file_path.split(os.sep)
+                            app_hint = "Sistema"
+                            for part in path_parts:
+                                if part.lower() in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy"]:
+                                    app_hint = part
+                                    break
 
                             size_display = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(stats.st_size / 1024, 1)} KB"
 
@@ -172,10 +175,15 @@ def list_available_backups():
                                 "name": file,
                                 "path": file_path,
                                 "file_path": file_path,
+                                "disk": target_disk,
+                                "disk_path": target_disk,
+                                "target_disk": target_disk,
+                                "mountpoint": target_disk,
                                 "size_mb": size_mb,
                                 "size_str": size_display,
                                 "size": size_display,
                                 "created_at": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                "date": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                 "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
                                 "timestamp": ts_ms,
                                 "app": app_hint,
