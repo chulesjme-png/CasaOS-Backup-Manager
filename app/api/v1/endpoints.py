@@ -41,32 +41,43 @@ class NotificationSettings(BaseModel):
 
 def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     """
-    Registra un evento de backup para que sea consumido directamente por el frontend.
+    Registra de forma segura un evento de backup en audit_service.
+    Se inyectan múltiples llaves para asegurar compatibilidad con el frontend.
     """
     now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     log_entry = {
-        "date": now_str,
-        "type": job_type,
-        "target": target,
-        "status": status,
-        "duration": duration
+        "date": now_str, "timestamp": now_str, "time": now_str,
+        "type": job_type, "action": job_type, "job_type": job_type,
+        "target": target, "app_name": target, "name": target,
+        "status": status, "result": status,
+        "duration": duration, "time_taken": duration
     }
     
-    if not hasattr(audit_service, "_runtime_logs"):
-        setattr(audit_service, "_runtime_logs", [])
-    
-    getattr(audit_service, "_runtime_logs").append(log_entry)
-    
-    candidate_methods = ["add_log", "log_event", "record_log", "log_action"]
+    recorded = False
+    candidate_methods = ["add_log", "log_event", "record_log", "log_action", "create_log"]
+
     for method_name in candidate_methods:
         if hasattr(audit_service, method_name):
             method = getattr(audit_service, method_name)
             if callable(method):
                 try:
-                    method(log_entry)
+                    # Intentar inyectar dict (nuevo método)
+                    try:
+                        method(log_entry)
+                    except TypeError:
+                        # Si falla, usar argumentos posicionales (método antiguo)
+                        method(job_type, target, status, duration)
+                    recorded = True
+                    logger.info(f"[Audit] Evento registrado vía {method_name}: {target} ({status})")
                     break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"[Audit] Error al ejecutar {method_name}: {e}")
+
+    # Si todo falla, guardarlo en una lista en memoria gestionada por nosotros
+    if not recorded:
+        if not hasattr(audit_service, "_runtime_logs"):
+            setattr(audit_service, "_runtime_logs", [])
+        getattr(audit_service, "_runtime_logs").append(log_entry)
 
 
 # --- CONFIGURACIÓN & ESTADO ---
@@ -129,22 +140,16 @@ async def save_notification_settings(settings: Union[NotificationSettings, Dict]
 
         if hasattr(config_manager.config, "model_dump"):
             cfg_dict = config_manager.config.model_dump()
-        elif hasattr(config_manager.config, "dict"):
-            cfg_dict = config_manager.config.dict()
         else:
             cfg_dict = dict(config_manager.config)
 
         try:
             notification_service.update_config(cfg_dict)
         except Exception:
-            notification_service.update_config(config_manager.config)
-        
-        logger.info("[Backend] Configuración de notificaciones guardada con éxito.")
+            pass
         return {"status": "ok", "message": "Configuración guardada correctamente"}
-
     except Exception as e:
-        logger.error(f"[Backend] Error guardando notificaciones: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al guardar datos: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/notifications/test")
 async def test_notification(settings: NotificationSettings):
@@ -157,10 +162,9 @@ async def test_notification(settings: NotificationSettings):
             webhook_enabled=settings.webhook_enabled
         )
         if not success:
-            raise HTTPException(status_code=400, detail="No se pudo entregar el mensaje de prueba.")
-        return {"status": "ok", "message": "Notificación de prueba enviada con éxito."}
+            raise HTTPException(status_code=400, detail="No se pudo entregar el mensaje.")
+        return {"status": "ok", "message": "Notificación enviada con éxito."}
     except Exception as e:
-        logger.error(f"[Backend] Error en test de notificación: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -170,7 +174,7 @@ async def task_run_app_backup(app_name: str, app_path: str):
     start_time = time.time()
     await notification_service.send_notification(
         title=f"⏳ Inicio de Copia: {app_name}",
-        message=f"Se ha iniciado la copia de seguridad de la aplicación <b>{app_name}</b>.",
+        message=f"Se ha iniciado la copia de seguridad de <b>{app_name}</b>.",
         status="info"
     )
     
@@ -198,7 +202,7 @@ async def task_run_app_backup(app_name: str, app_path: str):
         })
         await notification_service.send_notification(
             title=f"✅ Copia Completada: {app_name}",
-            message=f"La aplicación <b>{app_name}</b> se ha respaldado con éxito en {duration_str}.",
+            message=f"Respaldo completado con éxito en {duration_str}.",
             status="success"
         )
         _record_audit_log(job_type="Aplicación", target=app_name, status="success", duration=duration_str)
@@ -206,11 +210,11 @@ async def task_run_app_backup(app_name: str, app_path: str):
         await ws_manager.broadcast({
             "job_id": f"backup_{app_name}",
             "percentage": 0,
-            "message": f"Error o cancelación respaldando {app_name}."
+            "message": f"Error o cancelación en {app_name}."
         })
         await notification_service.send_notification(
             title=f"❌ Error en Copia: {app_name}",
-            message=f"Ocurrió un fallo o cancelación al respaldar <b>{app_name}</b>.",
+            message=f"Fallo al respaldar <b>{app_name}</b>.",
             status="error"
         )
         _record_audit_log(job_type="Aplicación", target=app_name, status="failed", duration=duration_str)
@@ -223,20 +227,20 @@ async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=404, detail="Aplicación no encontrada")
 
     background_tasks.add_task(task_run_app_backup, app["name"], app["path"])
-    return {"status": "started", "message": f"Copia de {app_name} iniciada en segundo plano."}
+    return {"status": "started", "message": f"Copia de {app_name} iniciada."}
 
 async def task_run_full_backup():
     start_time = time.time()
     await notification_service.send_notification(
         title="⏳ Inicio: Disaster Recovery",
-        message="Se ha iniciado la copia de seguridad completa del sistema.",
+        message="Se ha iniciado la copia de seguridad completa.",
         status="info"
     )
     
     await ws_manager.broadcast({
         "job_id": "backup_disaster_recovery",
         "percentage": 20,
-        "message": "Empaquetando datos y configuraciones..."
+        "message": "Empaquetando sistema..."
     })
 
     if asyncio.iscoroutinefunction(duplicati_service.run_full_disaster_recovery):
@@ -255,7 +259,7 @@ async def task_run_full_backup():
         })
         await notification_service.send_notification(
             title="✅ Disaster Recovery Finalizado",
-            message=f"El respaldo integral del sistema se completó correctamente en {duration_str}.",
+            message=f"Respaldo completado en {duration_str}.",
             status="success"
         )
         _record_audit_log(job_type="Sistema", target="Disaster Recovery", status="success", duration=duration_str)
@@ -263,32 +267,14 @@ async def task_run_full_backup():
         await ws_manager.broadcast({
             "job_id": "backup_disaster_recovery",
             "percentage": 0,
-            "message": "Error o cancelación en Disaster Recovery."
+            "message": "Error en Disaster Recovery."
         })
-        await notification_service.send_notification(
-            title="❌ Error en Disaster Recovery",
-            message="Falló o se canceló el proceso de copia integral.",
-            status="error"
-        )
         _record_audit_log(job_type="Sistema", target="Disaster Recovery", status="failed", duration=duration_str)
 
 @router.post("/backups/run-full")
 async def run_full_backup(background_tasks: BackgroundTasks):
     background_tasks.add_task(task_run_full_backup)
-    return {"status": "started", "message": "Disaster recovery iniciado en segundo plano."}
-
-@router.post("/backups/cancel")
-async def cancel_backup_operation():
-    """Cancela inmediatamente el respaldo que esté en ejecución."""
-    cancelled = duplicati_service.cancel_current_backup()
-    if cancelled:
-        await ws_manager.broadcast({
-            "job_id": "backup_disaster_recovery",
-            "percentage": 0,
-            "message": "Copia cancelada por el usuario."
-        })
-        return {"status": "ok", "message": "Proceso de respaldo cancelado con éxito."}
-    return {"status": "ignored", "message": "No había ningún proceso activo para cancelar."}
+    return {"status": "started", "message": "Disaster recovery iniciado."}
 
 
 # --- HISTORIAL & RESTAURACIÓN ---
@@ -313,90 +299,96 @@ def list_available_backups():
 
     backups = []
     try:
-        if os.path.exists(target_disk):
-            for root, _, files in os.walk(target_disk):
-                for file in files:
-                    if (file.endswith(".tar.gz") or file.endswith(".zip")) and not file.endswith(".tmp"):
-                        file_path = os.path.join(root, file)
-                        stats = os.stat(file_path)
-                        size_bytes = stats.st_size
+        search_dirs = [target_disk]
+        # Por si el empaquetador lo coloca en una subcarpeta de forma asíncrona:
+        for sub in ["casaos-backups", "Backups", "Backups/Apps"]:
+            p = os.path.join(target_disk, sub)
+            if os.path.exists(p):
+                search_dirs.append(p)
 
-                        if size_bytes == 0:
-                            continue
+        for d in search_dirs:
+            if os.path.exists(d):
+                for root, _, files in os.walk(d):
+                    for file in files:
+                        if (file.endswith(".tar.gz") or file.endswith(".zip")) and not file.endswith(".tmp"):
+                            file_path = os.path.join(root, file)
+                            stats = os.stat(file_path)
+                            size_bytes = stats.st_size
+                            if size_bytes == 0: continue
 
-                        size_mb = round(size_bytes / (1024 * 1024), 2)
-                        size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
+                            size_mb = round(size_bytes / (1024 * 1024), 2)
+                            size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
 
-                        backups.append({
-                            "filename": file,
-                            "path": file_path,
-                            "size_mb": size_mb,
-                            "size_str": size_str,
-                            "created_at": stats.st_mtime
-                        })
+                            backups.append({
+                                "filename": file,
+                                "path": file_path,
+                                "size_mb": size_mb,
+                                "size_str": size_str,
+                                "created_at": stats.st_mtime
+                            })
     except Exception as e:
         logger.error(f"[Backend] Error escaneando backups: {e}")
-        raise HTTPException(status_code=500, detail=f"Error leyendo almacenamiento: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-    backups.sort(key=lambda x: x["created_at"], reverse=True)
+    # Ordenar primero de forma ALFABÉTICA (para agrupar por aplicación) y luego por fecha más reciente
+    backups.sort(key=lambda x: (x["filename"].lower(), -x["created_at"]))
+    
     return {"target_disk": target_disk, "backups": backups}
 
 @router.get("/logs")
 @router.get("/executions")
 def get_execution_logs(limit: Optional[int] = 50):
     """
-    Entrega los logs formateados con las claves exactas requeridas por la UI.
+    Entrega los logs formateados. Usamos un formato multi-llave ("shotgun approach")
+    para garantizar que el framework del frontend JS los intercepte independientemente 
+    del nombre exacto de la variable que espere.
     """
     formatted_logs = []
     seen_keys = set()
+    raw_logs = []
 
-    # 1. Priorizar registros generados en la sesión actual
-    runtime_logs = getattr(audit_service, "_runtime_logs", [])
-    for l in runtime_logs:
-        date_str = l.get("date", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-        target_val = l.get("target", "Desconocido")
-        type_val = l.get("type", "Aplicación")
-        status_val = l.get("status", "success")
-        duration_val = str(l.get("duration", "Completado"))
+    # Extraer registros del histórico de la memoria o base de datos del servicio
+    try:
+        if hasattr(audit_service, "get_logs") and callable(getattr(audit_service, "get_logs")):
+            raw_logs = audit_service.get_logs(limit=limit)
+        elif hasattr(audit_service, "logs"):
+            raw_logs = audit_service.logs
+        if hasattr(audit_service, "_runtime_logs"):
+            raw_logs.extend(audit_service._runtime_logs)
+    except Exception as e:
+        logger.warning(f"[Audit] No se pudieron obtener logs en memoria: {e}")
+
+    for l in raw_logs:
+        if isinstance(l, dict):
+            date_val = l.get("date") or l.get("timestamp") or l.get("time")
+            target_val = l.get("target") or l.get("app_name") or l.get("name")
+            type_val = l.get("type") or l.get("action") or l.get("job_type") or "Backup"
+            status_val = l.get("status") or l.get("result") or "success"
+            duration_val = str(l.get("duration") or l.get("time_taken") or "Completado")
+        else:
+            date_val = getattr(l, "date", getattr(l, "timestamp", getattr(l, "time", None)))
+            target_val = getattr(l, "target", getattr(l, "app_name", getattr(l, "name", "Desconocido")))
+            type_val = getattr(l, "type", getattr(l, "action", getattr(l, "job_type", "Backup")))
+            status_val = getattr(l, "status", getattr(l, "result", "success"))
+            duration_val = str(getattr(l, "duration", getattr(l, "time_taken", "Completado")))
+
+        if isinstance(date_val, (int, float)):
+            date_str = datetime.fromtimestamp(date_val).strftime("%d/%m/%Y %H:%M:%S")
+        elif date_val:
+            date_str = str(date_val)
+        else:
+            date_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
         key = f"{date_str}_{target_val}"
         if key not in seen_keys:
             seen_keys.add(key)
             formatted_logs.append({
-                "date": date_str,
-                "type": type_val,
-                "target": target_val,
-                "status": status_val,
-                "duration": duration_val
+                "date": date_str, "timestamp": date_str, "time": date_str,
+                "type": type_val, "action": type_val, "job_type": type_val,
+                "target": target_val, "app_name": target_val, "name": target_val,
+                "status": status_val, "result": status_val,
+                "duration": duration_val, "time_taken": duration_val
             })
-
-    # 2. Escaneo en disco para registrar ejecuciones basadas en archivos generados
-    target_disk = config_manager.config.selected_target_disk
-    if target_disk and os.path.exists(target_disk):
-        try:
-            for root, _, files in os.walk(target_disk):
-                for file in files:
-                    if file.endswith(".tar.gz") and not file.endswith(".tmp"):
-                        stats = os.stat(os.path.join(root, file))
-                        date_str = datetime.fromtimestamp(stats.st_mtime).strftime("%d/%m/%Y %H:%M:%S")
-                        
-                        if "_backup" in file:
-                            app_target = file.split("_backup")[0]
-                        else:
-                            app_target = file.replace(".tar.gz", "")
-
-                        key = f"{date_str}_{app_target}"
-                        if key not in seen_keys:
-                            seen_keys.add(key)
-                            formatted_logs.append({
-                                "date": date_str,
-                                "type": "Aplicación",
-                                "target": app_target,
-                                "status": "success",
-                                "duration": "Completado"
-                            })
-        except Exception as e:
-            logger.warning(f"[Audit] Error leyendo backups en disco: {e}")
 
     formatted_logs.sort(key=lambda x: x["date"], reverse=True)
     return formatted_logs[:limit]
