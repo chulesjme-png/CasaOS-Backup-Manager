@@ -41,7 +41,7 @@ class NotificationSettings(BaseModel):
 
 def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     now_dt = datetime.now()
-    iso_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    iso_str = now_dt.strftime("%Y-%m-%dT%H:%M:%S")
     es_str = now_dt.strftime("%d/%m/%Y %H:%M:%S")
     ts_ms = int(now_dt.timestamp() * 1000)
     
@@ -312,18 +312,18 @@ def list_available_backups():
     backups = []
     seen_paths = set()
     
-    # Excluir carpetas de datos masivos para permitir escaneo rápido y profundo
+    # Excluir carpetas pesadas para evitar retrasos al escanear los 1.6 TB
     SKIP_DIRS = {
-        'media', 'movies', 'tv', 'downloads', 'music', 'photos', 'immich', 
-        'plex', 'jellyfin', 'nextcloud', 'ncdata', 'torrents', '.git', 'node_modules', 
-        'cache', 'lost+found', '$recycle.bin', 'system volume information'
+        'media', 'movies', 'pelis', 'peliculas', 'series', 'tv', 'downloads', 
+        'descargas', 'music', 'photos', 'fotos', 'immich', 'plex', 'jellyfin', 
+        'nextcloud', 'ncdata', 'torrents', '.git', 'node_modules', 'cache', 
+        'lost+found', '$recycle.bin', 'system volume information'
     }
 
-    valid_exts = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz")
+    valid_exts = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz", ".duplicati")
 
     try:
         for root, dirs, files in os.walk(target_disk, topdown=True):
-            # Filtrado inteligente de subdirectorios pesados
             dirs[:] = [d for d in dirs if d.lower() not in SKIP_DIRS and not d.startswith(".")]
 
             for file in files:
@@ -331,8 +331,8 @@ def list_available_backups():
                 if fname_lower.endswith(".tmp") or fname_lower.endswith(".partial") or fname_lower.endswith(".lock"):
                     continue
 
-                if fname_lower.endswith(valid_exts) or "duplicati" in fname_lower or "backup" in fname_lower:
-                    file_path = os.realpath(os.path.join(root, file))
+                if fname_lower.endswith(valid_exts) or "duplicati" in fname_lower or "backup" in fname_lower or "casaos" in fname_lower:
+                    file_path = os.path.realpath(os.path.join(root, file))
                     if file_path in seen_paths:
                         continue
                     seen_paths.add(file_path)
@@ -347,7 +347,7 @@ def list_available_backups():
                         size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
                         
                         dt = datetime.fromtimestamp(stats.st_mtime)
-                        iso_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+                        iso_date = dt.strftime("%Y-%m-%dT%H:%M:%S")
                         es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
 
                         app_hint = "Sistema"
@@ -365,7 +365,8 @@ def list_available_backups():
                             "size_str": size_str,
                             "size": size_str,
                             "created_at": iso_date,
-                            "date": es_date,
+                            "date": iso_date,
+                            "fecha": es_date,
                             "timestamp": int(stats.st_mtime * 1000),
                             "app": app_hint,
                             "app_name": app_hint,
@@ -407,7 +408,7 @@ def get_execution_logs(limit: Optional[int] = 50):
         
         if isinstance(date_val, (int, float)):
             dt = datetime.fromtimestamp(date_val if date_val < 1e11 else date_val / 1000)
-            iso_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+            iso_date = dt.strftime("%Y-%m-%dT%H:%M:%S")
             es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
             ts_ms = int(dt.timestamp() * 1000)
         elif date_val and str(date_val).strip() != "" and "desconocida" not in str(date_val).lower():
@@ -417,7 +418,7 @@ def get_execution_logs(limit: Optional[int] = 50):
             ts_ms = int(datetime.now().timestamp() * 1000)
         else:
             dt = datetime.now()
-            iso_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+            iso_date = dt.strftime("%Y-%m-%dT%H:%M:%S")
             es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
             ts_ms = int(dt.timestamp() * 1000)
 
@@ -464,6 +465,7 @@ def get_execution_logs(limit: Optional[int] = 50):
 @router.delete("/logs")
 def clear_execution_logs():
     if hasattr(audit_service, "_runtime_logs"):
+        setattr(audit_service, "_runtime_logs")
         setattr(audit_service, "_runtime_logs", [])
     if hasattr(audit_service, "clear_logs") and callable(getattr(audit_service, "clear_logs")):
         audit_service.clear_logs()
