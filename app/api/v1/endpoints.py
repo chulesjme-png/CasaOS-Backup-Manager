@@ -41,43 +41,37 @@ class NotificationSettings(BaseModel):
 
 def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     """
-    Registra de forma segura un evento de backup en audit_service.
-    Se inyectan múltiples llaves para asegurar compatibilidad con el frontend.
+    Registra eventos garantizando la presencia de todas las claves requeridas por el frontend.
     """
     now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     log_entry = {
-        "date": now_str, "timestamp": now_str, "time": now_str,
-        "type": job_type, "action": job_type, "job_type": job_type,
-        "target": target, "app_name": target, "name": target,
-        "status": status, "result": status,
-        "duration": duration, "time_taken": duration
+        "date": now_str, "timestamp": now_str, "time": now_str, "created_at": now_str, "fecha": now_str,
+        "type": job_type, "action": job_type, "job_type": job_type, "tipo": job_type,
+        "target": target, "app_name": target, "name": target, "objetivo": target,
+        "status": status, "result": status, "estado": status,
+        "duration": duration, "time_taken": duration, "duracion": duration
     }
-    
-    recorded = False
-    candidate_methods = ["add_log", "log_event", "record_log", "log_action", "create_log"]
 
+    # Guardar siempre copia directa en buffer en memoria local
+    if not hasattr(audit_service, "_runtime_logs"):
+        setattr(audit_service, "_runtime_logs", [])
+    getattr(audit_service, "_runtime_logs").append(log_entry)
+
+    # Intentar persistir en el servicio audit_service si dispone de métodos
+    candidate_methods = ["add_log", "log_event", "record_log", "log_action", "create_log"]
     for method_name in candidate_methods:
         if hasattr(audit_service, method_name):
             method = getattr(audit_service, method_name)
             if callable(method):
                 try:
-                    # Intentar inyectar dict (nuevo método)
                     try:
                         method(log_entry)
                     except TypeError:
-                        # Si falla, usar argumentos posicionales (método antiguo)
                         method(job_type, target, status, duration)
-                    recorded = True
                     logger.info(f"[Audit] Evento registrado vía {method_name}: {target} ({status})")
                     break
                 except Exception as e:
                     logger.warning(f"[Audit] Error al ejecutar {method_name}: {e}")
-
-    # Si todo falla, guardarlo en una lista en memoria gestionada por nosotros
-    if not recorded:
-        if not hasattr(audit_service, "_runtime_logs"):
-            setattr(audit_service, "_runtime_logs", [])
-        getattr(audit_service, "_runtime_logs").append(log_entry)
 
 
 # --- CONFIGURACIÓN & ESTADO ---
@@ -301,87 +295,81 @@ def list_available_backups():
     seen_paths = set()
 
     try:
-        search_dirs = [target_disk]
-        # Por si el empaquetador lo coloca en una subcarpeta de forma asíncrona:
-        for sub in ["casaos-backups", "Backups", "Backups/Apps"]:
-            p = os.path.join(target_disk, sub)
-            if os.path.exists(p):
-                search_dirs.append(p)
+        # Se escanea directamente el punto de montaje. os.walk recorre recursivamente subcarpetas sin repetir búsquedas.
+        if os.path.exists(target_disk):
+            for root, _, files in os.walk(target_disk):
+                for file in files:
+                    fname_lower = file.lower()
+                    
+                    # Ignorar únicamente archivos temporales o incompletos
+                    if fname_lower.endswith(".tmp") or fname_lower.endswith(".partial") or fname_lower.endswith(".lock"):
+                        continue
 
-        for d in search_dirs:
-            if os.path.exists(d):
-                for root, _, files in os.walk(d):
-                    for file in files:
-                        fname_lower = file.lower()
-                        
-                        # Excluir temporales y bloques cifrados/propios del servicio de Duplicati (.zip.aes, duplicati-*)
-                        if fname_lower.endswith(".tmp") or fname_lower.endswith(".aes") or fname_lower.startswith("duplicati-"):
+                    # Incluir empaquetados .tar.gz, .zip y .aes generados por el sistema o por Duplicati
+                    if (fname_lower.endswith(".tar.gz") or fname_lower.endswith(".zip") or 
+                        fname_lower.endswith(".aes") or fname_lower.endswith(".tgz")):
+
+                        file_path = os.path.realpath(os.path.join(root, file))
+
+                        if file_path in seen_paths:
+                            continue
+                        seen_paths.add(file_path)
+
+                        stats = os.stat(file_path)
+                        size_bytes = stats.st_size
+                        if size_bytes == 0: 
                             continue
 
-                        if fname_lower.endswith(".tar.gz") or fname_lower.endswith(".zip"):
-                            file_path = os.path.realpath(os.path.join(root, file))
+                        size_mb = round(size_bytes / (1024 * 1024), 2)
+                        size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
 
-                            # Evitar triplicados registrando solo rutas físicas únicas
-                            if file_path in seen_paths:
-                                continue
-                            seen_paths.add(file_path)
-
-                            stats = os.stat(file_path)
-                            size_bytes = stats.st_size
-                            if size_bytes == 0: 
-                                continue
-
-                            size_mb = round(size_bytes / (1024 * 1024), 2)
-                            size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
-
-                            backups.append({
-                                "filename": file,
-                                "path": file_path,
-                                "size_mb": size_mb,
-                                "size_str": size_str,
-                                "created_at": stats.st_mtime
-                            })
+                        backups.append({
+                            "filename": file,
+                            "path": file_path,
+                            "size_mb": size_mb,
+                            "size_str": size_str,
+                            "created_at": stats.st_mtime
+                        })
     except Exception as e:
         logger.error(f"[Backend] Error escaneando backups: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Ordenar primero de forma ALFABÉTICA (para agrupar por aplicación) y luego por fecha más reciente
-    backups.sort(key=lambda x: (x["filename"].lower(), -x["created_at"]))
+    # Ordenar copias por fecha de modificación (las más recientes primero)
+    backups.sort(key=lambda x: x["created_at"], reverse=True)
     
     return {"target_disk": target_disk, "backups": backups}
 
 @router.get("/logs")
 @router.get("/executions")
 def get_execution_logs(limit: Optional[int] = 50):
-    """
-    Entrega los logs formateados. Usamos un formato multi-llave ("shotgun approach")
-    para garantizar que el framework del frontend JS los intercepte independientemente 
-    del nombre exacto de la variable que espere.
-    """
     formatted_logs = []
     seen_keys = set()
     raw_logs = []
 
-    # Extraer registros del histórico de la memoria o base de datos del servicio
+    # 1. Recuperar logs almacenados en memoria de la sesión
+    if hasattr(audit_service, "_runtime_logs"):
+        raw_logs.extend(getattr(audit_service, "_runtime_logs"))
+
+    # 2. Recuperar logs de la instancia audit_service si existen
     try:
         if hasattr(audit_service, "get_logs") and callable(getattr(audit_service, "get_logs")):
-            raw_logs = audit_service.get_logs(limit=limit)
-        elif hasattr(audit_service, "logs"):
-            raw_logs = audit_service.logs
-        if hasattr(audit_service, "_runtime_logs"):
-            raw_logs.extend(audit_service._runtime_logs)
+            logs_from_service = audit_service.get_logs(limit=limit)
+            if logs_from_service:
+                raw_logs.extend(logs_from_service)
+        elif hasattr(audit_service, "logs") and getattr(audit_service, "logs"):
+            raw_logs.extend(getattr(audit_service, "logs"))
     except Exception as e:
-        logger.warning(f"[Audit] No se pudieron obtener logs en memoria: {e}")
+        logger.warning(f"[Audit] No se pudieron obtener logs de audit_service: {e}")
 
     for l in raw_logs:
         if isinstance(l, dict):
-            date_val = l.get("date") or l.get("timestamp") or l.get("time")
-            target_val = l.get("target") or l.get("app_name") or l.get("name")
-            type_val = l.get("type") or l.get("action") or l.get("job_type") or "Backup"
-            status_val = l.get("status") or l.get("result") or "success"
-            duration_val = str(l.get("duration") or l.get("time_taken") or "Completado")
+            date_val = l.get("date") or l.get("timestamp") or l.get("time") or l.get("created_at") or l.get("fecha")
+            target_val = l.get("target") or l.get("app_name") or l.get("name") or l.get("objetivo")
+            type_val = l.get("type") or l.get("action") or l.get("job_type") or l.get("tipo") or "Backup"
+            status_val = l.get("status") or l.get("result") or l.get("estado") or "success"
+            duration_val = str(l.get("duration") or l.get("time_taken") or l.get("duracion") or "Completado")
         else:
-            date_val = getattr(l, "date", getattr(l, "timestamp", getattr(l, "time", None)))
+            date_val = getattr(l, "date", getattr(l, "timestamp", getattr(l, "time", getattr(l, "created_at", None))))
             target_val = getattr(l, "target", getattr(l, "app_name", getattr(l, "name", "Desconocido")))
             type_val = getattr(l, "type", getattr(l, "action", getattr(l, "job_type", "Backup")))
             status_val = getattr(l, "status", getattr(l, "result", "success"))
@@ -394,18 +382,17 @@ def get_execution_logs(limit: Optional[int] = 50):
         else:
             date_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-        key = f"{date_str}_{target_val}"
+        key = f"{date_str}_{target_val}_{duration_val}"
         if key not in seen_keys:
             seen_keys.add(key)
             formatted_logs.append({
-                "date": date_str, "timestamp": date_str, "time": date_str,
-                "type": type_val, "action": type_val, "job_type": type_val,
-                "target": target_val, "app_name": target_val, "name": target_val,
-                "status": status_val, "result": status_val,
-                "duration": duration_val, "time_taken": duration_val
+                "date": date_str, "timestamp": date_str, "time": date_str, "created_at": date_str, "fecha": date_str,
+                "type": type_val, "action": type_val, "job_type": type_val, "tipo": type_val,
+                "target": target_val, "app_name": target_val, "name": target_val, "objetivo": target_val,
+                "status": status_val, "result": status_val, "estado": status_val,
+                "duration": duration_val, "time_taken": duration_val, "duracion": duration_val
             })
 
-    formatted_logs.sort(key=lambda x: x["date"], reverse=True)
     return formatted_logs[:limit]
 
 @router.delete("/logs")
