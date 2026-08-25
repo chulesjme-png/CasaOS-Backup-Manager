@@ -1,4 +1,4 @@
-// Renderizado del Historial de Ejecuciones
+// 1. Cargar Historial de Ejecuciones
 async function loadHistory() {
     try {
         const res = await fetch('/api/v1/executions?limit=50');
@@ -14,7 +14,8 @@ async function loadHistory() {
 
         tbody.innerHTML = logs.map(log => {
             const fecha = log.fecha || log.date || log.created_at || 'Reciente';
-            const duracion = log.duracion || log.duration || (log.duration_seconds ? `${log.duration_seconds}s` : '1s');
+            const duracion = log.duracion || log.duration || log.elapsed || '0.3s';
+            const objetivo = log.objetivo || log.target || log.app_name || 'Sistema';
             const estado = (log.estado === 'success' || log.status === 'success') 
                 ? '<span class="badge bg-success">Éxito</span>' 
                 : '<span class="badge bg-danger">Error</span>';
@@ -23,7 +24,7 @@ async function loadHistory() {
                 <tr>
                     <td>${fecha}</td>
                     <td>${log.tipo || log.type || 'Backup'}</td>
-                    <td><code class="text-pink">${log.objetivo || log.target || 'Sistema'}</code></td>
+                    <td><code class="text-pink">${objetivo}</code></td>
                     <td>${estado}</td>
                     <td>${duracion}</td>
                 </tr>
@@ -34,7 +35,7 @@ async function loadHistory() {
     }
 }
 
-// Carga directa de Copias Disponibles para Restauración (sin filtro JS bloqueante)
+// 2. Cargar Copias para Restaurar
 async function loadRestoreBackups() {
     const container = document.getElementById('restoreListContainer') || document.querySelector('#restoreModal .modal-body');
     if (!container) return;
@@ -44,7 +45,7 @@ async function loadRestoreBackups() {
         const backups = await response.json();
 
         if (!backups || backups.length === 0) {
-            container.innerHTML = '<div class="alert alert-info text-center m-3">No se han encontrado copias de seguridad en el disco seleccionado.</div>';
+            container.innerHTML = '<div class="alert alert-info text-center m-3">No se han encontrado copias de seguridad.</div>';
             return;
         }
 
@@ -52,16 +53,16 @@ async function loadRestoreBackups() {
             <div class="list-group">
                 ${backups.map(b => `
                     <div class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-1 fw-bold">${b.filename || b.name}</h6>
-                            <small class="text-muted">Aplicación: <b>${b.app_name || b.target}</b> | Fecha: ${b.fecha || b.date} | Tamaño: ${b.size || b.size_str}</small>
+                        <div class="text-start">
+                            <h6 class="mb-1 fw-bold text-dark">${b.filename || b.name}</h6>
+                            <small class="text-muted">App: <b class="text-primary">${b.app_name || b.target || 'App'}</b> | Fecha: ${b.fecha || b.date} | Tamaño: ${b.size_str || b.size}</small>
                         </div>
-                        <button class="btn btn-sm btn-outline-primary" onclick="restoreBackup('${b.file_path || b.path}')">Restaurar</button>
+                        <button class="btn btn-sm btn-outline-primary ms-2" onclick="restoreBackup('${b.file_path || b.path}')">Restaurar</button>
                     </div>
                 `).join('')}
             </div>
         `;
     } catch (e) {
-        console.error("Error al cargar copias de restauración:", e);
+        console.error("Error cargando copias de restauración:", e);
     }
 }
