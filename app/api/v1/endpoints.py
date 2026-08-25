@@ -41,7 +41,7 @@ class NotificationSettings(BaseModel):
 
 def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     now_dt = datetime.now()
-    iso_str = now_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    iso_str = now_dt.isoformat()
     es_str = now_dt.strftime("%d/%m/%Y %H:%M:%S")
     ts_ms = int(now_dt.timestamp() * 1000)
     
@@ -312,7 +312,7 @@ def list_available_backups():
     backups = []
     seen_paths = set()
     
-    # Excluir carpetas pesadas para evitar retrasos al escanear los 1.6 TB
+    # Directorios excluidos explicitamente del escaneo
     SKIP_DIRS = {
         'media', 'movies', 'pelis', 'peliculas', 'series', 'tv', 'downloads', 
         'descargas', 'music', 'photos', 'fotos', 'immich', 'plex', 'jellyfin', 
@@ -320,10 +320,11 @@ def list_available_backups():
         'lost+found', '$recycle.bin', 'system volume information'
     }
 
-    valid_exts = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz", ".duplicati")
+    valid_exts = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz", ".duplicati", ".dblock", ".dindex")
 
     try:
-        for root, dirs, files in os.walk(target_disk, topdown=True):
+        # Desactivamos followlinks para evitar bucles infinitos en symlinks de Linux
+        for root, dirs, files in os.walk(target_disk, topdown=True, followlinks=False):
             dirs[:] = [d for d in dirs if d.lower() not in SKIP_DIRS and not d.startswith(".")]
 
             for file in files:
@@ -347,7 +348,7 @@ def list_available_backups():
                         size_str = f"{size_mb} MB" if size_mb >= 0.1 else f"{round(size_bytes / 1024, 2)} KB"
                         
                         dt = datetime.fromtimestamp(stats.st_mtime)
-                        iso_date = dt.strftime("%Y-%m-%dT%H:%M:%S")
+                        iso_date = dt.isoformat()
                         es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
 
                         app_hint = "Sistema"
@@ -373,7 +374,7 @@ def list_available_backups():
                             "type": app_hint
                         })
                     except Exception as e:
-                        logger.warning(f"[Backups] Error en {file_path}: {e}")
+                        logger.warning(f"[Backups] Error al leer archivo {file_path}: {e}")
     except Exception as e:
         logger.error(f"[Backend] Error escaneando backups: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -404,23 +405,20 @@ def get_execution_logs(limit: Optional[int] = 50):
     for l in raw_logs:
         d = l if isinstance(l, dict) else getattr(l, "__dict__", {})
 
+        dt_now = datetime.now()
+        iso_date = dt_now.isoformat()
+        es_date = dt_now.strftime("%d/%m/%Y %H:%M:%S")
+        ts_ms = int(dt_now.timestamp() * 1000)
+
         date_val = d.get("date") or d.get("created_at") or d.get("timestamp") or d.get("time") or d.get("fecha")
-        
         if isinstance(date_val, (int, float)):
             dt = datetime.fromtimestamp(date_val if date_val < 1e11 else date_val / 1000)
-            iso_date = dt.strftime("%Y-%m-%dT%H:%M:%S")
+            iso_date = dt.isoformat()
             es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
             ts_ms = int(dt.timestamp() * 1000)
         elif date_val and str(date_val).strip() != "" and "desconocida" not in str(date_val).lower():
-            raw_str = str(date_val)
-            iso_date = raw_str
-            es_date = raw_str
-            ts_ms = int(datetime.now().timestamp() * 1000)
-        else:
-            dt = datetime.now()
-            iso_date = dt.strftime("%Y-%m-%dT%H:%M:%S")
-            es_date = dt.strftime("%d/%m/%Y %H:%M:%S")
-            ts_ms = int(dt.timestamp() * 1000)
+            iso_date = str(date_val)
+            es_date = str(date_val)
 
         target_val = d.get("target") or d.get("app_name") or d.get("name") or d.get("objetivo") or "Sistema"
         type_val = d.get("type") or d.get("action") or d.get("job_type") or d.get("tipo") or "Backup"
@@ -465,7 +463,6 @@ def get_execution_logs(limit: Optional[int] = 50):
 @router.delete("/logs")
 def clear_execution_logs():
     if hasattr(audit_service, "_runtime_logs"):
-        setattr(audit_service, "_runtime_logs")
         setattr(audit_service, "_runtime_logs", [])
     if hasattr(audit_service, "clear_logs") and callable(getattr(audit_service, "clear_logs")):
         audit_service.clear_logs()
