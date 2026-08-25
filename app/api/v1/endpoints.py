@@ -37,7 +37,35 @@ class NotificationSettings(BaseModel):
     webhook_url: Optional[str] = ""
 
 
-# --- HELPER DE AUDITORÍA ---
+# --- HELPER DE FECHAS & AUDITORÍA ---
+
+def _parse_to_iso(date_val):
+    if not date_val or "desconocida" in str(date_val).lower():
+        dt = datetime.now(timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), dt.strftime("%Y-%m-%d %H:%M:%S"), int(dt.timestamp() * 1000)
+    
+    if isinstance(date_val, (int, float)):
+        ts = date_val / 1000.0 if date_val > 1e11 else float(date_val)
+        dt = datetime.fromtimestamp(ts, timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), dt.strftime("%Y-%m-%d %H:%M:%S"), int(dt.timestamp() * 1000)
+    
+    s = str(date_val).strip()
+    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
+        try:
+            dt = datetime.strptime(s.replace("Z", ""), fmt).replace(tzinfo=timezone.utc)
+            return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), dt.strftime("%Y-%m-%d %H:%M:%S"), int(dt.timestamp() * 1000)
+        except ValueError:
+            pass
+    
+    if " " in s:
+        s_iso = s.replace(" ", "T")
+        if not s_iso.endswith("Z"):
+            s_iso += "Z"
+        return s_iso, s, int(datetime.now(timezone.utc).timestamp() * 1000)
+    
+    dt = datetime.now(timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), dt.strftime("%Y-%m-%d %H:%M:%S"), int(dt.timestamp() * 1000)
+
 
 def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     now_dt = datetime.now(timezone.utc)
@@ -50,7 +78,7 @@ def _record_audit_log(job_type: str, target: str, status: str, duration: str):
     log_entry = {
         "date": iso_str,
         "created_at": iso_str,
-        "fecha": display_str,
+        "fecha": iso_str,
         "timestamp": ts_ms,
         "time": iso_str,
         "datetime": iso_str,
@@ -314,18 +342,16 @@ def list_available_backups():
     backups = []
     seen_paths = set()
     
-    MAX_DEPTH = 3
+    MAX_DEPTH = 5
     target_disk_abs = os.path.abspath(target_disk)
     base_depth = target_disk_abs.count(os.sep)
 
     SKIP_DIRS = {
-        'media', 'movies', 'pelis', 'peliculas', 'series', 'tv', 'downloads', 
-        'descargas', 'music', 'photos', 'fotos', 'immich', 'plex', 'jellyfin', 
-        'nextcloud', 'ncdata', 'torrents', '.git', 'node_modules', 'cache', 
+        'downloads', 'descargas', 'torrents', '.git', 'node_modules', 'cache', 
         'lost+found', '$recycle.bin', 'system volume information', 'docker', 'containerd'
     }
 
-    valid_exts = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz", ".duplicati", ".dblock", ".dindex")
+    valid_exts = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz", ".duplicati", ".dblock", ".dindex", ".sqlite")
 
     try:
         for root, dirs, files in os.walk(target_disk_abs, topdown=True, followlinks=False):
@@ -362,7 +388,8 @@ def list_available_backups():
 
                         app_hint = "Sistema"
                         for part in file_path.split(os.sep):
-                            if part.lower() in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy"]:
+                            p_lower = part.lower()
+                            if p_lower in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy", "jellyfin", "nextcloud", "immich"]:
                                 app_hint = part
                                 break
 
@@ -414,17 +441,8 @@ def get_execution_logs(limit: Optional[int] = 50):
     for l in raw_logs:
         d = l if isinstance(l, dict) else getattr(l, "__dict__", {})
 
-        dt_now = datetime.now(timezone.utc)
-        iso_date = dt_now.strftime("%Y-%m-%dT%H:%M:%SZ")
-        display_date = dt_now.strftime("%Y-%m-%d %H:%M:%S")
-        ts_ms = int(dt_now.timestamp() * 1000)
-
         date_val = d.get("date") or d.get("created_at") or d.get("timestamp") or d.get("time") or d.get("fecha")
-        if isinstance(date_val, (int, float)):
-            dt = datetime.fromtimestamp(date_val / 1000.0 if date_val > 1e11 else date_val, timezone.utc)
-            iso_date = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-            display_date = dt.strftime("%Y-%m-%d %H:%M:%S")
-            ts_ms = int(dt.timestamp() * 1000)
+        iso_date, display_date, ts_ms = _parse_to_iso(date_val)
 
         target_val = d.get("target") or d.get("app_name") or d.get("name") or d.get("objetivo") or "Sistema"
         type_val = d.get("type") or d.get("action") or d.get("job_type") or d.get("tipo") or "Backup"
@@ -442,7 +460,7 @@ def get_execution_logs(limit: Optional[int] = 50):
             formatted_logs.append({
                 "date": iso_date,
                 "created_at": iso_date,
-                "fecha": display_date,
+                "fecha": iso_date,
                 "timestamp": ts_ms,
                 "time": iso_date,
                 "datetime": iso_date,
