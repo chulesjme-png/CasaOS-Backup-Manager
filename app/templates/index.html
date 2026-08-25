@@ -8,25 +8,13 @@
     <style>
         body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .card { border-radius: 12px; }
-        .nav-tabs .nav-link { border: none; background: transparent; padding: 0.5rem 0.8rem; cursor: pointer; }
-        .nav-tabs .nav-link.active { border-bottom: 2px solid #0d6efd; background: transparent; }
-        .app-list-scroll { max-height: 520px; overflow-y: auto; padding-right: 6px; }
-        .toast-container { z-index: 1090; }
+        .nav-tabs .nav-link { border: none; background: transparent; padding: 0.5rem 0.8rem; cursor: pointer; color: #6c757d; }
+        .nav-tabs .nav-link.active { border-bottom: 2px solid #0d6efd; background: transparent; color: #0d6efd; font-weight: bold; }
+        /* Permite ver ~10 perfiles completos en pantalla antes de activar scroll */
+        .app-list-scroll { max-height: 720px; overflow-y: auto; padding-right: 6px; }
     </style>
 </head>
 <body>
-
-    <!-- Contenedor para Notificaciones Toast (Reemplazo de alert) -->
-    <div class="toast-container position-fixed bottom-0 end-0 p-3">
-        <div id="liveToast" class="toast align-items-center text-bg-success border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body fw-semibold" id="toastMessage">
-                    Copia completada con éxito.
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-        </div>
-    </div>
 
     <!-- Header Navigation -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm py-2">
@@ -117,7 +105,7 @@
                     </div>
                 </div>
 
-                <!-- Perfiles de Aplicación -->
+                <!-- Perfiles de Aplicación (Scroll para 10 de golpe) -->
                 <div class="card p-4 shadow-sm border-0 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN GENERADOS</h6>
@@ -126,38 +114,83 @@
 
                     <div class="app-list-scroll">
                         <div class="list-group list-group-flush" id="appsContainer">
-                            <div class="text-center py-4 text-muted">Buscando aplicaciones en /DATA/AppData...</div>
+                            <div class="text-center py-4 text-muted">Buscando aplicaciones...</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Columna derecha -->
+            <!-- Columna derecha con Pestañas: RPi 5 / Docker / Discos -->
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-white border-bottom-0 pt-3 px-3">
-                        <ul class="nav nav-tabs card-header-tabs">
+                        <ul class="nav nav-tabs card-header-tabs" id="sideTabs">
                             <li class="nav-item">
-                                <button class="nav-link active fw-semibold text-dark">🍓 Raspberry Pi 5</button>
+                                <button class="nav-link active" onclick="switchTab('rpi')">🍓 Raspberry Pi 5</button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" onclick="switchTab('docker')">🐳 Docker</button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" onclick="switchTab('disks')">💾 Discos</button>
                             </li>
                         </ul>
                     </div>
                     <div class="card-body">
-                        <div class="small">
-                            <div class="d-flex justify-content-between py-2 border-bottom">
-                                <span class="text-muted">💻 Sistema Host:</span>
-                                <span class="fw-bold text-dark">Debian GNU/Linux 12</span>
+                        <!-- Pestaña Raspberry Pi -->
+                        <div id="tabContentRpi" class="tab-pane-content">
+                            <div class="small">
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">💻 Sistema Host:</span>
+                                    <span class="fw-bold text-dark">Debian GNU/Linux 12</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">CPU:</span>
+                                    <span class="fw-semibold">ARMv8 (4 Cores @ RPi 5)</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2">
+                                    <span class="text-muted">RAM:</span>
+                                    <span class="fw-semibold">6.99 GB / 7.87 GB (88.8%)</span>
+                                </div>
                             </div>
-                            <div class="d-flex justify-content-between py-2 border-bottom">
-                                <span class="text-muted">CPU:</span>
-                                <span class="fw-semibold">ARMv8 (4 Cores @ RPi 5)</span>
+                        </div>
+
+                        <!-- Pestaña Docker -->
+                        <div id="tabContentDocker" class="tab-pane-content d-none">
+                            <div class="small" id="dockerList">
+                                <div class="text-muted py-2 text-center">Cargando contenedores...</div>
                             </div>
-                            <div class="d-flex justify-content-between py-2">
-                                <span class="text-muted">RAM:</span>
-                                <span class="fw-semibold">6.99 GB / 7.87 GB (88.8%)</span>
+                        </div>
+
+                        <!-- Pestaña Discos -->
+                        <div id="tabContentDisks" class="tab-pane-content d-none">
+                            <div class="small" id="disksList">
+                                <div class="text-muted py-2 text-center">Cargando unidades de disco...</div>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Barra de Progreso y Cancelación -->
+    <div class="modal fade" id="modalProgress" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="progressTitle">Procesando Copia...</h5>
+                    <button type="button" class="btn-close" id="btnCloseProgressHeader" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <p class="text-muted small mb-2" id="progressStatusText">Iniciando compresión de archivos...</p>
+                    <div class="progress mb-3" style="height: 22px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;">0%</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="btnCancelJob" onclick="cancelCurrentJob()">🛑 Cancelar Proceso</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnCloseProgress" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -173,7 +206,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="d-flex justify-content-between mb-3">
-                        <span class="text-muted small">Últimos registros guardados.</span>
+                        <span class="text-muted small">Últimos registros en base de datos.</span>
                         <button class="btn btn-outline-danger btn-sm" onclick="clearLogs()">🗑️ Limpiar Historial</button>
                     </div>
                     <div class="table-responsive" style="max-height: 400px;">
@@ -212,11 +245,25 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        function showNotification(msg) {
-            document.getElementById('toastMessage').innerText = msg;
-            const toastEl = document.getElementById('liveToast');
-            const toast = new bootstrap.Toast(toastEl);
-            toast.show();
+        let currentJobId = null;
+        let jobInterval = null;
+
+        function switchTab(tabName) {
+            document.querySelectorAll('#sideTabs .nav-link').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane-content').forEach(pane => pane.classList.add('d-none'));
+
+            if (tabName === 'rpi') {
+                event.target.classList.add('active');
+                document.getElementById('tabContentRpi').classList.remove('d-none');
+            } else if (tabName === 'docker') {
+                event.target.classList.add('active');
+                document.getElementById('tabContentDocker').classList.remove('d-none');
+                loadDockerInfo();
+            } else if (tabName === 'disks') {
+                event.target.classList.add('active');
+                document.getElementById('tabContentDisks').classList.remove('d-none');
+                loadDisksInfo();
+            }
         }
 
         async function loadApps() {
@@ -241,7 +288,7 @@
                     <div class="list-group-item px-0 py-3 border-bottom">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <div class="fw-bold text-dark text-capitalize">${app.name}</div>
+                                <div class="fw-bold text-dark text-capitalize fs-6">${app.name}</div>
                                 <div class="text-muted small mt-1">Rutas: <code>${app.path}</code></div>
                             </div>
                             <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('${app.name}')">
@@ -255,9 +302,87 @@
             }
         }
 
+        async function loadDockerInfo() {
+            const container = document.getElementById('dockerList');
+            const res = await fetch('/api/v1/system/docker');
+            const data = await res.json();
+            const list = data.containers || [];
+            
+            container.innerHTML = list.length ? list.map(c => `
+                <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                    <div>
+                        <div class="fw-bold text-dark">${c.name}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">${c.image}</div>
+                    </div>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">${c.status}</span>
+                </div>
+            `).join('') : '<div class="text-muted py-2 text-center">No hay contenedores ejecutándose</div>';
+        }
+
+        async function loadDisksInfo() {
+            const container = document.getElementById('disksList');
+            const res = await fetch('/api/v1/system/disks');
+            const data = await res.json();
+            const list = data.disks || [];
+
+            container.innerHTML = list.length ? list.map(d => `
+                <div class="py-2 border-bottom">
+                    <div class="d-flex justify-content-between text-dark fw-bold mb-1">
+                        <span>${d.mount}</span>
+                        <span>${d.used_gb} GB / ${d.total_gb} GB</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar ${d.percent > 85 ? 'bg-danger' : 'bg-primary'}" style="width: ${d.percent}%"></div>
+                    </div>
+                </div>
+            `).join('') : '<div class="text-muted py-2 text-center">No se pudieron obtener unidades de disco</div>';
+        }
+
         async function triggerAppBackup(appName) {
-            await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
-            showNotification(`Copia iniciada/completada para: ${appName}`);
+            const modalProgressEl = document.getElementById('modalProgress');
+            const modalProgress = new bootstrap.Modal(modalProgressEl);
+            
+            document.getElementById('progressTitle').innerText = `Copiando: ${appName}`;
+            document.getElementById('progressStatusText').innerText = "Iniciando proceso en backend...";
+            const bar = document.getElementById('progressBar');
+            bar.style.width = '5%';
+            bar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
+            bar.innerText = '5%';
+            document.getElementById('btnCancelJob').disabled = false;
+
+            modalProgress.show();
+
+            const res = await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
+            const data = await res.json();
+            currentJobId = data.job_id;
+
+            jobInterval = setInterval(async () => {
+                const stRes = await fetch(`/api/v1/backups/job-status/${currentJobId}`);
+                const stData = await stRes.json();
+
+                bar.style.width = `${stData.progress}%`;
+                bar.innerText = `${stData.progress}%`;
+                document.getElementById('progressStatusText').innerText = stData.message;
+
+                if (stData.status === 'success') {
+                    clearInterval(jobInterval);
+                    bar.className = 'progress-bar bg-success';
+                    document.getElementById('progressStatusText').innerText = `✅ ¡Copia guardada con éxito! Archivo: ${stData.file}`;
+                    document.getElementById('btnCancelJob').disabled = true;
+                } else if (stData.status === 'failed' || stData.status === 'cancelled') {
+                    clearInterval(jobInterval);
+                    bar.className = 'progress-bar bg-danger';
+                    document.getElementById('progressStatusText').innerText = `❌ ${stData.message}`;
+                    document.getElementById('btnCancelJob').disabled = true;
+                }
+            }, 800);
+        }
+
+        async function cancelCurrentJob() {
+            if (currentJobId) {
+                await fetch(`/api/v1/backups/cancel/${currentJobId}`, { method: 'POST' });
+                document.getElementById('progressStatusText').innerText = "Cancelando...";
+            }
         }
 
         async function clearLogs() {
@@ -285,7 +410,7 @@
 
         document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
             const list = document.getElementById('restoreBackupsList');
-            list.innerHTML = '<div class="p-3 text-center text-muted">Buscando copias válidas...</div>';
+            list.innerHTML = '<div class="p-3 text-center text-muted">Buscando copias reales...</div>';
             const res = await fetch('/api/v1/backups/list');
             const data = await res.json();
             const backups = data.backups || [];
@@ -296,11 +421,11 @@
                         <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
                         <div class="small text-muted mt-1">App: <strong class="text-primary">${b.app_name}</strong> &nbsp;|&nbsp; Peso: <strong>${b.size_str}</strong> &nbsp;|&nbsp; Fecha: ${b.fecha}</div>
                     </div>
-                    <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="showNotification('Restauración iniciada para ${b.filename}')">
+                    <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="alert('Iniciando restauración de ${b.filename}')">
                         🔄 Restaurar
                     </button>
                 </div>
-            `).join('') : '<div class="p-4 text-center text-muted">No hay archivos de copia de seguridad válidos disponibles en el almacenamiento.</div>';
+            `).join('') : '<div class="p-4 text-center text-muted">No hay archivos de copia de seguridad válidos en el disco.</div>';
         });
 
         document.addEventListener('DOMContentLoaded', loadApps);
