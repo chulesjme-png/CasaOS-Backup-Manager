@@ -6,37 +6,30 @@
     <title>CasaOS Backup Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .card { border-radius: 12px; }
-        .nav-tabs .nav-link { border: none; background: transparent; padding: 0.5rem 0.8rem; cursor: pointer; }
-        .nav-tabs .nav-link.active { border-bottom: 2px solid #0d6efd; background: transparent; }
-        .host-tab-pane { min-height: 140px; }
-        .badge-hook { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        .app-list-scroll { max-height: 680px; overflow-y: auto; padding-right: 6px; }
+        .app-list-scroll { max-height: 500px; overflow-y: auto; padding-right: 6px; }
     </style>
 </head>
 <body>
 
-    <!-- Header Navigation -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm py-2">
         <div class="container-fluid px-4">
             <a class="navbar-brand d-flex align-items-center gap-2" href="/">
-                <img src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" style="height: 32px;" onerror="this.style.display='none'">
+                <span class="fw-bold text-primary">📦 CasaOS Backup Manager</span>
                 <span class="badge bg-light text-secondary border ms-2" style="font-size: 0.75rem;">v0.6.0-final</span>
             </a>
             <div class="d-flex gap-2">
-                <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">🔍 Escanear</button>
-                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalSchedules">📅 Programación</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="loadApps()">🔍 Escanear Apps</button>
                 <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
-                <button class="btn btn-warning btn-sm text-white fw-semibold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
-                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalSettings">⚙️ Configuración</button>
+                <button class="btn btn-warning btn-sm text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
             </div>
         </div>
     </nav>
 
-    <!-- Main Content Container -->
     <div class="container-fluid px-4 py-4">
         
+        <!-- Tarjetas de resumen -->
         <div class="row g-3 mb-3">
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
@@ -56,7 +49,7 @@
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
                     <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Aplicaciones CasaOS</span>
-                    <div class="fw-bold text-dark mt-2">25 Detectadas</div>
+                    <div class="fw-bold text-dark mt-2" id="appsCountLabel">Cargando...</div>
                 </div>
             </div>
             <div class="col-md-3">
@@ -67,94 +60,52 @@
             </div>
         </div>
 
-        <!-- Selector de Destino Activo -->
-        <div class="card p-3 shadow-sm border-0 mb-4">
-            <div class="row align-items-center">
-                <div class="col-md-4 d-flex align-items-center gap-2">
-                    <span class="fs-4">💾</span>
-                    <span class="fw-bold text-dark">Destino Activo de Copias:</span>
-                </div>
-                <div class="col-md-8">
-                    <select class="form-select border-primary-subtle" id="targetDiskSelect">
-                        <option value="/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa" selected>
-                            Disco: 08604ab9-10b8-46bc-a6f2-a19f3adfc6fa (/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa)
-                        </option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
         <div class="row">
             <div class="col-lg-8">
-                <!-- Disaster Recovery -->
+                <!-- Backup general -->
                 <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex gap-3 align-items-center">
                             <div class="fs-1 text-primary">🛡️</div>
                             <div>
-                                <h5 class="fw-bold text-dark mb-1">Copia de Seguridad de la Raspberry Pi (Disaster Recovery)</h5>
-                                <p class="text-muted small mb-2">Resguarda la configuración de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>).</p>
-                                <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Incremental</span>
-                                <span class="badge bg-success-subtle text-success border border-success-subtle">🟢 Listo para resguardo</span>
+                                <h5 class="fw-bold text-dark mb-1">Copia de Seguridad de la Raspberry Pi</h5>
+                                <p class="text-muted small mb-0">Resguarda la configuración global de <code>/DATA/AppData</code>.</p>
                             </div>
                         </div>
-                        <button class="btn btn-primary px-4 py-2 fw-semibold shadow-sm" onclick="triggerFullBackup()">
+                        <button class="btn btn-primary px-4 py-2 fw-semibold shadow-sm" onclick="triggerAppBackup('Sistema_Completo')">
                             📦 Copiar Sistema Completo
                         </button>
                     </div>
                 </div>
 
-                <!-- Perfiles de Aplicaciones -->
+                <!-- Perfiles de Aplicación dinámicos -->
                 <div class="card p-4 shadow-sm border-0 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN GENERADOS</h6>
-                        <span class="badge bg-primary rounded-pill">Transmission</span>
+                        <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN DETECTADOS</h6>
                     </div>
 
                     <div class="app-list-scroll">
-                        <div class="list-group list-group-flush">
-                            <div class="list-group-item px-0 py-3 border-bottom">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="fw-bold text-dark">transmission</span>
-                                        </div>
-                                        <div class="text-muted small mt-1">Rutas: <code>/DATA/AppData/transmission</code></div>
-                                    </div>
-                                    <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('transmission')">
-                                        ⚡ Copiar Ahora
-                                    </button>
-                                </div>
-                            </div>
+                        <div class="list-group list-group-flush" id="appsContainer">
+                            <div class="text-center py-4 text-muted">Buscando aplicaciones en /DATA/AppData...</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Columna Derecha -->
+            <!-- Columna derecha -->
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-white border-bottom-0 pt-3 px-3">
-                        <ul class="nav nav-tabs card-header-tabs" id="hostTabs">
-                            <li class="nav-item">
-                                <button class="nav-link active fw-semibold text-dark">🍓 Raspberry Pi 5</button>
-                            </li>
-                        </ul>
+                        <h6 class="fw-bold mb-0">🍓 Host Info</h6>
                     </div>
-                    <div class="card-body">
-                        <div class="small">
-                            <div class="d-flex justify-content-between py-2 border-bottom">
-                                <span class="text-muted">💻 Sistema Host:</span>
-                                <span class="fw-bold text-dark">Debian GNU/Linux 12</span>
-                            </div>
-                            <div class="d-flex justify-content-between py-2 border-bottom">
-                                <span class="text-muted">CPU:</span>
-                                <span class="fw-semibold">ARMv8 (4 Cores @ RPi 5)</span>
-                            </div>
-                            <div class="d-flex justify-content-between py-2 border-bottom">
-                                <span class="text-muted">RAM:</span>
-                                <span class="fw-semibold">6.99 GB / 7.87 GB (88.8%)</span>
-                            </div>
+                    <div class="card-body small">
+                        <div class="d-flex justify-content-between py-2 border-bottom">
+                            <span class="text-muted">Sistema:</span>
+                            <span class="fw-bold text-dark">Debian 12 / Raspberry Pi 5</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-2">
+                            <span class="text-muted">Ruta Destino:</span>
+                            <span class="fw-semibold text-break">/media/pichules/...</span>
                         </div>
                     </div>
                 </div>
@@ -162,52 +113,35 @@
         </div>
     </div>
 
-    <!-- MODAL HISTORIAL CORREGIDO -->
+    <!-- Modales -->
     <div class="modal fade" id="modalLogs" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header">
-                    <h5 class="modal-title fw-bold">📜 Historial de Ejecuciones</h5>
+                    <h5 class="modal-title fw-bold">📜 Historial</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="d-flex justify-content-between mb-3">
-                        <span class="text-muted small">Últimos registros del sistema.</span>
-                        <button class="btn btn-outline-danger btn-sm" onclick="clearLogs()">🗑️ Limpiar Historial</button>
-                    </div>
-                    <div class="table-responsive" style="max-height: 400px;">
-                        <table class="table table-hover align-middle small mb-0">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th>Fecha</th>
-                                    <th>Tipo</th>
-                                    <th>Objetivo</th>
-                                    <th>Estado</th>
-                                    <th>Duración</th>
-                                </tr>
-                            </thead>
-                            <tbody id="logsTableBody">
-                                <tr><td colspan="5" class="text-center py-3">Cargando...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    <table class="table table-hover align-middle small mb-0">
+                        <thead class="table-light">
+                            <tr><th>Fecha</th><th>Tipo</th><th>Objetivo</th><th>Estado</th><th>Duración</th></tr>
+                        </thead>
+                        <tbody id="logsTableBody"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MODAL RESTAURAR CORREGIDO -->
     <div class="modal fade" id="modalRestore" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header">
-                    <h5 class="modal-title fw-bold">📦 Restaurar Copias de Seguridad</h5>
+                    <h5 class="modal-title fw-bold">📦 Copias Disponibles</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="list-group list-group-flush border rounded" id="restoreBackupsList">
-                        <div class="p-3 text-center text-muted">Buscando copias...</div>
-                    </div>
+                    <div class="list-group list-group-flush" id="restoreBackupsList"></div>
                 </div>
             </div>
         </div>
@@ -215,91 +149,86 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Cargar Historial
-        document.getElementById('modalLogs').addEventListener('show.bs.modal', async () => {
-            const tbody = document.getElementById('logsTableBody');
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Buscando registros...</td></tr>';
+        // Cargar lista dinámica de Aplicaciones
+        async function loadApps() {
+            const container = document.getElementById('appsContainer');
+            const countLabel = document.getElementById('appsCountLabel');
+            container.innerHTML = '<div class="text-center py-4 text-muted">Buscando aplicaciones...</div>';
+
             try {
-                const res = await fetch('/api/v1/executions?limit=50');
-                const logs = await res.json();
-                tbody.innerHTML = '';
+                const res = await fetch('/api/v1/apps');
+                const data = await res.json();
+                const apps = data.apps || [];
                 
-                if (!logs || logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">El historial está vacío.</td></tr>';
+                countLabel.innerText = `${apps.length} Detectadas`;
+
+                if (apps.length === 0) {
+                    container.innerHTML = '<div class="p-3 text-muted text-center">No se encontraron carpetas en /DATA/AppData</div>';
                     return;
                 }
-                
-                logs.forEach(log => {
-                    let fecha = log.fecha || log.date || (log.start_time ? new Date(log.start_time).toLocaleString() : 'Reciente');
-                    let statusClass = (log.estado === 'success' || log.status === 'success') ? 'bg-success' : 'bg-danger';
-                    let duracion = log.duracion || log.duration || (log.duration_seconds ? log.duration_seconds + 's' : '0.3s');
-                    let objetivo = log.objetivo || log.target || log.app_name || 'Sistema';
-                    let tipo = log.tipo || log.type || log.backend_type || 'Backup';
 
-                    tbody.innerHTML += `<tr>
-                        <td class="text-nowrap">${fecha}</td>
-                        <td class="fw-semibold">${tipo}</td>
-                        <td><code>${objetivo}</code></td>
-                        <td><span class="badge ${statusClass}">${log.status || 'success'}</span></td>
-                        <td><b>${duracion}</b></td>
-                    </tr>`;
-                });
+                container.innerHTML = apps.map(app => `
+                    <div class="list-group-item px-0 py-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold text-dark text-capitalize">${app.name}</div>
+                                <div class="text-muted small mt-1">Ruta: <code>${app.path}</code></div>
+                            </div>
+                            <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('${app.name}')">
+                                ⚡ Copiar Ahora
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
             } catch (err) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-danger">Error conectando con el servidor.</td></tr>';
-            }
-        });
-
-        // Limpiar Logs
-        async function clearLogs() {
-            if (confirm("¿Estás seguro de que deseas borrar todo el historial?")) {
-                await fetch('/api/v1/logs', { method: 'DELETE' });
-                const tbody = document.getElementById('logsTableBody');
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">El historial está vacío.</td></tr>';
+                container.innerHTML = '<div class="p-3 text-danger text-center">Error al conectar con la API de aplicaciones.</div>';
             }
         }
 
-        // Cargar Copias a Restaurar
-        document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
-            const list = document.getElementById('restoreBackupsList');
-            list.innerHTML = '<div class="p-4 text-center text-muted">Buscando copias en el disco destino...</div>';
-            try {
-                const res = await fetch('/api/v1/backups/list');
-                let data = await res.json();
-                const backups = Array.isArray(data) ? data : (data.backups || []);
-                
-                list.innerHTML = '';
-                if (!backups || backups.length === 0) {
-                    list.innerHTML = '<div class="p-4 text-center text-muted">No se han encontrado copias de seguridad en el disco seleccionado.</div>';
-                    return;
-                }
-                
-                backups.forEach(b => {
-                    let fecha = b.fecha || b.date || (b.created_at ? new Date(b.created_at * 1000).toLocaleString() : 'Reciente');
-                    let pesoTexto = b.size_str || b.size || (b.size_mb ? `${b.size_mb.toFixed(2)} MB` : 'Desconocido');
-                    let appName = b.app_name || b.target || 'App';
-                    let filename = b.filename || b.name;
-
-                    list.innerHTML += `
-                        <div class="list-group-item d-flex justify-content-between align-items-center py-3">
-                            <div>
-                                <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${filename}</div>
-                                <div class="small text-muted mt-1">App: <strong class="text-primary">${appName}</strong> &nbsp;|&nbsp; Peso: <strong>${pesoTexto}</strong> &nbsp;|&nbsp; Fecha: ${fecha}</div>
-                            </div>
-                            <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="alert('Restauración iniciada para ${filename}')">
-                                🔄 Restaurar
-                            </button>
-                        </div>`;
-                });
-            } catch (err) {
-                list.innerHTML = '<div class="p-4 text-center text-danger">Error leyendo el almacenamiento.</div>';
-            }
-        });
-
-        // Ejecutar Backup manual
+        // Ejecutar Backup
         async function triggerAppBackup(appName) {
             await fetch(`/api/v1/backups/run-app/${appName}`, { method: 'POST' });
-            alert(`Copia de ${appName} completada correctamente.`);
+            alert(`Copia iniciada/completada para: ${appName}`);
         }
+
+        // Cargar Historial en el Modal
+        document.getElementById('modalLogs').addEventListener('show.bs.modal', async () => {
+            const tbody = document.getElementById('logsTableBody');
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3">Cargando...</td></tr>';
+            const res = await fetch('/api/v1/executions?limit=50');
+            const logs = await res.json();
+            tbody.innerHTML = logs.map(l => `
+                <tr>
+                    <td>${l.fecha}</td>
+                    <td>${l.tipo}</td>
+                    <td><code>${l.objetivo}</code></td>
+                    <td><span class="badge ${l.estado === 'success' ? 'bg-success' : 'bg-danger'}">${l.estado}</span></td>
+                    <td>${l.duracion}</td>
+                </tr>
+            `).join('');
+        });
+
+        // Cargar Copias en el Modal de Restauración
+        document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
+            const list = document.getElementById('restoreBackupsList');
+            list.innerHTML = '<div class="p-3 text-center text-muted">Cargando copias...</div>';
+            const res = await fetch('/api/v1/backups/list');
+            const data = await res.json();
+            const backups = data.backups || [];
+            
+            list.innerHTML = backups.length ? backups.map(b => `
+                <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                    <div>
+                        <div class="fw-bold text-dark">${b.filename}</div>
+                        <div class="small text-muted">App: <strong>${b.app_name}</strong> | Peso: <strong>${b.size_str}</strong> | Fecha: ${b.fecha}</div>
+                    </div>
+                    <button class="btn btn-warning btn-sm text-dark fw-bold">🔄 Restaurar</button>
+                </div>
+            `).join('') : '<div class="p-3 text-center text-muted">No hay copias guardadas.</div>';
+        });
+
+        // Inicializar al cargar la página
+        document.addEventListener('DOMContentLoaded', loadApps);
     </script>
 </body>
 </html>
