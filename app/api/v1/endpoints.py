@@ -67,8 +67,6 @@ async def save_notification_settings(settings: Union[NotificationSettings, Dict]
     config_manager.save_config()
     return {"status": "ok", "message": "Configuración guardada"}
 
-# --- TAREA NATIVA DE BACKUP TAR.GZ ---
-
 def _compress_directory(source_path: str, dest_file: str):
     with tarfile.open(dest_file, "w:gz") as tar:
         tar.add(source_path, arcname=os.path.basename(source_path))
@@ -133,22 +131,29 @@ async def run_app_backup(app_name: str, background_tasks: BackgroundTasks):
 
 @router.get("/backups/list")
 def list_available_backups():
-    search_paths = []
-    target_disk = config_manager.config.selected_target_disk
-    if target_disk and os.path.exists(target_disk):
-        search_paths.append(target_disk)
-
-    for fallback in ["/media", "/mnt", "/DATA"]:
-        if os.path.exists(fallback) and fallback not in search_paths:
-            search_paths.append(fallback)
-
     backups = []
     seen = set()
     VALID_EXTS = (".tar.gz", ".tgz", ".zip", ".aes", ".tar", ".gz")
 
-    for base_path in search_paths:
+    search_dirs = []
+    target_disk = config_manager.config.selected_target_disk
+    
+    if target_disk and os.path.exists(target_disk):
+        search_dirs.extend([
+            os.path.join(target_disk, "Backups"),
+            os.path.join(target_disk, "Backups", "Apps"),
+            target_disk
+        ])
+
+    for fallback in ["/media", "/mnt", "/DATA"]:
+        if os.path.exists(fallback):
+            search_dirs.extend([os.path.join(fallback, "Backups"), fallback])
+
+    for s_dir in search_dirs:
+        if not os.path.exists(s_dir):
+            continue
         try:
-            for root, _, files in os.walk(base_path, followlinks=True):
+            for root, _, files in os.walk(s_dir, followlinks=True):
                 for file in files:
                     if file.lower().endswith(VALID_EXTS):
                         file_path = os.path.join(root, file)
@@ -163,10 +168,13 @@ def list_available_backups():
                             dt = datetime.fromtimestamp(stats.st_mtime, timezone.utc)
 
                             app_hint = "Sistema"
-                            for part in file_path.split(os.sep):
-                                if part.lower() in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy"]:
-                                    app_hint = part
+                            path_parts = [p.lower() for p in file_path.split(os.sep)]
+                            for app_k in ["transmission", "plex", "radarr", "sonarr", "prowlarr", "seerr", "nginxproxymanager", "wg-easy"]:
+                                if app_k in path_parts or file.lower().startswith(app_k):
+                                    app_hint = app_k
                                     break
+
+                            size_display = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(stats.st_size / 1024, 1)} KB"
 
                             backups.append({
                                 "filename": file,
@@ -174,7 +182,8 @@ def list_available_backups():
                                 "path": file_path,
                                 "file_path": file_path,
                                 "size_mb": size_mb,
-                                "size_str": f"{size_mb} MB",
+                                "size_str": size_display,
+                                "size": size_display,
                                 "created_at": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                 "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
                                 "timestamp": ts_ms,
@@ -184,7 +193,7 @@ def list_available_backups():
                         except Exception:
                             pass
         except Exception as e:
-            logger.error(f"[Backups] Error escaneando {base_path}: {e}")
+            logger.error(f"[Backups] Error escaneando {s_dir}: {e}")
 
     backups.sort(key=lambda x: x["timestamp"], reverse=True)
     return backups

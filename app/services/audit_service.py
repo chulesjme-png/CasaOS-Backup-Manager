@@ -61,30 +61,45 @@ class AuditService:
                 formatted = []
                 for row in rows:
                     r = dict(row)
-                    ts_ms = r.get("timestamp") or int(time.time() * 1000)
-                    dt = datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
                     
+                    raw_ts = r.get("timestamp")
+                    try:
+                        ts_ms = float(raw_ts) if raw_ts is not None else time.time() * 1000
+                    except (ValueError, TypeError):
+                        ts_ms = time.time() * 1000
+
+                    try:
+                        dt = datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
+                    except Exception:
+                        dt = datetime.now(timezone.utc)
+                        ts_ms = int(dt.timestamp() * 1000)
+
                     iso_str = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     display_str = dt.strftime("%Y-%m-%d %H:%M:%S")
 
-                    dur_sec = r.get("duration_seconds") or 3.5
-                    dur_formatted = f"{round(float(dur_sec), 1)}s"
-                    target = r.get("target_name") or "Sistema"
+                    raw_dur = r.get("duration_seconds")
+                    try:
+                        dur_sec = float(raw_dur) if raw_dur is not None else 3.5
+                    except (ValueError, TypeError):
+                        dur_sec = 3.5
+
+                    dur_formatted = f"{round(dur_sec, 1)}s"
+                    target = str(r.get("target_name") or "Sistema")
 
                     formatted.append({
                         "id": r.get("id"),
-                        "timestamp": ts_ms,
+                        "timestamp": int(ts_ms),
                         "date": iso_str,
                         "created_at": iso_str,
                         "fecha": display_str,
                         "time": iso_str,
-                        "type": r.get("job_type") or "Backup",
-                        "tipo": r.get("job_type") or "Backup",
+                        "type": str(r.get("job_type") or "Backup"),
+                        "tipo": str(r.get("job_type") or "Backup"),
                         "target": target,
                         "target_name": target,
                         "app_name": target,
                         "objetivo": target,
-                        "status": r.get("status") or "success",
+                        "status": str(r.get("status") or "success").lower(),
                         "duration": dur_formatted,
                         "duration_seconds": dur_sec,
                         "duracion": dur_formatted,
