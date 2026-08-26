@@ -14,7 +14,7 @@ from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-# Importación del servicio de discos corregido
+# Importación del servicio de discos
 from app.services.disk_service import disk_service
 
 logger = logging.getLogger("casaos-backup")
@@ -176,6 +176,9 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                     fp = os.path.join(root, f)
                     tar.add(fp, arcname=os.path.relpath(fp, src_dir))
 
+        # Ejecutar limpieza de retención tras crear la nueva copia
+        list_backups(max_keep_per_app=3)
+
         elapsed = round(time.time() - start, 2)
         active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Copia completada con éxito", "file": filename}
 
@@ -215,43 +218,97 @@ def cancel_job(job_id: str):
 
 @app.get("/api/v1/backups/list")
 @app.get("/api/v1/backups")
-def list_backups():
-    backups = []
-    seen_files = set()
+def list_backups(max_keep_per_app: int = 3):
+    """
+    Escanea todos los puntos de montaje, agrupa las copias por aplicación,
+    elimina del disco de forma permanente las copias antiguas (superiores a 3)
+    y retorna solo la lista limpia.
+    """
     mounts = get_all_mounts()
+    search_paths = set()
 
     for m in mounts:
         target_path = f"/host{m}" if os.path.exists(f"/host{m}") else m
         if os.path.exists(target_path):
-            for root, _, files in os.walk(target_path):
-                for file in files:
-                    fn_lower = file.lower()
-                    if fn_lower.startswith("duplicati-") or "dblock" in fn_lower or "dindex" in fn_lower or "dlist" in fn_lower:
-                        continue
-                    
-                    if fn_lower.endswith((".tar.gz", ".tgz", ".zip")) and fn_lower not in seen_files:
-                        fp = os.path.join(root, file)
-                        try:
-                            stats = os.stat(fp)
-                            dt = datetime.fromtimestamp(stats.st_mtime)
-                            size_mb = round(stats.st_size / (1024 * 1024), 2)
-                            size_str = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(stats.st_size/1024, 1)} KB"
-                            
-                            app_name = file.split("_")[0].capitalize() if "_" in file else "Sistema"
-                            seen_files.add(fn_lower)
+            search_paths.add(target_path)
 
-                            backups.append({
-                                "filename": file,
-                                "app_name": app_name,
-                                "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
-                                "size_str": size_str,
-                                "timestamp": stats.st_mtime
-                            })
-                        except Exception:
-                            pass
+    for default_p in ["/DATA/Backups", "/host/DATA/Backups"]:
+        if os.path.exists(default_p):
+            search_paths.add(default_p)
 
-    backups.sort(key=lambda x: x["timestamp"], reverse=True)
-    return {"backups": backups}
+    app_groups = {}
+
+    for base_path in search_paths:
+        for root, _, files in os.walk(base_path):
+            for file in files:
+                fn_lower = file.lower()
+                if fn_lower.startswith("duplicati-") or "dblock" in fn_lower or "dindex" in fn_lower or "dlist" in fn_lower:
+                    continue
+                
+                if fn_lower.endswith((".tar.gz", ".tgz", ".zip")):
+                    fp = os.path.join(root, file)
+                    try:
+                        stats = os.stat(fp)
+                        
+                        # Determinar identificador de la app
+                        if "_backup_" in fn_lower:
+                            app_key = fn_lower.split("_backup_")[0]
+                        elif fn_lower.startswith("disaster_recovery_") or fn_lower.startswith("full_system_"):
+                            app_key = "disaster_recovery"
+                        else:
+                            parent_name = os.path.basename(root).lower()
+                            if parent_name and parent_name not in ("backups", "apps", "casaos"):
+                                app_key = parent_name
+                            else:
+                                app_key = fn_lower.split(".")[0].split("_")[0]
+
+                        if app_key not in app_groups:
+                            app_groups[app_key] = []
+
+                        app_groups[app_key].append({
+                            "filename": file,
+                            "filepath": fp,
+                            "app_name": app_key.capitalize(),
+                            "timestamp": stats.st_mtime,
+                            "size": stats.st_size
+                        })
+                    except Exception as e:
+                        logger.error(f"Error al analizar metadatos de {fp}: {e}")
+
+    retained_backups = []
+
+    # Eliminación física en disco de copias sobrantes (> 3)
+    for app_key, entries in app_groups.items():
+        entries.sort(key=lambda x: x["timestamp"], reverse=True)
+
+        to_keep = entries[:max_keep_per_app]
+        to_delete = entries[max_keep_per_app:]
+
+        for old in to_delete:
+            try:
+                if os.path.exists(old["filepath"]):
+                    os.remove(old["filepath"])
+                    logger.info(f"[RETENCION] Eliminado del disco: {old['filepath']}")
+            except Exception as e:
+                logger.error(f"[ERROR] No se pudo borrar {old['filepath']}: {e}")
+
+        for item in to_keep:
+            dt = datetime.fromtimestamp(item["timestamp"])
+            sz = item["size"]
+            size_mb = round(sz / (1024 * 1024), 2)
+            size_str = f"{size_mb} MB" if size_mb >= 1.0 else f"{round(sz / 1024, 1)} KB"
+
+            retained_backups.append({
+                "filename": item["filename"],
+                "app_name": item["app_name"],
+                "app": item["app_name"],
+                "fecha": dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "size_str": size_str,
+                "timestamp": item["timestamp"]
+            })
+
+    retained_backups.sort(key=lambda x: x["timestamp"], reverse=True)
+    return {"backups": retained_backups}
 
 @app.get("/api/v1/executions")
 @app.get("/api/v1/logs")
