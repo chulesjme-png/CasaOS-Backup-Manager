@@ -143,7 +143,8 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     
     real_target = None
     if target_disk:
-        for cand in [target_disk, f"/host{target_disk}"]:
+        clean_target = target_disk[5:] if target_disk.startswith("/host/") else target_disk
+        for cand in [clean_target, f"/host{clean_target}"]:
             if os.path.exists(cand):
                 real_target = cand
                 break
@@ -151,7 +152,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     if real_target:
         base_dest = Path(real_target)
     else:
-        base_dest = Path("/host/DATA/Backups" if os.path.exists("/host/DATA/Backups") else "/DATA/Backups")
+        base_dest = Path("/DATA/Backups" if os.path.exists("/DATA/Backups") else "/host/DATA/Backups")
         
     dest_dir = base_dest / "Backups" / "Apps" / app_name
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -223,28 +224,30 @@ def cancel_job(job_id: str):
 @app.get("/api/v1/backups")
 def list_backups(max_keep_per_app: int = 3):
     """
-    Busca únicamente dentro de carpetas 'Backups' en el almacenamiento local y en los discos montados.
-    Elimina físicamente copias antiguas (> 3) y devuelve rápido la lista sin archivos basura del sistema.
+    Busca únicamente en rutas directas con permisos RW (priorizando /media/ sobre /host/media/),
+    desduplica por ruta real de archivo y retiene exactamente 3 versiones físicas por app.
     """
     search_paths = set()
 
-    # 1. Directorios locales de backups
-    for default_p in ["/DATA/Backups", "/host/DATA/Backups"]:
-        if os.path.exists(default_p):
-            search_paths.add(default_p)
+    # Priorizar /DATA/Backups sobre /host/DATA/Backups
+    if os.path.exists("/DATA/Backups"):
+        search_paths.add("/DATA/Backups")
+    elif os.path.exists("/host/DATA/Backups"):
+        search_paths.add("/host/DATA/Backups")
 
-    # 2. Subcarpetas /Backups de cada disco montado (/media/pichules/.../Backups)
+    # Priorizar rutas /media/ sobre /host/media/
     for mount in get_all_mounts():
-        for candidate in [
-            os.path.join(mount, "Backups"),
-            os.path.join("/host" + mount, "Backups"),
-            mount if mount.endswith("Backups") else None,
-            f"/host{mount}" if mount.endswith("Backups") else None
-        ]:
-            if candidate and os.path.exists(candidate):
-                search_paths.add(candidate)
+        clean_mount = mount[5:] if mount.startswith("/host/") else mount
+        cand_rw = os.path.join(clean_mount, "Backups") if not clean_mount.endswith("Backups") else clean_mount
+        cand_ro = os.path.join("/host" + clean_mount, "Backups") if not clean_mount.endswith("Backups") else f"/host{clean_mount}"
+        
+        if os.path.exists(cand_rw):
+            search_paths.add(cand_rw)
+        elif os.path.exists(cand_ro):
+            search_paths.add(cand_ro)
 
     app_groups = {}
+    seen_files = set()
 
     for base_path in search_paths:
         for root, _, files in os.walk(base_path):
@@ -259,6 +262,12 @@ def list_backups(max_keep_per_app: int = 3):
                 if fn_lower.endswith((".tar.gz", ".tgz", ".zip")):
                     fp = os.path.join(root, file)
                     try:
+                        # Evitar procesar el mismo archivo físico si viene mapeado por múltiples sitios
+                        real_path = os.path.realpath(fp)
+                        if real_path in seen_files:
+                            continue
+                        seen_files.add(real_path)
+
                         stats = os.stat(fp)
                         
                         if "_backup_" in fn_lower:
@@ -287,7 +296,6 @@ def list_backups(max_keep_per_app: int = 3):
 
     retained_backups = []
 
-    # Borrado físico real en disco USB si superan las 3 copias
     for app_key, entries in app_groups.items():
         entries.sort(key=lambda x: x["timestamp"], reverse=True)
 
