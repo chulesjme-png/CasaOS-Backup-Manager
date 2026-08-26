@@ -6,7 +6,7 @@ class DiskService:
     def __init__(self):
         pass
 
-    def _get_disk_labels_map() -> Dict[str, str]:
+    def _get_disk_labels_map(self) -> Dict[str, str]:
         """
         Lee /dev/disk/by-label/ del host para mapear /dev/sdX -> Nombre de la etiqueta.
         """
