@@ -8,32 +8,37 @@ class DiskService:
     def __init__(self):
         pass
 
-    def _get_label_from_lsblk(self, device_path: str) -> str:
+    def _clean_disk_label(self, mountpoint: str, device: str) -> str:
         """
-        Intenta obtener la etiqueta real (LABEL) del dispositivo mediante lsblk.
+        Genera un nombre amigable para el disco evitando UUIDs extremadamente largos.
         """
-        try:
-            cmd = ["lsblk", "-no", "LABEL,MODEL", device_path]
-            output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True).strip()
-            if output:
-                lines = output.splitlines()
-                first_line = lines[0].strip()
-                # Si hay LABEL lo usamos, si no, probamos con el modelo del disco
-                parts = first_line.split()
-                if parts:
-                    return " ".join(parts)
-        except Exception:
-            pass
-        return ""
+        folder_name = mountpoint.split("/")[-1] if "/" in mountpoint else mountpoint
+
+        # Intentar obtener la etiqueta con lsblk si está disponible el dispositivo
+        if device and device != "none":
+            try:
+                cmd = ["lsblk", "-no", "LABEL", device]
+                label = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True).strip()
+                if label:
+                    return label
+            except Exception:
+                pass
+
+        # Si el nombre es un UUID largo (ej: 08604ab9-10b8-46bc...), lo acortamos a algo limpio
+        if len(folder_name) > 16 and "-" in folder_name:
+            return f"Disco ({folder_name[:8]}...)"
+
+        return folder_name or mountpoint
 
     def get_disks(self) -> List[Dict[str, Any]]:
-        """
-        Obtiene únicamente los discos/particiones externos reales montados,
-        obteniendo el nombre formateado de CasaOS y descartando carpetas del sistema.
-        """
         raw_partitions = psutil.disk_partitions(all=True)
         
-        # 1. Normalizar rutas removiendo prefijos de mapeo contenedor
+        # Lista estricta de rutas base/intermedias a descartar por completo
+        EXCLUDED_EXACT_PATHS = {
+            "/", "/proc", "/sys", "/dev", "/DATA", 
+            "/media", "/media/devmon", "/media/pichules", "/mnt", "/run/media"
+        }
+
         clean_mounts = []
         for part in raw_partitions:
             m = part.mountpoint
@@ -42,14 +47,14 @@ class DiskService:
             clean_mounts.append((m, part))
 
         all_paths = [m[0] for m in clean_mounts]
-
         disks = []
+
         for clean_mountpoint, part in clean_mounts:
-            # Descartar rutas base del sistema e intermedias conocidas
-            if clean_mountpoint in ["/", "/proc", "/sys", "/dev", "/DATA", "/media", "/media/devmon", "/media/pichules", "/mnt"]:
+            # 1. Ignorar carpetas del sistema e intermedias directas
+            if clean_mountpoint in EXCLUDED_EXACT_PATHS:
                 continue
 
-            # Filtrar carpetas intermedias (si existe otro punto de montaje dentro de esta ruta)
+            # 2. Descartar carpetas intermedias (si existe subdirectorio montado)
             normalized_path = clean_mountpoint.rstrip("/") + "/"
             is_parent = any(
                 other != clean_mountpoint and (other + "/").startswith(normalized_path)
@@ -58,7 +63,7 @@ class DiskService:
             if is_parent:
                 continue
 
-            # Ruta física accesible dentro del contenedor
+            # Mapeo de volumen dentro del contenedor Docker
             target_path = part.mountpoint
             if os.path.exists("/host") and not part.mountpoint.startswith("/host"):
                 container_mapped_path = f"/host{part.mountpoint}"
@@ -67,23 +72,13 @@ class DiskService:
 
             try:
                 usage = shutil.disk_usage(target_path)
-                
-                # Intentar obtener la etiqueta legible del disco (ej: USB3.0, HUH728080ALE601, etc.)
-                label = self._get_label_from_lsblk(part.device)
-                
-                # Si no tiene etiqueta de disco, acortamos la UUID mostrando solo los primeros 8 caracteres
-                folder_name = clean_mountpoint.split("/")[-1]
-                if not label:
-                    if len(folder_name) > 15 and "-" in folder_name:
-                        label = f"Disco ({folder_name[:8]}...)"
-                    else:
-                        label = folder_name
+                display_name = self._clean_disk_label(clean_mountpoint, part.device)
 
                 disks.append({
                     "device": part.device,
                     "mount": clean_mountpoint,
                     "mountpoint": clean_mountpoint,
-                    "name": label,
+                    "name": display_name,
                     "fstype": part.fstype,
                     "total": usage.total,
                     "used": usage.used,
