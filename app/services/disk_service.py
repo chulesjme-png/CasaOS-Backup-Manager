@@ -9,86 +9,65 @@ class DiskService:
 
     def get_disks(self) -> List[Dict[str, Any]]:
         """
-        Obtiene la lista de discos y particiones montadas reales en el Host.
-        Filtra puntos de montaje intermedios (/media, /mnt, /media/user) y
-        deja únicamente los discos físicos de almacenamiento real.
+        Obtiene de forma dinámica todos los discos reales del host.
+        Filtra puntos de montaje intermedios (ej. /media, /media/usuario, /mnt)
+        sin importar el nombre del usuario o la estructura de carpetas.
         """
-        mounts_path = "/host/proc/mounts" if os.path.exists("/host/proc/mounts") else "/proc/mounts"
         disks = []
-        seen_mounts = set()
+        raw_partitions = psutil.disk_partitions(all=True)
+        
+        # Limpiar y normalizar las rutas devueltas por Docker/Host
+        clean_mounts = []
+        for part in raw_partitions:
+            m = part.mountpoint
+            if m.startswith("/host"):
+                m = m[5:] or "/"
+            clean_mounts.append((m, part))
 
-        if not os.path.exists(mounts_path):
-            # Fallback psutil
-            for part in psutil.disk_partitions(all=False):
-                if part.mountpoint in seen_mounts:
-                    continue
-                seen_mounts.add(part.mountpoint)
-                try:
-                    usage = psutil.disk_usage(part.mountpoint)
-                    disks.append({
-                        "device": part.device,
-                        "mountpoint": part.mountpoint,
-                        "fstype": part.fstype,
-                        "total": usage.total,
-                        "used": usage.used,
-                        "free": usage.free,
-                        "percent": usage.percent
-                    })
-                except PermissionError:
-                    continue
-            return disks
+        # Colección de todas las rutas de montaje activas para detectar intermedias
+        all_paths = [m[0] for m in clean_mounts]
 
-        # Rutas intermedias que NO son discos finales y deben ignorarse
-        ignored_exact_mounts = {"/", "/media", "/mnt", "/devmon", "/media/devmon", "/media/pichules"}
+        for clean_mountpoint, part in clean_mounts:
+            # Excluir la raíz del sistema (/), la virtual /proc, etc.
+            if clean_mountpoint in ["/", "/proc", "/sys", "/dev"]:
+                continue
 
-        with open(mounts_path, "r") as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) < 3:
-                    continue
-                
-                device, mountpoint, fstype = parts[0], parts[1], parts[2]
+            # FILTRO DINÁMICO DE CARPETAS INTERMEDIAS:
+            # Si existe otro punto de montaje dentro de esta carpeta, es un directorio intermedio.
+            # Ej: /media/pichules es intermedia si existe /media/pichules/DISCO_EXTERNO
+            is_parent_folder = any(
+                other != clean_mountpoint and other.startswith(clean_mountpoint.rstrip("/") + "/")
+                for other in all_paths
+            )
+            if is_parent_folder:
+                continue
 
-                # Filtrar solo dispositivos reales o rutas de datos/medios
-                if device.startswith("/dev/") or mountpoint.startswith(("/media", "/mnt", "/DATA")):
-                    # Excluir sistemas virtuales, duplicados o carpetas intermedias
-                    if mountpoint in seen_mounts or fstype in ("tmpfs", "devtmpfs", "squashfs", "overlay", "proc", "sysfs"):
-                        continue
+            # Mapeo de ruta real dentro del contenedor Docker
+            target_path = part.mountpoint
+            if os.path.exists("/host") and not part.mountpoint.startswith("/host"):
+                container_mapped_path = f"/host{part.mountpoint}"
+                if os.path.exists(container_mapped_path):
+                    target_path = container_mapped_path
 
-                    if mountpoint in ignored_exact_mounts and mountpoint != "/DATA":
-                        continue
+            try:
+                usage = shutil.disk_usage(target_path)
+                display_name = clean_mountpoint.split("/")[-1] if "/" in clean_mountpoint else clean_mountpoint
 
-                    # Determinar si es un disco real (ejemplo: /DATA o subcarpetas directas de /media/pichules/...)
-                    # Si está en /media/pichules/xxx o /media/xxx, validamos que no sea la carpeta padre pichules
-                    target_path = mountpoint
-                    if os.path.exists("/host") and not mountpoint.startswith("/host"):
-                        container_mapped_path = f"/host{mountpoint}"
-                        if os.path.exists(container_mapped_path):
-                            target_path = container_mapped_path
-
-                    try:
-                        usage = shutil.disk_usage(target_path)
-                        seen_mounts.add(mountpoint)
-                        
-                        # Extraer un nombre amigable para el selector UI
-                        display_name = mountpoint
-                        if "/" in mountpoint:
-                            parts_path = [p for p in mountpoint.split("/") if p]
-                            if len(parts_path) >= 1:
-                                display_name = parts_path[-1]
-
-                        disks.append({
-                            "device": device,
-                            "mountpoint": mountpoint,
-                            "name": display_name,
-                            "fstype": fstype,
-                            "total": usage.total,
-                            "used": usage.used,
-                            "free": usage.free,
-                            "percent": round((usage.used / usage.total) * 100, 1) if usage.total > 0 else 0
-                        })
-                    except (PermissionError, FileNotFoundError, OSError):
-                        continue
+                disks.append({
+                    "device": part.device,
+                    "mountpoint": clean_mountpoint,
+                    "name": display_name or clean_mountpoint,
+                    "fstype": part.fstype,
+                    "total": usage.total,
+                    "used": usage.used,
+                    "free": usage.free,
+                    "total_gb": round(usage.total / (1024**3), 2),
+                    "used_gb": round(usage.used / (1024**3), 2),
+                    "free_gb": round(usage.free / (1024**3), 2),
+                    "percent": round((usage.used / usage.total) * 100, 1) if usage.total > 0 else 0
+                })
+            except (PermissionError, FileNotFoundError, OSError):
+                continue
 
         return disks
 

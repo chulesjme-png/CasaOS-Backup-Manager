@@ -68,7 +68,7 @@
                     <span class="fw-bold text-dark">Destino Activo de Copias:</span>
                 </div>
                 <div class="col-md-8">
-                    <select class="form-select border-primary-subtle" id="targetDiskSelect"></select>
+                    <select class="form-select border-primary-subtle" id="targetDiskSelect" onchange="saveSelectedDisk(this.value)"></select>
                 </div>
             </div>
         </div>
@@ -214,6 +214,7 @@
     <script>
         let currentJobId = null;
         let jobInterval = null;
+        let savedTargetDisk = "";
 
         function switchTab(evt, tabName) {
             document.querySelectorAll('#sideTabs .nav-link').forEach(btn => btn.classList.remove('active'));
@@ -282,13 +283,19 @@
                 const list = data.disks || [];
 
                 select.innerHTML = list.map(d => `
-                    <option value="${d.mount}">Disco: ${d.name} (${d.mount}) - ${d.free_gb} GB libres</option>
+                    <option value="${d.mountpoint}">Disco: ${d.name} (${d.mountpoint}) - ${d.free_gb} GB libres</option>
                 `).join('');
+
+                if (savedTargetDisk && list.some(d => d.mountpoint === savedTargetDisk)) {
+                    select.value = savedTargetDisk;
+                } else if (select.options.length > 0) {
+                    savedTargetDisk = select.value;
+                }
 
                 container.innerHTML = list.length ? list.map(d => `
                     <div class="py-2 border-bottom">
                         <div class="d-flex justify-content-between text-dark fw-bold mb-1">
-                            <span>${d.mount}</span>
+                            <span>${d.mountpoint}</span>
                             <span>${d.used_gb} GB / ${d.total_gb} GB</span>
                         </div>
                         <div class="progress" style="height: 10px;">
@@ -298,6 +305,19 @@
                 `).join('') : '<div class="text-muted py-2 text-center">No se encontraron discos montados</div>';
             } catch (err) {
                 container.innerHTML = '<div class="text-danger py-2 text-center">Error al leer discos</div>';
+            }
+        }
+
+        async function saveSelectedDisk(value) {
+            savedTargetDisk = value;
+            try {
+                await fetch('/api/v1/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ selected_target_disk: value })
+                });
+            } catch (e) {
+                console.error("Error al guardar selección de disco:", e);
             }
         }
 
@@ -411,7 +431,17 @@
             }
         });
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const configRes = await fetch('/api/v1/config');
+                const configData = await configRes.json();
+                if (configData.selected_target_disk) {
+                    savedTargetDisk = configData.selected_target_disk;
+                }
+            } catch (e) {
+                console.error("No se pudo cargar la configuración:", e);
+            }
+
             loadApps();
             loadDisksInfo();
         });
