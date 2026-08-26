@@ -10,7 +10,6 @@ class DiskService:
     def _get_device_label(self, device_path: str, mountpoint: str) -> str:
         folder_name = mountpoint.split("/")[-1] if "/" in mountpoint else mountpoint
 
-        # Intento de lectura de etiqueta udev
         if device_path and device_path.startswith("/dev/"):
             try:
                 cmd = ["udevadm", "info", "--query=property", "--name=" + device_path]
@@ -23,20 +22,17 @@ class DiskService:
             except Exception:
                 pass
 
-        # Si el nombre es un UUID largo, acortarlo limpiamente
         if len(folder_name) > 16 and "-" in folder_name:
             return f"Disco {folder_name[:8]}"
 
         return folder_name or mountpoint
 
     def get_disks(self) -> List[Dict[str, Any]]:
-        # Leer los montajes directamente desde el host
         mounts_source = "/host/proc/mounts" if os.path.exists("/host/proc/mounts") else "/proc/mounts"
         
         if not os.path.exists(mounts_source):
             return []
 
-        # Prefijos válidos para discos de datos/externos (excluye carpetas intermedias del sistema)
         VALID_PREFIXES = ("/media/pichules/", "/mnt/", "/run/media/")
 
         disks = []
@@ -50,16 +46,18 @@ class DiskService:
 
                 device, mountpoint, fstype = parts[0], parts[1], parts[2]
 
-                # 1. Filtro estricto: Solo aceptar subdirectorios dentro de /media/pichules/, /mnt/ o /run/media/
+                # Filtro estricto: Debe comenzar con uno de los prefijos válidos
                 if not any(mountpoint.startswith(prefix) for prefix in VALID_PREFIXES):
                     continue
 
-                # Evitar duplicados
+                # Evitar mostrar directorios de montaje raíz (como /media/pichules directamente)
+                if mountpoint in ("/media/pichules", "/mnt", "/run/media"):
+                    continue
+
                 if mountpoint in seen_mounts:
                     continue
                 seen_mounts.add(mountpoint)
 
-                # Ruta accesible para shutil desde el contenedor
                 target_path = f"/host{mountpoint}" if os.path.exists(f"/host{mountpoint}") else mountpoint
 
                 try:

@@ -14,6 +14,9 @@ from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+# Importación del servicio de discos corregido
+from app.services.disk_service import disk_service
+
 logger = logging.getLogger("casaos-backup")
 logging.basicConfig(level=logging.INFO)
 
@@ -128,59 +131,19 @@ def get_docker_containers():
 
     return {"containers": containers}
 
-# Obtener puntos de montaje
+# Obtener puntos de montaje desde disk_service
 def get_all_mounts():
-    mounts = set()
-    search_dirs = ["/media", "/mnt"]
-    
-    if os.path.exists("/proc/mounts"):
-        with open("/proc/mounts", "r") as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) >= 3:
-                    mnt = parts[1]
-                    if mnt.startswith(("/media", "/mnt", "/DATA")) and not mnt.startswith(("/proc", "/sys", "/dev", "/run")):
-                        mounts.add(mnt)
-
-    for sd in search_dirs:
-        if os.path.exists(sd):
-            try:
-                for entry in os.scandir(sd):
-                    if entry.is_dir() and not entry.name.startswith("."):
-                        mounts.add(entry.path)
-            except Exception:
-                pass
-                
-    if os.path.exists("/DATA"):
-        mounts.add("/DATA")
-        
-    return sorted(list(mounts))
+    disks = disk_service.get_disks()
+    return [d["mountpoint"] for d in disks]
 
 @app.get("/api/v1/system/disks")
 def get_disks():
-    disks = []
-    for m in get_all_mounts():
-        if os.path.exists(m):
-            try:
-                usage = shutil.disk_usage(m)
-                if usage.total > 0:
-                    disks.append({
-                        "mount": m,
-                        "name": os.path.basename(m) or m,
-                        "total_gb": round(usage.total / (1024**3), 2),
-                        "used_gb": round(usage.used / (1024**3), 2),
-                        "free_gb": round(usage.free / (1024**3), 2),
-                        "percent": round((usage.used / usage.total) * 100, 1)
-                    })
-            except Exception:
-                pass
-    return {"disks": disks}
+    return {"disks": disk_service.get_disks()}
 
 def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
     active_jobs[job_id] = {"status": "running", "progress": 10, "message": "Preparando archivos...", "cancelled": False}
     
-    # Destino flexible: Si el disco seleccionado no existe, usa /DATA/Backups por defecto
     if target_disk and os.path.exists(target_disk):
         base_dest = Path(target_disk)
     else:
@@ -258,8 +221,9 @@ def list_backups():
     mounts = get_all_mounts()
 
     for m in mounts:
-        if os.path.exists(m):
-            for root, _, files in os.walk(m):
+        target_path = f"/host{m}" if os.path.exists(f"/host{m}") else m
+        if os.path.exists(target_path):
+            for root, _, files in os.walk(target_path):
                 for file in files:
                     fn_lower = file.lower()
                     if fn_lower.startswith("duplicati-") or "dblock" in fn_lower or "dindex" in fn_lower or "dlist" in fn_lower:
