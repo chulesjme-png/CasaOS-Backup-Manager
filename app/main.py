@@ -14,7 +14,6 @@ from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-# Importación del servicio de discos
 from app.services.disk_service import disk_service
 
 logger = logging.getLogger("casaos-backup")
@@ -77,7 +76,6 @@ def get_apps():
                 })
     return {"apps": apps}
 
-# Detección de contenedores Docker
 @app.get("/api/v1/system/docker")
 def get_docker_containers():
     containers = []
@@ -130,11 +128,6 @@ def get_docker_containers():
         pass
 
     return {"containers": containers}
-
-# Obtener puntos de montaje desde disk_service
-def get_all_mounts():
-    disks = disk_service.get_disks()
-    return [d["mountpoint"] for d in disks]
 
 @app.get("/api/v1/system/disks")
 def get_disks():
@@ -220,37 +213,35 @@ def cancel_job(job_id: str):
 @app.get("/api/v1/backups")
 def list_backups(max_keep_per_app: int = 3):
     """
-    Escanea todos los puntos de montaje, agrupa las copias por aplicación,
-    elimina del disco de forma permanente las copias antiguas (superiores a 3)
-    y retorna solo la lista limpia.
+    Escanea únicamente las carpetas dedicadas a Backups (/DATA/Backups),
+    ignora archivos ocultos de sistema (._), elimina físicamente del disco
+    las copias que superen las 3 versiones y devuelve la lista al instante.
     """
-    mounts = get_all_mounts()
-    search_paths = set()
-
-    for m in mounts:
-        target_path = f"/host{m}" if os.path.exists(f"/host{m}") else m
-        if os.path.exists(target_path):
-            search_paths.add(target_path)
-
-    for default_p in ["/DATA/Backups", "/host/DATA/Backups"]:
-        if os.path.exists(default_p):
-            search_paths.add(default_p)
+    # Rutas base estrictas de copias de seguridad
+    base_candidates = ["/DATA/Backups", "/host/DATA/Backups"]
+    search_paths = [p for p in base_candidates if os.path.exists(p)]
 
     app_groups = {}
 
     for base_path in search_paths:
         for root, _, files in os.walk(base_path):
             for file in files:
+                # 1. Descartar archivos ocultos / metadatos de macOS (._*)
+                if file.startswith(".") or file.startswith("._"):
+                    continue
+                
                 fn_lower = file.lower()
+                # 2. Descartar fragmentos de Duplicati
                 if fn_lower.startswith("duplicati-") or "dblock" in fn_lower or "dindex" in fn_lower or "dlist" in fn_lower:
                     continue
                 
+                # 3. Filtrar únicamente copias de seguridad válidas (.tar.gz, .tgz, .zip)
                 if fn_lower.endswith((".tar.gz", ".tgz", ".zip")):
                     fp = os.path.join(root, file)
                     try:
                         stats = os.stat(fp)
                         
-                        # Determinar identificador de la app
+                        # Agrupar por nombre de aplicación
                         if "_backup_" in fn_lower:
                             app_key = fn_lower.split("_backup_")[0]
                         elif fn_lower.startswith("disaster_recovery_") or fn_lower.startswith("full_system_"):
@@ -273,11 +264,11 @@ def list_backups(max_keep_per_app: int = 3):
                             "size": stats.st_size
                         })
                     except Exception as e:
-                        logger.error(f"Error al analizar metadatos de {fp}: {e}")
+                        logger.error(f"Error metadatos en {fp}: {e}")
 
     retained_backups = []
 
-    # Eliminación física en disco de copias sobrantes (> 3)
+    # Aplicar borrado físico en disco de copias obsoletas (> 3)
     for app_key, entries in app_groups.items():
         entries.sort(key=lambda x: x["timestamp"], reverse=True)
 
