@@ -129,6 +129,10 @@ def get_docker_containers():
 
     return {"containers": containers}
 
+def get_all_mounts():
+    disks = disk_service.get_disks()
+    return [d["mountpoint"] for d in disks if "mountpoint" in d]
+
 @app.get("/api/v1/system/disks")
 def get_disks():
     return {"disks": disk_service.get_disks()}
@@ -137,10 +141,17 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
     active_jobs[job_id] = {"status": "running", "progress": 10, "message": "Preparando archivos...", "cancelled": False}
     
-    if target_disk and os.path.exists(target_disk):
-        base_dest = Path(target_disk)
+    real_target = None
+    if target_disk:
+        for cand in [target_disk, f"/host{target_disk}"]:
+            if os.path.exists(cand):
+                real_target = cand
+                break
+
+    if real_target:
+        base_dest = Path(real_target)
     else:
-        base_dest = Path("/DATA/Backups")
+        base_dest = Path("/host/DATA/Backups" if os.path.exists("/host/DATA/Backups") else "/DATA/Backups")
         
     dest_dir = base_dest / "Backups" / "Apps" / app_name
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -169,7 +180,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                     fp = os.path.join(root, f)
                     tar.add(fp, arcname=os.path.relpath(fp, src_dir))
 
-        # Ejecutar limpieza de retención tras crear la nueva copia
         list_backups(max_keep_per_app=3)
 
         elapsed = round(time.time() - start, 2)
@@ -213,35 +223,44 @@ def cancel_job(job_id: str):
 @app.get("/api/v1/backups")
 def list_backups(max_keep_per_app: int = 3):
     """
-    Escanea únicamente las carpetas dedicadas a Backups (/DATA/Backups),
-    ignora archivos ocultos de sistema (._), elimina físicamente del disco
-    las copias que superen las 3 versiones y devuelve la lista al instante.
+    Busca únicamente dentro de carpetas 'Backups' en el almacenamiento local y en los discos montados.
+    Elimina físicamente copias antiguas (> 3) y devuelve rápido la lista sin archivos basura del sistema.
     """
-    # Rutas base estrictas de copias de seguridad
-    base_candidates = ["/DATA/Backups", "/host/DATA/Backups"]
-    search_paths = [p for p in base_candidates if os.path.exists(p)]
+    search_paths = set()
+
+    # 1. Directorios locales de backups
+    for default_p in ["/DATA/Backups", "/host/DATA/Backups"]:
+        if os.path.exists(default_p):
+            search_paths.add(default_p)
+
+    # 2. Subcarpetas /Backups de cada disco montado (/media/pichules/.../Backups)
+    for mount in get_all_mounts():
+        for candidate in [
+            os.path.join(mount, "Backups"),
+            os.path.join("/host" + mount, "Backups"),
+            mount if mount.endswith("Backups") else None,
+            f"/host{mount}" if mount.endswith("Backups") else None
+        ]:
+            if candidate and os.path.exists(candidate):
+                search_paths.add(candidate)
 
     app_groups = {}
 
     for base_path in search_paths:
         for root, _, files in os.walk(base_path):
             for file in files:
-                # 1. Descartar archivos ocultos / metadatos de macOS (._*)
                 if file.startswith(".") or file.startswith("._"):
                     continue
                 
                 fn_lower = file.lower()
-                # 2. Descartar fragmentos de Duplicati
                 if fn_lower.startswith("duplicati-") or "dblock" in fn_lower or "dindex" in fn_lower or "dlist" in fn_lower:
                     continue
                 
-                # 3. Filtrar únicamente copias de seguridad válidas (.tar.gz, .tgz, .zip)
                 if fn_lower.endswith((".tar.gz", ".tgz", ".zip")):
                     fp = os.path.join(root, file)
                     try:
                         stats = os.stat(fp)
                         
-                        # Agrupar por nombre de aplicación
                         if "_backup_" in fn_lower:
                             app_key = fn_lower.split("_backup_")[0]
                         elif fn_lower.startswith("disaster_recovery_") or fn_lower.startswith("full_system_"):
@@ -268,7 +287,7 @@ def list_backups(max_keep_per_app: int = 3):
 
     retained_backups = []
 
-    # Aplicar borrado físico en disco de copias obsoletas (> 3)
+    # Borrado físico real en disco USB si superan las 3 copias
     for app_key, entries in app_groups.items():
         entries.sort(key=lambda x: x["timestamp"], reverse=True)
 
