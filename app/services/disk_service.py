@@ -9,14 +9,12 @@ class DiskService:
 
     def get_disks(self) -> List[Dict[str, Any]]:
         """
-        Obtiene de forma dinámica todos los discos reales del host.
-        Filtra puntos de montaje intermedios (ej. /media, /media/usuario, /mnt)
-        sin importar el nombre del usuario o la estructura de carpetas.
+        Obtiene únicamente los puntos de montaje reales y finales.
+        Filtra recursivamente cualquier carpeta o ruta intermedia.
         """
-        disks = []
         raw_partitions = psutil.disk_partitions(all=True)
         
-        # Limpiar y normalizar las rutas devueltas por Docker/Host
+        # 1. Normalizar las rutas limpiando prefijos de Docker si existen
         clean_mounts = []
         for part in raw_partitions:
             m = part.mountpoint
@@ -24,25 +22,27 @@ class DiskService:
                 m = m[5:] or "/"
             clean_mounts.append((m, part))
 
-        # Colección de todas las rutas de montaje activas para detectar intermedias
+        # 2. Extraer todas las rutas de montaje disponibles
         all_paths = [m[0] for m in clean_mounts]
 
+        disks = []
         for clean_mountpoint, part in clean_mounts:
-            # Excluir la raíz del sistema (/), la virtual /proc, etc.
+            # Excluir rutas de sistema operativo base
             if clean_mountpoint in ["/", "/proc", "/sys", "/dev"]:
                 continue
 
-            # FILTRO DINÁMICO DE CARPETAS INTERMEDIAS:
-            # Si existe otro punto de montaje dentro de esta carpeta, es un directorio intermedio.
-            # Ej: /media/pichules es intermedia si existe /media/pichules/DISCO_EXTERNO
-            is_parent_folder = any(
-                other != clean_mountpoint and other.startswith(clean_mountpoint.rstrip("/") + "/")
+            # FILTRADO RECURSIVO AVANZADO:
+            # Si clean_mountpoint es prefijo de CUALQUIER otra ruta en la lista, es un directorio padre/intermedio.
+            normalized_path = clean_mountpoint.rstrip("/") + "/"
+            is_parent = any(
+                other != clean_mountpoint and (other + "/").startswith(normalized_path)
                 for other in all_paths
             )
-            if is_parent_folder:
+
+            if is_parent:
                 continue
 
-            # Mapeo de ruta real dentro del contenedor Docker
+            # Mapeo dentro del contenedor Docker
             target_path = part.mountpoint
             if os.path.exists("/host") and not part.mountpoint.startswith("/host"):
                 container_mapped_path = f"/host{part.mountpoint}"
