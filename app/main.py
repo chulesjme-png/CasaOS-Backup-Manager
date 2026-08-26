@@ -325,7 +325,8 @@ def list_backups(max_keep_per_app: int = 3):
                 "timestamp": item["timestamp"]
             })
 
-    retained_backups.sort(key=lambda x: x["timestamp"], reverse=True)
+    # Ordenar alfabéticamente por nombre de App y luego por fecha descendente (más reciente primero)
+    retained_backups.sort(key=lambda x: (x["app_name"].lower(), -x["timestamp"]))
     return {"backups": retained_backups}
 
 @app.get("/api/v1/executions")
