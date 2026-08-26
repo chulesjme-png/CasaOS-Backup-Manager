@@ -1,108 +1,81 @@
 import os
 import shutil
-import logging
 import psutil
-
-logger = logging.getLogger("casaos_backup_manager")
+from typing import List, Dict, Any
 
 class DiskService:
-    """Servicio de detección de discos compatible con entornos Docker y Host."""
+    def __init__(self):
+        pass
 
-    IGNORED_FSTYPES = {
-        'tmpfs', 'devtmpfs', 'sysfs', 'proc', 'overlay', 'squashfs', 
-        'cgroup', 'pstore', 'bpf', 'tracefs', 'debugfs', 'mqueue', 'devpts', 'ecryptfs'
-    }
-
-    IGNORED_PATHS = {
-        '/etc/resolv.conf', '/etc/hostname', '/etc/hosts',
-        '/dev', '/proc', '/sys', '/run'
-    }
-
-    def get_system_disks(self) -> list:
+    def get_disks(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene la lista de discos y particiones montadas en el Host.
+        Lee directamente el /proc del host para evitar el aislamiento de Docker
+        y no confundir la partición raíz del contenedor con los discos físicos.
+        """
+        mounts_path = "/host/proc/mounts" if os.path.exists("/host/proc/mounts") else "/proc/mounts"
         disks = []
-        seen_devices = set()
+        seen_mounts = set()
 
-        try:
-            # Inspeccionar particiones montadas en el sistema
-            partitions = psutil.disk_partitions(all=True)
-            
-            for part in partitions:
-                mountpoint = part.mountpoint
-                device = part.device
-                fstype = part.fstype.lower()
-
-                if fstype in self.IGNORED_FSTYPES:
+        if not os.path.exists(mounts_path):
+            # Fallback seguro con psutil si no existe proc montado
+            for part in psutil.disk_partitions(all=False):
+                if part.mountpoint in seen_mounts:
                     continue
-
-                if mountpoint in self.IGNORED_PATHS or any(mountpoint.startswith(p + '/') for p in self.IGNORED_PATHS):
-                    continue
-
-                if os.path.isfile(mountpoint):
-                    continue
-
+                seen_mounts.add(part.mountpoint)
                 try:
-                    # Deduplicación por ID de dispositivo del Kernel
-                    stat_info = os.stat(mountpoint)
-                    dev_id = stat_info.st_dev
-
-                    if dev_id in seen_devices:
-                        continue
-
-                    usage = shutil.disk_usage(mountpoint)
-                    total_gb = round(usage.total / (1024 ** 3), 1)
-                    used_gb = round(usage.used / (1024 ** 3), 1)
-                    free_gb = round(usage.free / (1024 ** 3), 1)
-                    percent = round((usage.used / usage.total) * 100, 1) if usage.total > 0 else 0
-
-                    if total_gb == 0:
-                        continue
-
-                    # Etiquetado descriptivo
-                    if mountpoint == '/':
-                        name = "Almacenamiento Raíz (/)"
-                    elif mountpoint.startswith('/media/'):
-                        parts = mountpoint.strip('/').split('/')
-                        label = parts[-1] if len(parts) >= 2 else mountpoint
-                        name = f"Disco: {label}"
-                    else:
-                        name = f"Disco ({mountpoint})"
-
-                    seen_devices.add(dev_id)
+                    usage = psutil.disk_usage(part.mountpoint)
                     disks.append({
-                        "device": device,
-                        "mountpoint": mountpoint,
-                        "name": f"{name} ({mountpoint})",
-                        "label": name,
-                        "total_gb": total_gb,
-                        "used_gb": used_gb,
-                        "free_gb": free_gb,
-                        "percent": percent,
-                        "fstype": part.fstype
+                        "device": part.device,
+                        "mountpoint": part.mountpoint,
+                        "fstype": part.fstype,
+                        "total": usage.total,
+                        "used": usage.used,
+                        "free": usage.free,
+                        "percent": usage.percent
                     })
-
-                except (PermissionError, FileNotFoundError):
+                except PermissionError:
                     continue
-                except Exception as e:
-                    logger.warning(f"Error analizando {mountpoint}: {e}")
+            return disks
+
+        # Lectura directa desde el punto de montaje real
+        with open(mounts_path, "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 3:
                     continue
+                
+                device, mountpoint, fstype = parts[0], parts[1], parts[2]
 
-        except Exception as e:
-            logger.error(f"Error al obtener discos del sistema: {e}")
+                # Filtrar únicamente discos de almacenamiento real en CasaOS / Host Linux
+                if device.startswith("/dev/") or mountpoint.startswith(("/media", "/mnt", "/DATA")):
+                    # Excluir sistemas de archivos virtuales y duplicados
+                    if mountpoint in seen_mounts or fstype in ("tmpfs", "devtmpfs", "squashfs", "overlay"):
+                        continue
+                    
+                    # Comprobar la ruta accesible desde el contenedor
+                    target_path = mountpoint
+                    if os.path.exists("/host") and not mountpoint.startswith("/host"):
+                        container_mapped_path = f"/host{mountpoint}"
+                        if os.path.exists(container_mapped_path):
+                            target_path = container_mapped_path
 
-        disks.sort(key=lambda x: x['total_gb'], reverse=True)
+                    try:
+                        usage = shutil.disk_usage(target_path)
+                        seen_mounts.add(mountpoint)
+                        
+                        disks.append({
+                            "device": device,
+                            "mountpoint": mountpoint,
+                            "fstype": fstype,
+                            "total": usage.total,
+                            "used": usage.used,
+                            "free": usage.free,
+                            "percent": round((usage.used / usage.total) * 100, 1) if usage.total > 0 else 0
+                        })
+                    except (PermissionError, FileNotFoundError, OSError):
+                        continue
+
         return disks
-
-    def get_disk_by_path(self, path: str) -> dict:
-        try:
-            usage = shutil.disk_usage(path)
-            return {
-                "total_gb": round(usage.total / (1024 ** 3), 1),
-                "used_gb": round(usage.used / (1024 ** 3), 1),
-                "free_gb": round(usage.free / (1024 ** 3), 1),
-                "percent": round((usage.used / usage.total) * 100, 1) if usage.total > 0 else 0
-            }
-        except Exception as e:
-            logger.error(f"Error obteniendo uso de disco para {path}: {e}")
-            return {"total_gb": 0, "used_gb": 0, "free_gb": 0, "percent": 0}
 
 disk_service = DiskService()
