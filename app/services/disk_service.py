@@ -8,76 +8,83 @@ class DiskService:
     def __init__(self):
         pass
 
-    def _clean_disk_label(self, mountpoint: str, device: str) -> str:
+    def _get_device_label(self, device_path: str, mountpoint: str) -> str:
         """
-        Genera un nombre amigable para el disco evitando UUIDs extremadamente largos.
+        Obtiene el nombre del disco buscando etiquetas del sistema o acortando el UUID.
         """
         folder_name = mountpoint.split("/")[-1] if "/" in mountpoint else mountpoint
 
-        # Intentar obtener la etiqueta con lsblk si está disponible el dispositivo
-        if device and device != "none":
+        # 1. Intentar obtener etiqueta por udevadm (si está disponible)
+        if device_path and device_path != "none" and os.path.exists(device_path):
             try:
-                cmd = ["lsblk", "-no", "LABEL", device]
-                label = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True).strip()
-                if label:
-                    return label
+                cmd = ["udevadm", "info", "--query=property", "--name=" + device_path]
+                output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True)
+                for line in output.splitlines():
+                    if line.startswith("ID_FS_LABEL=") or line.startswith("ID_MODEL="):
+                        val = line.split("=", 1)[1].strip()
+                        if val:
+                            return val.replace("_", " ")
             except Exception:
                 pass
 
-        # Si el nombre es un UUID largo (ej: 08604ab9-10b8-46bc...), lo acortamos a algo limpio
+        # 2. Si es un UUID largo (ej: 08604ab9-10b8-46bc-a6f2...), lo acortamos de forma limpia
         if len(folder_name) > 16 and "-" in folder_name:
-            return f"Disco ({folder_name[:8]}...)"
+            return f"Disco {folder_name[:8]}"
 
         return folder_name or mountpoint
 
     def get_disks(self) -> List[Dict[str, Any]]:
         raw_partitions = psutil.disk_partitions(all=True)
-        
-        # Lista estricta de rutas base/intermedias a descartar por completo
-        EXCLUDED_EXACT_PATHS = {
-            "/", "/proc", "/sys", "/dev", "/DATA", 
-            "/media", "/media/devmon", "/media/pichules", "/mnt", "/run/media"
+
+        # Detectar cuál es el dispositivo físico raíz ("/") para ignorar todas sus carpetas
+        root_device = None
+        for p in raw_partitions:
+            if p.mountpoint in ["/", "/host"]:
+                root_device = p.device
+                break
+
+        # Carpetas base del sistema que NUNCA deben mostrarse
+        BLACK_LIST_PATHS = {
+            "/", "/host", "/DATA", "/media", "/media/devmon", 
+            "/media/pichules", "/mnt", "/run/media", "/proc", "/sys", "/dev"
         }
 
-        clean_mounts = []
+        disks = []
         for part in raw_partitions:
             m = part.mountpoint
-            if m.startswith("/host"):
-                m = m[5:] or "/"
-            clean_mounts.append((m, part))
+            
+            # Normalizar ruta montada vía host
+            clean_mount = m[5:] if m.startswith("/host") else m
+            clean_mount = clean_mount or "/"
 
-        all_paths = [m[0] for m in clean_mounts]
-        disks = []
-
-        for clean_mountpoint, part in clean_mounts:
-            # 1. Ignorar carpetas del sistema e intermedias directas
-            if clean_mountpoint in EXCLUDED_EXACT_PATHS:
+            # FILTRO 1: Ignorar carpetas negras explícitas
+            if clean_mount in BLACK_LIST_PATHS:
                 continue
 
-            # 2. Descartar carpetas intermedias (si existe subdirectorio montado)
-            normalized_path = clean_mountpoint.rstrip("/") + "/"
-            is_parent = any(
-                other != clean_mountpoint and (other + "/").startswith(normalized_path)
-                for other in all_paths
-            )
-            if is_parent:
+            # FILTRO 2: Ignorar cualquier montaje que pertenezca al disco del sistema raíz
+            if root_device and part.device == root_device:
                 continue
 
-            # Mapeo de volumen dentro del contenedor Docker
+            # Ruta real accesible dentro del contenedor
             target_path = part.mountpoint
             if os.path.exists("/host") and not part.mountpoint.startswith("/host"):
-                container_mapped_path = f"/host{part.mountpoint}"
-                if os.path.exists(container_mapped_path):
-                    target_path = container_mapped_path
+                mapped = f"/host{part.mountpoint}"
+                if os.path.exists(mapped):
+                    target_path = mapped
 
             try:
                 usage = shutil.disk_usage(target_path)
-                display_name = self._clean_disk_label(clean_mountpoint, part.device)
+                
+                # Descartar particiones virtuales o vacías de 0 bytes
+                if usage.total == 0:
+                    continue
+
+                display_name = self._get_device_label(part.device, clean_mount)
 
                 disks.append({
                     "device": part.device,
-                    "mount": clean_mountpoint,
-                    "mountpoint": clean_mountpoint,
+                    "mount": clean_mount,
+                    "mountpoint": clean_mount,
                     "name": display_name,
                     "fstype": part.fstype,
                     "total": usage.total,
