@@ -1,6 +1,5 @@
 import os
 import json
-import glob
 import tarfile
 import subprocess
 from datetime import datetime
@@ -100,28 +99,30 @@ class BackupService:
 
         active_target = self.target_dir
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Guardar en subcarpeta específica si existe la convención
+        app_target_dir = os.path.join(active_target, "Apps", app_id)
+        os.makedirs(app_target_dir, exist_ok=True)
+        
         backup_filename = f"{app_id}_backup_{timestamp}.tar.gz"
-        backup_path = os.path.join(active_target, backup_filename)
+        backup_path = os.path.join(app_target_dir, backup_filename)
 
         included_paths = profile.get("paths", [])
         if not included_paths:
             return {"success": False, "error": "No hay rutas asociadas para respaldar"}
 
         try:
-            # 1. Ejecución opcional de Pre-Hook (Dumps DB, etc.)
             hooks = profile.get("recommended_hooks", [])
             for hook in hooks:
                 if progress_callback:
                     progress_callback(5, f"Ejecutando pre-hook ({hook})...")
                 print(f"[HOOK] Ejecutando pre-backup hook ({hook}) para {app_id}...")
 
-            # 2. Escaneo previo para cálculo de progreso
             if progress_callback:
                 progress_callback(8, "Calculando volumen de datos...")
             
             file_list, total_bytes = self._collect_file_list(included_paths, active_target)
 
-            # 3. Creación del archivo comprimido TAR.GZ con reporte continuo
             files_added = 0
             processed_bytes = 0
 
@@ -144,15 +145,11 @@ class BackupService:
             size_bytes = os.path.getsize(backup_path) if os.path.exists(backup_path) else 0
             size_mb = round(size_bytes / (1024 * 1024), 2)
 
-            # 4. Aplicar Política de Retención Automática (Máximo 3 copias)
+            # Aplicar retención en el subdirectorio de la app
             if progress_callback:
                 progress_callback(97, "Aplicando políticas de retención...")
             try:
-                backup_engine_service.apply_retention_policy(
-                    target_dir=active_target,
-                    prefix=app_id,
-                    max_copies=3
-                )
+                self.get_available_backups(target_dir=active_target, max_keep_per_app=3)
             except Exception as ret_err:
                 print(f"[WARNING] Error aplicando retención para {app_id}: {ret_err}")
 
@@ -180,9 +177,12 @@ class BackupService:
             progress_callback(2, "Iniciando Disaster Recovery...")
 
         active_target = self.target_dir
+        dr_target_dir = os.path.join(active_target, "DisasterRecovery")
+        os.makedirs(dr_target_dir, exist_ok=True)
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"disaster_recovery_{timestamp}.tar.gz"
-        backup_path = os.path.join(active_target, backup_filename)
+        backup_path = os.path.join(dr_target_dir, backup_filename)
 
         source_paths = ["/DATA/AppData"]
 
@@ -211,15 +211,7 @@ class BackupService:
             size_bytes = os.path.getsize(backup_path) if os.path.exists(backup_path) else 0
             size_mb = round(size_bytes / (1024 * 1024), 2)
 
-            # Aplicar retención también para Disaster Recovery
-            try:
-                backup_engine_service.apply_retention_policy(
-                    target_dir=active_target,
-                    prefix="disaster_recovery",
-                    max_copies=3
-                )
-            except Exception as ret_err:
-                print(f"[WARNING] Error aplicando retención en Disaster Recovery: {ret_err}")
+            self.get_available_backups(target_dir=active_target, max_keep_per_app=3)
 
             if progress_callback:
                 progress_callback(100, "Disaster Recovery completado con éxito")
@@ -239,24 +231,27 @@ class BackupService:
             return {"success": False, "error": str(e)}
 
     def list_snapshots(self, max_keep_per_app: int = 3) -> List[Dict[str, Any]]:
-        """
-        Lista las copias de seguridad activas en el directorio destino.
-        Elimina automáticamente del disco las copias que superen max_keep_per_app por aplicación.
-        """
+        """Lista las copias de seguridad activas aplicando la política de retención."""
         return self.get_available_backups(target_dir=self.target_dir, max_keep_per_app=max_keep_per_app)
 
     def get_available_backups(self, target_dir: str = None, max_keep_per_app: int = 3) -> List[Dict[str, Any]]:
         """
-        Escanea el directorio de backups, borra físicamente del disco las copias
-        obsoletas (más de 3 por app) y retorna solo las 3 más recientes de cada una.
+        Escanea recursivamente el directorio de backups en busca de archivos .tar.gz,
+        elimina físicamente del disco las copias que excedan el límite de 3 por app
+        y devuelve únicamente las 3 más recientes de cada aplicación.
         """
         active_target = target_dir or self.target_dir
         if not active_target or not os.path.exists(active_target):
             return []
 
-        pattern = os.path.join(active_target, "*.tar.gz")
-        all_files = glob.glob(pattern)
+        # 1. Escaneo recursivo mediante os.walk para penetrar en subcarpetas
+        all_files = []
+        for root, _, files in os.walk(active_target):
+            for file in files:
+                if file.endswith(".tar.gz"):
+                    all_files.append(os.path.join(root, file))
 
+        # 2. Agrupar por nombre de aplicación
         app_groups: Dict[str, List[str]] = {}
 
         for filepath in all_files:
@@ -267,7 +262,12 @@ class BackupService:
             elif filename.startswith("disaster_recovery_") or filename.startswith("full_system_"):
                 app_name = "Disaster Recovery"
             else:
-                app_name = "Otros"
+                # Si el archivo está dentro de una subcarpeta (ej. Apps/transmission/...)
+                parent_dir = os.path.basename(os.path.dirname(filepath))
+                if parent_dir and parent_dir not in ("Backups", "Apps", "CasaOS"):
+                    app_name = parent_dir
+                else:
+                    app_name = "Otros"
 
             if app_name not in app_groups:
                 app_groups[app_name] = []
@@ -275,27 +275,27 @@ class BackupService:
 
         valid_backups = []
 
+        # 3. Aplicar eliminación física de copias obsoletas
         for app_name, files in app_groups.items():
-            # Ordenar por fecha de modificación (la más reciente primero)
+            # Ordenar de más reciente a más antigua por fecha de modificación
             files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
 
             to_keep = files[:max_keep_per_app]
             to_delete = files[max_keep_per_app:]
 
-            # Eliminar archivos obsoletos físicamente del disco
+            # Borrar del disco las copias de la 4ª en adelante
             for old_file in to_delete:
                 try:
                     os.remove(old_file)
-                    print(f"[RETENTION] Copia obsoleta eliminada del disco: {old_file}")
+                    print(f"[RETENTION] Archivo antiguo borrado de disco: {old_file}")
                 except Exception as e:
-                    print(f"[ERROR] No se pudo eliminar copia obsoleta {old_file}: {e}")
+                    print(f"[ERROR] No se pudo borrar {old_file}: {e}")
 
-            # Procesar únicamente las copias conservadas
+            # Agregar solo las copias conservadas
             for filepath in to_keep:
                 try:
                     stat = os.stat(filepath)
                     filename = os.path.basename(filepath)
-                    
                     display_app = app_name.capitalize() if app_name not in ("Disaster Recovery", "Otros") else app_name
 
                     valid_backups.append({
@@ -311,7 +311,7 @@ class BackupService:
                         "mtime": stat.st_mtime
                     })
                 except Exception as e:
-                    print(f"[ERROR] Error al leer metadatos de {filepath}: {e}")
+                    print(f"[ERROR] Error al procesar {filepath}: {e}")
                     continue
 
         valid_backups.sort(key=lambda x: x["mtime"], reverse=True)
