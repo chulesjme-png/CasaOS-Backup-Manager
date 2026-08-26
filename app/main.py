@@ -203,10 +203,84 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             )
             conn.commit()
 
+def perform_real_restore(filename: str, job_id: str):
+    start = time.time()
+    active_jobs[job_id] = {"status": "running", "progress": 10, "message": "Buscando copia de seguridad...", "cancelled": False}
+
+    search_paths = set()
+    if os.path.exists("/DATA/Backups"):
+        search_paths.add("/DATA/Backups")
+    if os.path.exists("/host/DATA/Backups"):
+        search_paths.add("/host/DATA/Backups")
+
+    for mount in get_all_mounts():
+        clean_mount = mount[5:] if mount.startswith("/host/") else mount
+        cand_rw = os.path.join(clean_mount, "Backups") if not clean_mount.endswith("Backups") else clean_mount
+        cand_ro = os.path.join("/host" + clean_mount, "Backups") if not clean_mount.endswith("Backups") else f"/host{clean_mount}"
+        if os.path.exists(cand_rw): search_paths.add(cand_rw)
+        elif os.path.exists(cand_ro): search_paths.add(cand_ro)
+
+    target_file = None
+    for base in search_paths:
+        for root, _, files in os.walk(base):
+            if filename in files:
+                target_file = Path(root) / filename
+                break
+        if target_file:
+            break
+
+    if not target_file or not target_file.exists():
+        active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Archivo {filename} no encontrado."}
+        return
+
+    try:
+        fn_lower = filename.lower()
+        if "_backup_" in fn_lower:
+            app_key = fn_lower.split("_backup_")[0]
+        elif fn_lower.startswith("disaster_recovery_") or fn_lower.startswith("full_system_"):
+            app_key = "sistema_completo"
+        else:
+            app_key = fn_lower.split(".")[0]
+
+        dest_dir = Path("/DATA/AppData") if app_key in ["sistema_completo", "disaster_recovery"] else Path(f"/DATA/AppData/{app_key}")
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        active_jobs[job_id]["progress"] = 40
+        active_jobs[job_id]["message"] = f"Descomprimiendo en {dest_dir}..."
+
+        with tarfile.open(target_file, "r:gz") as tar:
+            tar.extractall(path=dest_dir)
+
+        elapsed = round(time.time() - start, 2)
+        active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Restauración completada con éxito", "file": filename}
+
+        with get_db() as conn:
+            conn.cursor().execute(
+                "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                ("Restore", app_key.capitalize(), "success", elapsed, filename, int(time.time() * 1000))
+            )
+            conn.commit()
+
+    except Exception as e:
+        elapsed = round(time.time() - start, 2)
+        active_jobs[job_id] = {"status": "failed", "progress": 100, "message": str(e)}
+        with get_db() as conn:
+            conn.cursor().execute(
+                "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                ("Restore", filename, "failed", elapsed, str(e), int(time.time() * 1000))
+            )
+            conn.commit()
+
 @app.post("/api/v1/backups/run-app/{app_name}")
 def run_backup(app_name: str, background_tasks: BackgroundTasks, target_disk: str = Query(None)):
     job_id = f"job_{app_name}_{int(time.time())}"
     background_tasks.add_task(perform_real_backup, app_name, target_disk, job_id)
+    return {"status": "started", "job_id": job_id}
+
+@app.post("/api/v1/backups/restore")
+def restore_backup(filename: str, background_tasks: BackgroundTasks):
+    job_id = f"job_restore_{int(time.time())}"
+    background_tasks.add_task(perform_real_restore, filename, job_id)
     return {"status": "started", "job_id": job_id}
 
 @app.get("/api/v1/backups/job-status/{job_id}")
@@ -223,19 +297,13 @@ def cancel_job(job_id: str):
 @app.get("/api/v1/backups/list")
 @app.get("/api/v1/backups")
 def list_backups(max_keep_per_app: int = 3):
-    """
-    Busca únicamente en rutas directas con permisos RW (priorizando /media/ sobre /host/media/),
-    desduplica por ruta real de archivo y retiene exactamente 3 versiones físicas por app.
-    """
     search_paths = set()
 
-    # Priorizar /DATA/Backups sobre /host/DATA/Backups
     if os.path.exists("/DATA/Backups"):
         search_paths.add("/DATA/Backups")
     elif os.path.exists("/host/DATA/Backups"):
         search_paths.add("/host/DATA/Backups")
 
-    # Priorizar rutas /media/ sobre /host/media/
     for mount in get_all_mounts():
         clean_mount = mount[5:] if mount.startswith("/host/") else mount
         cand_rw = os.path.join(clean_mount, "Backups") if not clean_mount.endswith("Backups") else clean_mount
@@ -262,7 +330,6 @@ def list_backups(max_keep_per_app: int = 3):
                 if fn_lower.endswith((".tar.gz", ".tgz", ".zip")):
                     fp = os.path.join(root, file)
                     try:
-                        # Evitar procesar el mismo archivo físico si viene mapeado por múltiples sitios
                         real_path = os.path.realpath(fp)
                         if real_path in seen_files:
                             continue
@@ -325,7 +392,6 @@ def list_backups(max_keep_per_app: int = 3):
                 "timestamp": item["timestamp"]
             })
 
-    # Ordenar alfabéticamente por nombre de App y luego por fecha descendente (más reciente primero)
     retained_backups.sort(key=lambda x: (x["app_name"].lower(), -x["timestamp"]))
     return {"backups": retained_backups}
 

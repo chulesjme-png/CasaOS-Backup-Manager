@@ -150,11 +150,11 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header">
-                    <h5 class="modal-title fw-bold" id="progressTitle">Procesando Copia...</h5>
+                    <h5 class="modal-title fw-bold" id="progressTitle">Procesando...</h5>
                     <button type="button" class="btn-close" id="btnCloseProgressHeader" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body py-4">
-                    <p class="text-muted small mb-2" id="progressStatusText">Iniciando compresión de archivos...</p>
+                    <p class="text-muted small mb-2" id="progressStatusText">Iniciando proceso...</p>
                     <div class="progress mb-3" style="height: 22px;">
                         <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;">0%</div>
                     </div>
@@ -281,7 +281,6 @@
                 const data = await res.json();
                 const list = data.disks || [];
 
-                // Cargar preferencia guardada previamente
                 const savedTargetDisk = localStorage.getItem('selected_target_disk');
 
                 select.innerHTML = list.map(d => {
@@ -289,7 +288,6 @@
                     return `<option value="${path}">Disco: ${d.name} (${path}) - ${d.free_gb} GB libres</option>`;
                 }).join('');
 
-                // Aplicar selección persistente si existe en la lista
                 if (savedTargetDisk && list.some(d => (d.mountpoint || d.mount) === savedTargetDisk)) {
                     select.value = savedTargetDisk;
                 } else if (select.options.length > 0) {
@@ -373,6 +371,59 @@
             }
         }
 
+        async function triggerRestore(filename) {
+            const restoreModalEl = document.getElementById('modalRestore');
+            const restoreModalInstance = bootstrap.Modal.getInstance(restoreModalEl);
+            if (restoreModalInstance) restoreModalInstance.hide();
+
+            const modalEl = document.getElementById('modalProgress');
+            const modalProgress = new bootstrap.Modal(modalEl);
+            
+            document.getElementById('progressTitle').innerText = `Restaurando: ${filename}`;
+            document.getElementById('progressStatusText').innerText = "Iniciando descompresión...";
+            const bar = document.getElementById('progressBar');
+            bar.style.width = '10%';
+            bar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark';
+            bar.innerText = '10%';
+            
+            document.getElementById('btnCancelJob').style.display = 'none';
+            modalProgress.show();
+
+            try {
+                const res = await fetch(`/api/v1/backups/restore?filename=${encodeURIComponent(filename)}`, { method: 'POST' });
+                const data = await res.json();
+                currentJobId = data.job_id;
+
+                if (jobInterval) clearInterval(jobInterval);
+
+                jobInterval = setInterval(async () => {
+                    try {
+                        const stRes = await fetch(`/api/v1/backups/job-status/${currentJobId}`);
+                        const stData = await stRes.json();
+
+                        bar.style.width = `${stData.progress}%`;
+                        bar.innerText = `${stData.progress}%`;
+                        document.getElementById('progressStatusText').innerText = stData.message;
+
+                        if (stData.status === 'success') {
+                            clearInterval(jobInterval);
+                            bar.className = 'progress-bar bg-success';
+                            document.getElementById('progressStatusText').innerText = `✅ ¡Restauración completada con éxito!`;
+                        } else if (stData.status === 'failed') {
+                            clearInterval(jobInterval);
+                            bar.className = 'progress-bar bg-danger';
+                            document.getElementById('progressStatusText').innerText = `❌ ${stData.message}`;
+                        }
+                    } catch (e) {
+                        console.error("Error comprobando estado de restauración:", e);
+                    }
+                }, 800);
+            } catch (err) {
+                bar.className = 'progress-bar bg-danger';
+                document.getElementById('progressStatusText').innerText = '❌ Error al iniciar la restauración.';
+            }
+        }
+
         async function cancelCurrentJob() {
             if (currentJobId) {
                 await fetch(`/api/v1/backups/cancel/${currentJobId}`, { method: 'POST' });
@@ -421,7 +472,7 @@
                             <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
                             <div class="small text-muted mt-1">App: <strong class="text-primary">${b.app_name}</strong> &nbsp;|&nbsp; Peso: <strong>${b.size_str}</strong> &nbsp;|&nbsp; Fecha: ${b.fecha}</div>
                         </div>
-                        <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="alert('Iniciando restauración de ${b.filename}')">🔄 Restaurar</button>
+                        <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore('${b.filename}')">🔄 Restaurar</button>
                     </div>
                 `).join('') : '<div class="p-4 text-center text-muted">No hay copias válidas registradas.</div>';
             } catch (e) {
