@@ -1,31 +1,32 @@
 import os
 import shutil
-import subprocess
 from typing import List, Dict, Any
 
 class DiskService:
     def __init__(self):
         pass
 
-    def _get_device_label(self, device_path: str, mountpoint: str) -> str:
-        folder_name = mountpoint.split("/")[-1] if "/" in mountpoint else mountpoint
-
-        if device_path and device_path.startswith("/dev/"):
-            try:
-                cmd = ["udevadm", "info", "--query=property", "--name=" + device_path]
-                output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True)
-                for line in output.splitlines():
-                    if line.startswith("ID_FS_LABEL=") or line.startswith("ID_MODEL="):
-                        val = line.split("=", 1)[1].strip()
-                        if val:
-                            return val.replace("_", " ")
-            except Exception:
-                pass
-
-        if len(folder_name) > 16 and "-" in folder_name:
-            return f"Disco {folder_name[:8]}"
-
-        return folder_name or mountpoint
+    def _get_disk_labels_map() -> Dict[str, str]:
+        """
+        Lee /dev/disk/by-label/ del host para mapear /dev/sdX -> Nombre de la etiqueta.
+        """
+        label_map = {}
+        by_label_paths = ["/host/dev/disk/by-label", "/dev/disk/by-label"]
+        
+        for path in by_label_paths:
+            if os.path.exists(path):
+                try:
+                    for label in os.listdir(path):
+                        full_path = os.path.join(path, label)
+                        if os.path.islink(full_path):
+                            target = os.path.realpath(full_path)
+                            if target.startswith("/host"):
+                                target = target[5:]
+                            clean_label = label.replace("\\x20", " ").replace("_", " ")
+                            label_map[target] = clean_label
+                except Exception:
+                    pass
+        return label_map
 
     def get_disks(self) -> List[Dict[str, Any]]:
         mounts_source = "/host/proc/mounts" if os.path.exists("/host/proc/mounts") else "/proc/mounts"
@@ -33,10 +34,13 @@ class DiskService:
         if not os.path.exists(mounts_source):
             return []
 
-        VALID_PREFIXES = ("/media/pichules/", "/mnt/", "/run/media/")
-
+        labels_map = self._get_disk_labels_map()
         disks = []
         seen_mounts = set()
+        seen_devices = set()
+
+        # Prefijos de dispositivos de bloques físicos reales (SATA, USB, NVMe, SD)
+        PHYSICAL_DEV_PREFIXES = ("/dev/sd", "/dev/nvme", "/dev/mmcblk", "/dev/vd", "/dev/mapper")
 
         with open(mounts_source, "r") as f:
             for line in f:
@@ -46,27 +50,47 @@ class DiskService:
 
                 device, mountpoint, fstype = parts[0], parts[1], parts[2]
 
-                # Filtro estricto: Debe comenzar con uno de los prefijos válidos
-                if not any(mountpoint.startswith(prefix) for prefix in VALID_PREFIXES):
+                # 1. Filtro genérico: Solo aceptar dispositivos físicos reales
+                if not device.startswith(PHYSICAL_DEV_PREFIXES):
                     continue
 
-                # Evitar mostrar directorios de montaje raíz (como /media/pichules directamente)
-                if mountpoint in ("/media/pichules", "/mnt", "/run/media"):
+                # 2. Ignorar montajes internos del sistema operativo o Docker
+                if mountpoint in ("/", "/boot", "/etc", "/var", "/proc", "/sys", "/dev"):
+                    continue
+                if mountpoint.startswith(("/var/lib/docker", "/proc", "/sys", "/dev", "/run/docker")):
                     continue
 
-                if mountpoint in seen_mounts:
+                # 3. Solo aceptar puntos de montaje de almacenamiento (/media/..., /mnt/..., /DATA/...)
+                if not mountpoint.startswith(("/media", "/mnt", "/run/media", "/DATA")):
                     continue
-                seen_mounts.add(mountpoint)
+
+                # Ignorar carpetas raíz intermedias (/media, /mnt)
+                if mountpoint in ("/media", "/mnt", "/run/media"):
+                    continue
+
+                if mountpoint in seen_mounts or device in seen_devices:
+                    continue
 
                 target_path = f"/host{mountpoint}" if os.path.exists(f"/host{mountpoint}") else mountpoint
 
                 try:
                     usage = shutil.disk_usage(target_path)
-                    
                     if usage.total == 0:
                         continue
 
-                    display_name = self._get_device_label(device, mountpoint)
+                    folder_name = mountpoint.split("/")[-1]
+                    dev_short = device.split("/")[-1]
+
+                    # Prioridad de nombres: Etiqueta real > Nombre de carpeta simple > Dispositivo
+                    if device in labels_map:
+                        display_name = labels_map[device]
+                    elif not (len(folder_name) > 18 and "-" in folder_name):
+                        display_name = folder_name.replace("_", " ")
+                    else:
+                        display_name = f"Disco USB ({dev_short})"
+
+                    seen_mounts.add(mountpoint)
+                    seen_devices.add(device)
 
                     disks.append({
                         "device": device,
