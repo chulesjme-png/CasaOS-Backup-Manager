@@ -282,43 +282,39 @@
                 const data = await res.json();
                 const list = data.disks || [];
 
-                select.innerHTML = list.map(d => `
-                    <option value="${d.mountpoint}">Disco: ${d.name} (${d.mountpoint}) - ${d.free_gb} GB libres</option>
-                `).join('');
+                select.innerHTML = list.map(d => {
+                    const path = d.mountpoint || d.mount || '';
+                    return `<option value="${path}">Disco: ${d.name} (${path}) - ${d.free_gb} GB libres</option>`;
+                }).join('');
 
-                if (savedTargetDisk && list.some(d => d.mountpoint === savedTargetDisk)) {
+                if (savedTargetDisk && list.some(d => (d.mountpoint || d.mount) === savedTargetDisk)) {
                     select.value = savedTargetDisk;
                 } else if (select.options.length > 0) {
                     savedTargetDisk = select.value;
                 }
 
-                container.innerHTML = list.length ? list.map(d => `
-                    <div class="py-2 border-bottom">
-                        <div class="d-flex justify-content-between text-dark fw-bold mb-1">
-                            <span>${d.mountpoint}</span>
-                            <span>${d.used_gb} GB / ${d.total_gb} GB</span>
+                container.innerHTML = list.length ? list.map(d => {
+                    const path = d.mountpoint || d.mount || '';
+                    return `
+                        <div class="py-2 border-bottom">
+                            <div class="d-flex justify-content-between text-dark fw-bold mb-1">
+                                <span>${path}</span>
+                                <span>${d.used_gb} GB / ${d.total_gb} GB</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar ${d.percent > 85 ? 'bg-danger' : 'bg-primary'}" style="width: ${d.percent}%"></div>
+                            </div>
                         </div>
-                        <div class="progress" style="height: 10px;">
-                            <div class="progress-bar ${d.percent > 85 ? 'bg-danger' : 'bg-primary'}" style="width: ${d.percent}%"></div>
-                        </div>
-                    </div>
-                `).join('') : '<div class="text-muted py-2 text-center">No se encontraron discos montados</div>';
+                    `;
+                }).join('') : '<div class="text-muted py-2 text-center">No se encontraron discos montados</div>';
             } catch (err) {
                 container.innerHTML = '<div class="text-danger py-2 text-center">Error al leer discos</div>';
             }
         }
 
-        async function saveSelectedDisk(value) {
+        function saveSelectedDisk(value) {
             savedTargetDisk = value;
-            try {
-                await fetch('/api/v1/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ selected_target_disk: value })
-                });
-            } catch (e) {
-                console.error("Error al guardar selección de disco:", e);
-            }
+            localStorage.setItem('selected_target_disk', value);
         }
 
         async function triggerAppBackup(appName) {
@@ -431,15 +427,10 @@
             }
         });
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                const configRes = await fetch('/api/v1/config');
-                const configData = await configRes.json();
-                if (configData.selected_target_disk) {
-                    savedTargetDisk = configData.selected_target_disk;
-                }
-            } catch (e) {
-                console.error("No se pudo cargar la configuración:", e);
+        document.addEventListener('DOMContentLoaded', () => {
+            const localDisk = localStorage.getItem('selected_target_disk');
+            if (localDisk) {
+                savedTargetDisk = localDisk;
             }
 
             loadApps();

@@ -55,6 +55,7 @@ class DiskService:
 
                 disks.append({
                     "device": part.device,
+                    "mount": clean_mountpoint,
                     "mountpoint": clean_mountpoint,
                     "name": display_name or clean_mountpoint,
                     "fstype": part.fstype,
