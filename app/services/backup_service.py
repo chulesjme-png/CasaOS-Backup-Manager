@@ -1,5 +1,6 @@
 import os
 import json
+import glob
 import tarfile
 import subprocess
 from datetime import datetime
@@ -37,6 +38,14 @@ class BackupService:
         except OSError as e:
             print(f"[WARNING] No se pudo crear el directorio de backups '{path}': {e}")
         return path
+
+    def _format_size(self, size_bytes: int) -> str:
+        if size_bytes < 1024 * 1024:
+            return f"{round(size_bytes / 1024, 1)} KB"
+        return f"{round(size_bytes / (1024 * 1024), 2)} MB"
+
+    def _format_date(self, timestamp: float) -> str:
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
     def _collect_file_list(self, paths: List[str], active_target: str):
         """Escanea las rutas objetivo y genera una lista detallada con sus tamaños para calcular el progreso."""
@@ -202,6 +211,16 @@ class BackupService:
             size_bytes = os.path.getsize(backup_path) if os.path.exists(backup_path) else 0
             size_mb = round(size_bytes / (1024 * 1024), 2)
 
+            # Aplicar retención también para Disaster Recovery
+            try:
+                backup_engine_service.apply_retention_policy(
+                    target_dir=active_target,
+                    prefix="disaster_recovery",
+                    max_copies=3
+                )
+            except Exception as ret_err:
+                print(f"[WARNING] Error aplicando retención en Disaster Recovery: {ret_err}")
+
             if progress_callback:
                 progress_callback(100, "Disaster Recovery completado con éxito")
 
@@ -219,22 +238,83 @@ class BackupService:
                 progress_callback(0, f"Error en Disaster Recovery: {str(e)}")
             return {"success": False, "error": str(e)}
 
-    def list_snapshots(self) -> List[Dict[str, Any]]:
-        """Lista las copias de seguridad realizadas en el volumen de destino activo."""
-        active_target = self.target_dir
-        if not os.path.exists(active_target):
+    def list_snapshots(self, max_keep_per_app: int = 3) -> List[Dict[str, Any]]:
+        """
+        Lista las copias de seguridad activas en el directorio destino.
+        Elimina automáticamente del disco las copias que superen max_keep_per_app por aplicación.
+        """
+        return self.get_available_backups(target_dir=self.target_dir, max_keep_per_app=max_keep_per_app)
+
+    def get_available_backups(self, target_dir: str = None, max_keep_per_app: int = 3) -> List[Dict[str, Any]]:
+        """
+        Escanea el directorio de backups, borra físicamente del disco las copias
+        obsoletas (más de 3 por app) y retorna solo las 3 más recientes de cada una.
+        """
+        active_target = target_dir or self.target_dir
+        if not active_target or not os.path.exists(active_target):
             return []
 
-        snapshots = []
-        for file in os.listdir(active_target):
-            if file.endswith(".tar.gz"):
-                full_p = os.path.join(active_target, file)
-                stat = os.stat(full_p)
-                snapshots.append({
-                    "filename": file,
-                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                    "created_at": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                })
-        return sorted(snapshots, key=lambda x: x["created_at"], reverse=True)
+        pattern = os.path.join(active_target, "*.tar.gz")
+        all_files = glob.glob(pattern)
+
+        app_groups: Dict[str, List[str]] = {}
+
+        for filepath in all_files:
+            filename = os.path.basename(filepath)
+            
+            if "_backup_" in filename:
+                app_name = filename.split("_backup_")[0]
+            elif filename.startswith("disaster_recovery_") or filename.startswith("full_system_"):
+                app_name = "Disaster Recovery"
+            else:
+                app_name = "Otros"
+
+            if app_name not in app_groups:
+                app_groups[app_name] = []
+            app_groups[app_name].append(filepath)
+
+        valid_backups = []
+
+        for app_name, files in app_groups.items():
+            # Ordenar por fecha de modificación (la más reciente primero)
+            files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
+
+            to_keep = files[:max_keep_per_app]
+            to_delete = files[max_keep_per_app:]
+
+            # Eliminar archivos obsoletos físicamente del disco
+            for old_file in to_delete:
+                try:
+                    os.remove(old_file)
+                    print(f"[RETENTION] Copia obsoleta eliminada del disco: {old_file}")
+                except Exception as e:
+                    print(f"[ERROR] No se pudo eliminar copia obsoleta {old_file}: {e}")
+
+            # Procesar únicamente las copias conservadas
+            for filepath in to_keep:
+                try:
+                    stat = os.stat(filepath)
+                    filename = os.path.basename(filepath)
+                    
+                    display_app = app_name.capitalize() if app_name not in ("Disaster Recovery", "Otros") else app_name
+
+                    valid_backups.append({
+                        "filename": filename,
+                        "filepath": filepath,
+                        "full_path": filepath,
+                        "app": display_app,
+                        "app_id": app_name,
+                        "size": stat.st_size,
+                        "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                        "size_formatted": self._format_size(stat.st_size),
+                        "created_at": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+                        "mtime": stat.st_mtime
+                    })
+                except Exception as e:
+                    print(f"[ERROR] Error al leer metadatos de {filepath}: {e}")
+                    continue
+
+        valid_backups.sort(key=lambda x: x["mtime"], reverse=True)
+        return valid_backups
 
 backup_service = BackupService()
