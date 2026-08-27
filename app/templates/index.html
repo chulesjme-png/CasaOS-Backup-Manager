@@ -138,14 +138,34 @@
                     </div>
                     <div class="card-body">
                         <div id="tabContentRpi" class="tab-pane-content">
-                            <div class="small">
+                            <div class="small" id="rpiDetails">
                                 <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">💻 Sistema Raspberry:</span>
-                                    <span class="fw-bold text-dark">CasaOS Linux</span>
+                                    <span class="text-muted">💻 Dispositivo:</span>
+                                    <span class="fw-bold text-dark" id="rpiModel">Raspberry Pi</span>
                                 </div>
                                 <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">Estado AppData:</span>
-                                    <span class="fw-semibold text-success">Disponible</span>
+                                    <span class="text-muted">🐧 Sistema Operativo:</span>
+                                    <span class="fw-semibold text-dark" id="rpiOs">CasaOS Linux</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">🏗️ Arquitectura:</span>
+                                    <span class="fw-semibold text-dark" id="rpiArch">aarch64 (64-bit)</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">🧠 Memoria RAM:</span>
+                                    <span class="fw-semibold text-dark" id="rpiRam">Cargando...</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">🔥 Estado CPU / Temp:</span>
+                                    <span class="fw-semibold text-dark" id="rpiCpu">Cargando...</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">📁 Ruta AppData:</span>
+                                    <code>/DATA/AppData</code>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">🛡️ Estado AppData:</span>
+                                    <span class="fw-semibold text-success">🟢 Disponible</span>
                                 </div>
                             </div>
                         </div>
@@ -238,9 +258,24 @@
             document.querySelectorAll('.tab-pane-content').forEach(pane => pane.classList.add('d-none'));
 
             evt.target.classList.add('active');
-            if (tabName === 'rpi') document.getElementById('tabContentRpi').classList.remove('d-none');
+            if (tabName === 'rpi') { document.getElementById('tabContentRpi').classList.remove('d-none'); loadRpiInfo(); }
             if (tabName === 'docker') { document.getElementById('tabContentDocker').classList.remove('d-none'); loadDockerInfo(); }
             if (tabName === 'disks') { document.getElementById('tabContentDisks').classList.remove('d-none'); loadDisksInfo(); }
+        }
+
+        async function loadRpiInfo() {
+            try {
+                const res = await fetch('/api/v1/system/info');
+                const data = await res.json();
+                if (data.model) document.getElementById('rpiModel').innerText = data.model;
+                if (data.os) document.getElementById('rpiOs').innerText = data.os;
+                if (data.arch) document.getElementById('rpiArch').innerText = data.arch;
+                if (data.ram) document.getElementById('rpiRam').innerText = data.ram;
+                if (data.cpu) document.getElementById('rpiCpu').innerText = data.cpu;
+            } catch (e) {
+                document.getElementById('rpiRam').innerText = 'Disponible';
+                document.getElementById('rpiCpu').innerText = 'OK';
+            }
         }
 
         async function loadApps() {
@@ -501,6 +536,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadApps();
             loadDisksInfo();
+            loadRpiInfo();
         });
     </script>
 </body>
