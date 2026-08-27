@@ -274,7 +274,14 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     filename = f"{app_name.lower()}_backup_{timestamp}.tar.gz"
     dest_file = dest_dir / filename
 
-    src_dir = Path("/DATA/AppData") if app_name == "Sistema_Completo" else Path(f"/DATA/AppData/{app_name}")
+    # Soporte robusto para identificar si es sistema completo en minúsculas, mayúsculas o espacios
+    normalized_app = app_name.replace("_", " ").strip().lower()
+    if normalized_app in ["sistema completo", "sistema_completo", "disaster recovery"]:
+        src_dir = Path("/DATA/AppData")
+        filename = f"sistema_completo_backup_{timestamp}.tar.gz"
+        dest_file = dest_dir / filename
+    else:
+        src_dir = Path(f"/DATA/AppData/{app_name}")
 
     try:
         # 1. Verificación de existencia del directorio de origen
@@ -447,6 +454,12 @@ def perform_real_restore(filename: str, job_id: str):
 def run_backup(app_name: str, background_tasks: BackgroundTasks, target_disk: str = Query(None)):
     job_id = f"job_{app_name}_{int(time.time())}"
     background_tasks.add_task(perform_real_backup, app_name, target_disk, job_id)
+    return {"status": "started", "job_id": job_id}
+
+@app.post("/api/v1/backups/run-system")
+def run_system_backup(background_tasks: BackgroundTasks, target_disk: str = Query(None)):
+    job_id = f"job_Sistema_Completo_{int(time.time())}"
+    background_tasks.add_task(perform_real_backup, "Sistema_Completo", target_disk, job_id)
     return {"status": "started", "job_id": job_id}
 
 @app.post("/api/v1/backups/restore")
