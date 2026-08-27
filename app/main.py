@@ -35,8 +35,10 @@ class ConfigModel(BaseModel):
     telegram_chat_id: str = ""
 
 class TelegramTestModel(BaseModel):
-    telegram_token: str
-    telegram_chat_id: str
+    telegram_token: str = ""
+    telegram_chat_id: str = ""
+    token: str = ""
+    chat_id: str = ""
 
 # --- GESTIÓN DE CONFIGURACIÓN Y TELEGRAM ---
 def load_config():
@@ -60,9 +62,9 @@ def send_telegram_notification(message: str):
     cfg = load_config()
     if not cfg.get("telegram_enabled") or not cfg.get("telegram_token") or not cfg.get("telegram_chat_id"):
         return
-    url = f"https://api.telegram.org/bot{cfg['telegram_token']}/sendMessage"
+    url = f"https://api.telegram.org/bot{cfg['telegram_token'].strip()}/sendMessage"
     payload = {
-        "chat_id": cfg["telegram_chat_id"],
+        "chat_id": cfg["telegram_chat_id"].strip(),
         "text": message,
         "parse_mode": "Markdown"
     }
@@ -134,22 +136,38 @@ def save_config(config: ConfigModel):
 
 @app.post("/api/v1/config/test-telegram")
 def test_telegram(data: TelegramTestModel):
-    if not data.telegram_token or not data.telegram_chat_id:
-        raise HTTPException(status_code=400, detail="Faltan credenciales de Telegram")
-    
-    url = f"https://api.telegram.org/bot{data.telegram_token}/sendMessage"
+    token = (data.telegram_token or data.token).strip()
+    chat_id = (data.telegram_chat_id or data.chat_id).strip()
+
+    if not token or not chat_id:
+        cfg = load_config()
+        token = token or cfg.get("telegram_token", "").strip()
+        chat_id = chat_id or cfg.get("telegram_chat_id", "").strip()
+
+    if not token or not chat_id:
+        raise HTTPException(status_code=400, detail="Faltan credenciales (Token o Chat ID)")
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
-        "chat_id": data.telegram_chat_id,
+        "chat_id": chat_id,
         "text": "🧪 *CasaOS Backup Manager*: Mensaje de prueba exitoso.",
         "parse_mode": "Markdown"
     }
     try:
-        res = requests.post(url, json=payload, timeout=5)
-        if res.status_code == 200:
-            return {"status": "ok"}
-        raise HTTPException(status_code=400, detail="Respuesta fallida de Telegram API")
+        res = requests.post(url, json=payload, timeout=8)
+        res_data = res.json()
+        
+        if res.status_code == 200 and res_data.get("ok"):
+            return {"status": "ok", "message": "Mensaje enviado con éxito"}
+            
+        error_desc = res_data.get("description", "Error desconocido de Telegram")
+        logger.error(f"Error Telegram API ({res.status_code}): {error_desc}")
+        raise HTTPException(status_code=400, detail=f"Telegram API: {error_desc}")
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error de conexión con Telegram: {e}")
+        raise HTTPException(status_code=500, detail=f"Error de conexión: {str(e)}")
 
 # --- ENDPOINTS EXISTENTES DE APPS Y DOCKER ---
 @app.get("/api/v1/apps")
