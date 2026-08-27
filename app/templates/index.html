@@ -69,7 +69,7 @@
                     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
                     <button class="btn btn-outline-secondary btn-sm">📅 Programación</button>
                     <button class="btn btn-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
-                    <button class="btn btn-outline-secondary btn-sm">⚙️ Configuración</button>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalConfig">⚙️ Configuración</button>
                 </div>
             </div>
         </div>
@@ -243,6 +243,51 @@
                 </div>
                 <div class="modal-body">
                     <div class="list-group list-group-flush border rounded" id="restoreBackupsList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Configuración -->
+    <div class="modal fade" id="modalConfig" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">⚙️ Configuración del Sistema</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="configForm">
+                        <h6 class="fw-bold text-dark mb-3">💾 Destino de Copias por Defecto</h6>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Ruta o Punto de Montaje</label>
+                            <input type="text" class="form-control form-control-sm" id="cfgTargetDisk" placeholder="/media/pichules/...">
+                        </div>
+
+                        <hr class="my-3">
+
+                        <h6 class="fw-bold text-dark mb-3">📢 Notificaciones de Telegram</h6>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="cfgTelegramEnabled">
+                            <label class="form-check-label small fw-semibold" for="cfgTelegramEnabled">Activar notificaciones tras cada backup</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Bot Token</label>
+                            <input type="password" class="form-control form-control-sm" id="cfgTelegramToken" placeholder="123456789:ABCdef...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Chat ID</label>
+                            <input type="text" class="form-control form-control-sm" id="cfgTelegramChatId" placeholder="987654321">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span id="telegramTestResult" class="small"></span>
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="testTelegram()">🧪 Probar Telegram</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="saveConfiguration()">💾 Guardar Configuración</button>
                 </div>
             </div>
         </div>
@@ -488,6 +533,85 @@
             if (confirm("¿Limpiar historial?")) {
                 await fetch('/api/v1/logs', { method: 'DELETE' });
                 document.getElementById('logsTableBody').innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">Historial vacío</td></tr>';
+            }
+        }
+
+        // Cargar configuración al abrir el modal
+        document.getElementById('modalConfig').addEventListener('show.bs.modal', async () => {
+            try {
+                const res = await fetch('/api/v1/config');
+                if (res.ok) {
+                    const cfg = await res.json();
+                    document.getElementById('cfgTargetDisk').value = cfg.target_disk || localStorage.getItem('selected_target_disk') || '';
+                    document.getElementById('cfgTelegramEnabled').checked = !!cfg.telegram_enabled;
+                    document.getElementById('cfgTelegramToken').value = cfg.telegram_token || '';
+                    document.getElementById('cfgTelegramChatId').value = cfg.telegram_chat_id || '';
+                }
+            } catch (e) {
+                console.error("Error al cargar la configuración:", e);
+            }
+        });
+
+        // Guardar configuración
+        async function saveConfiguration() {
+            const payload = {
+                target_disk: document.getElementById('cfgTargetDisk').value,
+                telegram_enabled: document.getElementById('cfgTelegramEnabled').checked,
+                telegram_token: document.getElementById('cfgTelegramToken').value,
+                telegram_chat_id: document.getElementById('cfgTelegramChatId').value
+            };
+
+            try {
+                const res = await fetch('/api/v1/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    if (payload.target_disk) {
+                        localStorage.setItem('selected_target_disk', payload.target_disk);
+                    }
+                    const modalEl = document.getElementById('modalConfig');
+                    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                    if (modalInstance) modalInstance.hide();
+                    alert("✅ Configuración guardada correctamente");
+                } else {
+                    alert("❌ Error al guardar la configuración");
+                }
+            } catch (e) {
+                alert("❌ Error de conexión al guardar configuración");
+            }
+        }
+
+        // Probar mensaje de Telegram
+        async function testTelegram() {
+            const resultSpan = document.getElementById('telegramTestResult');
+            resultSpan.className = "small text-muted";
+            resultSpan.innerText = "Enviando prueba...";
+
+            const payload = {
+                telegram_token: document.getElementById('cfgTelegramToken').value,
+                telegram_chat_id: document.getElementById('cfgTelegramChatId').value
+            };
+
+            try {
+                const res = await fetch('/api/v1/config/test-telegram', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    resultSpan.className = "small text-success fw-bold";
+                    resultSpan.innerText = "✅ Mensaje enviado";
+                } else {
+                    resultSpan.className = "small text-danger fw-bold";
+                    resultSpan.innerText = "❌ Fallo al enviar";
+                }
+            } catch (e) {
+                resultSpan.className = "small text-danger fw-bold";
+                resultSpan.innerText = "❌ Error de red";
             }
         }
 
