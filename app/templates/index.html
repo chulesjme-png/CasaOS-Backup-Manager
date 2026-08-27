@@ -15,22 +15,18 @@
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm py-2">
-        <div class="container-fluid px-4">
-            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
-                <span class="fs-4">📦</span>
-                <span class="fw-bold text-dark">CasaOS Backup Manager</span>
-                <span class="badge bg-light text-secondary border ms-2" style="font-size: 0.75rem;">v0.6.0-final</span>
-            </a>
-            <div class="d-flex gap-2">
-                <button class="btn btn-outline-secondary btn-sm" onclick="loadApps()">🔍 Escanear</button>
-                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
-                <button class="btn btn-warning btn-sm text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
+    <!-- Cabecera Principal con Logo Horizontal -->
+    <nav class="navbar navbar-light bg-white border-bottom shadow-sm py-2 mb-4">
+        <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <img src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" height="36">
+                <span class="badge bg-light text-secondary border rounded-pill px-2 py-1 ms-2" style="font-size: 0.75rem;">v0.6.0-alpha1</span>
             </div>
         </div>
     </nav>
 
-    <div class="container-fluid px-4 py-4">
+    <div class="container-fluid px-4 pb-4">
+        <!-- Métricas del Sistema -->
         <div class="row g-3 mb-3">
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
@@ -61,6 +57,24 @@
             </div>
         </div>
 
+        <!-- Panel de Control de Respaldos -->
+        <div class="card p-3 shadow-sm border-0 mb-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fs-5">⚙️</span>
+                    <h5 class="fw-bold text-dark mb-0">Panel de Control de Respaldos</h5>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="loadApps()">🔍 Escanear</button>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
+                    <button class="btn btn-outline-secondary btn-sm">📅 Programación</button>
+                    <button class="btn btn-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
+                    <button class="btn btn-outline-secondary btn-sm">⚙️ Configuración</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Selector de Destino -->
         <div class="card p-3 shadow-sm border-0 mb-4">
             <div class="row align-items-center">
                 <div class="col-md-4 d-flex align-items-center gap-2">
@@ -73,8 +87,10 @@
             </div>
         </div>
 
+        <!-- Grid Principal -->
         <div class="row">
             <div class="col-lg-8">
+                <!-- Backup Completo -->
                 <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex gap-3 align-items-center">
@@ -92,6 +108,7 @@
                     </div>
                 </div>
 
+                <!-- Perfiles de Aplicación -->
                 <div class="card p-4 shadow-sm border-0 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN GENERADOS</h6>
@@ -103,12 +120,13 @@
                 </div>
             </div>
 
+            <!-- Panel Lateral (Pestañas) -->
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-white border-bottom-0 pt-3 px-3">
                         <ul class="nav nav-tabs card-header-tabs" id="sideTabs">
                             <li class="nav-item">
-                                <button class="nav-link active" onclick="switchTab(event, 'rpi')">🍓 Host</button>
+                                <button class="nav-link active" onclick="switchTab(event, 'rpi')">🍓 Raspberry</button>
                             </li>
                             <li class="nav-item">
                                 <button class="nav-link" onclick="switchTab(event, 'docker')">🐳 Docker</button>
@@ -122,7 +140,7 @@
                         <div id="tabContentRpi" class="tab-pane-content">
                             <div class="small">
                                 <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">💻 Sistema Host:</span>
+                                    <span class="text-muted">💻 Sistema Raspberry:</span>
                                     <span class="fw-bold text-dark">CasaOS Linux</span>
                                 </div>
                                 <div class="d-flex justify-content-between py-2 border-bottom">
