@@ -7,12 +7,14 @@ import subprocess
 import shutil
 import socket
 import json
+import requests
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, BackgroundTasks, Query
+from fastapi import FastAPI, BackgroundTasks, Query, HTTPException
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from app.services.disk_service import disk_service
 
@@ -20,10 +22,56 @@ logger = logging.getLogger("casaos-backup")
 logging.basicConfig(level=logging.INFO)
 
 DB_PATH = Path("/DATA/AppData/casaos-backup-manager/history.db")
+CONFIG_PATH = Path("/DATA/AppData/casaos-backup-manager/config.json")
 BASE_DIR = Path(__file__).resolve().parent
 
 active_jobs = {}
 
+# --- MODELOS DE DATOS ---
+class ConfigModel(BaseModel):
+    target_disk: str = ""
+    telegram_enabled: bool = False
+    telegram_token: str = ""
+    telegram_chat_id: str = ""
+
+class TelegramTestModel(BaseModel):
+    telegram_token: str
+    telegram_chat_id: str
+
+# --- GESTIÓN DE CONFIGURACIÓN Y TELEGRAM ---
+def load_config():
+    if CONFIG_PATH.exists():
+        try:
+            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.error(f"Error al leer la configuración: {e}")
+    return {
+        "target_disk": "",
+        "telegram_enabled": False,
+        "telegram_token": "",
+        "telegram_chat_id": ""
+    }
+
+def save_config_file(data: dict):
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+def send_telegram_notification(message: str):
+    cfg = load_config()
+    if not cfg.get("telegram_enabled") or not cfg.get("telegram_token") or not cfg.get("telegram_chat_id"):
+        return
+    url = f"https://api.telegram.org/bot{cfg['telegram_token']}/sendMessage"
+    payload = {
+        "chat_id": cfg["telegram_chat_id"],
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        logger.error(f"Error enviando notificación a Telegram: {e}")
+
+# --- BASE DE DATOS ---
 def get_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     return sqlite3.connect(DB_PATH)
@@ -63,6 +111,47 @@ def read_root():
             return path.read_text(encoding="utf-8")
     return "<h1>Error: No se encontró index.html</h1>"
 
+# --- ENDPOINTS DE CONFIGURACIÓN Y SISTEMA ---
+@app.get("/api/v1/system/info")
+def get_system_info():
+    return {
+        "model": "Raspberry Pi",
+        "os": "CasaOS Linux",
+        "arch": "aarch64 (64-bit)",
+        "ram": "8 GB (Disponible)",
+        "cpu": "Normal / OK"
+    }
+
+@app.get("/api/v1/config")
+def get_config():
+    return load_config()
+
+@app.post("/api/v1/config")
+def save_config(config: ConfigModel):
+    data = config.dict()
+    save_config_file(data)
+    return {"status": "success", "config": data}
+
+@app.post("/api/v1/config/test-telegram")
+def test_telegram(data: TelegramTestModel):
+    if not data.telegram_token or not data.telegram_chat_id:
+        raise HTTPException(status_code=400, detail="Faltan credenciales de Telegram")
+    
+    url = f"https://api.telegram.org/bot{data.telegram_token}/sendMessage"
+    payload = {
+        "chat_id": data.telegram_chat_id,
+        "text": "🧪 *CasaOS Backup Manager*: Mensaje de prueba exitoso.",
+        "parse_mode": "Markdown"
+    }
+    try:
+        res = requests.post(url, json=payload, timeout=5)
+        if res.status_code == 200:
+            return {"status": "ok"}
+        raise HTTPException(status_code=400, detail="Respuesta fallida de Telegram API")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- ENDPOINTS EXISTENTES DE APPS Y DOCKER ---
 @app.get("/api/v1/apps")
 def get_apps():
     appdata_dir = Path("/DATA/AppData")
@@ -137,6 +226,7 @@ def get_all_mounts():
 def get_disks():
     return {"disks": disk_service.get_disks()}
 
+# --- PROCESOS DE RESPALDO Y RESTAURACIÓN ---
 def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
     active_jobs[job_id] = {"status": "running", "progress": 10, "message": "Preparando archivos...", "cancelled": False}
@@ -152,7 +242,12 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     if real_target:
         base_dest = Path(real_target)
     else:
-        base_dest = Path("/DATA/Backups" if os.path.exists("/DATA/Backups") else "/host/DATA/Backups")
+        cfg = load_config()
+        cfg_disk = cfg.get("target_disk")
+        if cfg_disk and os.path.exists(cfg_disk):
+            base_dest = Path(cfg_disk)
+        else:
+            base_dest = Path("/DATA/Backups" if os.path.exists("/DATA/Backups") else "/host/DATA/Backups")
         
     dest_dir = base_dest / "Backups" / "Apps" / app_name
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -166,6 +261,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     try:
         if not src_dir.exists():
             active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Origen {src_dir} no existe"}
+            send_telegram_notification(f"❌ *Copia fallida*: {app_name}\nOrigen `{src_dir}` no existe.")
             return
 
         active_jobs[job_id]["progress"] = 35
@@ -176,6 +272,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                 if active_jobs[job_id].get("cancelled"):
                     if dest_file.exists(): os.remove(dest_file)
                     active_jobs[job_id] = {"status": "cancelled", "progress": 0, "message": "Proceso cancelado por el usuario"}
+                    send_telegram_notification(f"⚠️ *Copia cancelada*: {app_name}")
                     return
                 for f in files:
                     fp = os.path.join(root, f)
@@ -193,6 +290,8 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             )
             conn.commit()
 
+        send_telegram_notification(f"✅ *Copia finalizada*: {app_name}\nArchivo: `{filename}`\nDuración: {elapsed}s")
+
     except Exception as e:
         elapsed = round(time.time() - start, 2)
         active_jobs[job_id] = {"status": "failed", "progress": 100, "message": str(e)}
@@ -202,6 +301,8 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                 ("Backup", app_name, "failed", elapsed, str(e), int(time.time() * 1000))
             )
             conn.commit()
+            
+        send_telegram_notification(f"❌ *Error en copia*: {app_name}\nDetalle: {str(e)}")
 
 def perform_real_restore(filename: str, job_id: str):
     start = time.time()
@@ -231,6 +332,7 @@ def perform_real_restore(filename: str, job_id: str):
 
     if not target_file or not target_file.exists():
         active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Archivo {filename} no encontrado."}
+        send_telegram_notification(f"❌ *Restauración fallida*: Archivo `{filename}` no encontrado.")
         return
 
     try:
@@ -261,6 +363,8 @@ def perform_real_restore(filename: str, job_id: str):
             )
             conn.commit()
 
+        send_telegram_notification(f"🔄 *Restauración completada*: {app_key.capitalize()}\nArchivo: `{filename}`")
+
     except Exception as e:
         elapsed = round(time.time() - start, 2)
         active_jobs[job_id] = {"status": "failed", "progress": 100, "message": str(e)}
@@ -271,6 +375,9 @@ def perform_real_restore(filename: str, job_id: str):
             )
             conn.commit()
 
+        send_telegram_notification(f"❌ *Error al restaurar*: {filename}\nDetalle: {str(e)}")
+
+# --- RUTAS DE EJECUCIÓN Y TAREAS ---
 @app.post("/api/v1/backups/run-app/{app_name}")
 def run_backup(app_name: str, background_tasks: BackgroundTasks, target_disk: str = Query(None)):
     job_id = f"job_{app_name}_{int(time.time())}"
