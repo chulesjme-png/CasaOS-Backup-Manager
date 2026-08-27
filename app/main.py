@@ -247,7 +247,7 @@ def get_disks():
 # --- PROCESOS DE RESPALDO Y RESTAURACIÓN ---
 def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
-    active_jobs[job_id] = {"status": "running", "progress": 10, "message": "Preparando archivos...", "cancelled": False}
+    active_jobs[job_id] = {"status": "running", "progress": 5, "message": "Iniciando comprobaciones...", "cancelled": False}
     
     real_target = None
     if target_disk:
@@ -277,18 +277,56 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     src_dir = Path("/DATA/AppData") if app_name == "Sistema_Completo" else Path(f"/DATA/AppData/{app_name}")
 
     try:
+        # 1. Verificación de existencia del directorio de origen
         if not src_dir.exists():
             active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Origen {src_dir} no existe"}
             send_telegram_notification(f"❌ *Copia fallida*: {app_name}\nOrigen `{src_dir}` no existe.")
             return
 
+        # 2. PRE-FLIGHT CHECK: Medición de tamaño y verificación de espacio disponible
+        active_jobs[job_id]["message"] = "Verificando espacio libre en disco..."
+        active_jobs[job_id]["progress"] = 15
+
+        required_bytes = 0
+        for root, _, files in os.walk(src_dir):
+            for f in files:
+                fp = os.path.join(root, f)
+                if os.path.exists(fp):
+                    try:
+                        required_bytes += os.path.getsize(fp)
+                    except OSError:
+                        pass
+
+        dest_usage = shutil.disk_usage(dest_dir)
+        free_bytes = dest_usage.free
+        margin_bytes = 100 * 1024 * 1024  # 100 MB de margen de seguridad
+
+        if free_bytes < (required_bytes + margin_bytes):
+            req_mb = round(required_bytes / (1024 * 1024), 2)
+            free_mb = round(free_bytes / (1024 * 1024), 2)
+            err_msg = f"Espacio insuficiente. Necesario: ~{req_mb} MB, Libre: {free_mb} MB"
+            
+            active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
+            
+            with get_db() as conn:
+                conn.cursor().execute(
+                    "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                    ("Backup", app_name, "failed", round(time.time() - start, 2), err_msg, int(time.time() * 1000))
+                )
+                conn.commit()
+
+            send_telegram_notification(f"⚠️ *Copia abortada (Sin espacio)*: {app_name}\nSe requieren ~{req_mb} MB y solo hay {free_mb} MB libres.")
+            return
+
+        # 3. Proceso de compresión
         active_jobs[job_id]["progress"] = 35
         active_jobs[job_id]["message"] = f"Comprimiendo {src_dir.name}..."
 
         with tarfile.open(dest_file, "w:gz") as tar:
             for root, _, files in os.walk(src_dir):
                 if active_jobs[job_id].get("cancelled"):
-                    if dest_file.exists(): os.remove(dest_file)
+                    if dest_file.exists(): 
+                        os.remove(dest_file)
                     active_jobs[job_id] = {"status": "cancelled", "progress": 0, "message": "Proceso cancelado por el usuario"}
                     send_telegram_notification(f"⚠️ *Copia cancelada*: {app_name}")
                     return
@@ -296,6 +334,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                     fp = os.path.join(root, f)
                     tar.add(fp, arcname=os.path.relpath(fp, src_dir))
 
+        # 4. Políticas de retención
         list_backups(max_keep_per_app=3)
 
         elapsed = round(time.time() - start, 2)
@@ -311,6 +350,14 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         send_telegram_notification(f"✅ *Copia finalizada*: {app_name}\nArchivo: `{filename}`\nDuración: {elapsed}s")
 
     except Exception as e:
+        # ROLLBACK: Eliminación de archivos parciales corruptos
+        if dest_file.exists():
+            try:
+                os.remove(dest_file)
+                logger.info(f"[ROLLBACK] Archivo incompleto eliminado: {dest_file}")
+            except Exception as rm_err:
+                logger.error(f"[ROLLBACK ERROR] No se pudo eliminar {dest_file}: {rm_err}")
+
         elapsed = round(time.time() - start, 2)
         active_jobs[job_id] = {"status": "failed", "progress": 100, "message": str(e)}
         with get_db() as conn:
