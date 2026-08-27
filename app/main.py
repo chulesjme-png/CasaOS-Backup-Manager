@@ -274,7 +274,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     filename = f"{app_name.lower()}_backup_{timestamp}.tar.gz"
     dest_file = dest_dir / filename
 
-    # Soporte robusto para identificar si es sistema completo en minúsculas, mayúsculas o espacios
     normalized_app = app_name.replace("_", " ").strip().lower()
     if normalized_app in ["sistema completo", "sistema_completo", "disaster recovery"]:
         src_dir = Path("/DATA/AppData")
@@ -284,13 +283,11 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         src_dir = Path(f"/DATA/AppData/{app_name}")
 
     try:
-        # 1. Verificación de existencia del directorio de origen
         if not src_dir.exists():
             active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Origen {src_dir} no existe"}
             send_telegram_notification(f"❌ *Copia fallida*: {app_name}\nOrigen `{src_dir}` no existe.")
             return
 
-        # 2. PRE-FLIGHT CHECK: Medición de tamaño y verificación de espacio disponible
         active_jobs[job_id]["message"] = "Verificando espacio libre en disco..."
         active_jobs[job_id]["progress"] = 15
 
@@ -306,7 +303,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
 
         dest_usage = shutil.disk_usage(dest_dir)
         free_bytes = dest_usage.free
-        margin_bytes = 100 * 1024 * 1024  # 100 MB de margen de seguridad
+        margin_bytes = 100 * 1024 * 1024
 
         if free_bytes < (required_bytes + margin_bytes):
             req_mb = round(required_bytes / (1024 * 1024), 2)
@@ -325,23 +322,31 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             send_telegram_notification(f"⚠️ *Copia abortada (Sin espacio)*: {app_name}\nSe requieren ~{req_mb} MB y solo hay {free_mb} MB libres.")
             return
 
-        # 3. Proceso de compresión
         active_jobs[job_id]["progress"] = 35
         active_jobs[job_id]["message"] = f"Comprimiendo {src_dir.name}..."
 
+        was_cancelled = False
         with tarfile.open(dest_file, "w:gz") as tar:
             for root, _, files in os.walk(src_dir):
-                if active_jobs[job_id].get("cancelled"):
-                    if dest_file.exists(): 
-                        os.remove(dest_file)
-                    active_jobs[job_id] = {"status": "cancelled", "progress": 0, "message": "Proceso cancelado por el usuario"}
-                    send_telegram_notification(f"⚠️ *Copia cancelada*: {app_name}")
-                    return
                 for f in files:
+                    if active_jobs[job_id].get("cancelled"):
+                        was_cancelled = True
+                        break
                     fp = os.path.join(root, f)
                     tar.add(fp, arcname=os.path.relpath(fp, src_dir))
+                if was_cancelled:
+                    break
 
-        # 4. Políticas de retención
+        if was_cancelled:
+            if dest_file.exists():
+                try:
+                    os.remove(dest_file)
+                except Exception as rm_err:
+                    logger.error(f"[CANCELATION ERROR] No se pudo borrar {dest_file}: {rm_err}")
+            active_jobs[job_id] = {"status": "cancelled", "progress": 0, "message": "Proceso cancelado por el usuario"}
+            send_telegram_notification(f"⚠️ *Copia cancelada*: {app_name}")
+            return
+
         list_backups(max_keep_per_app=3)
 
         elapsed = round(time.time() - start, 2)
@@ -357,7 +362,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         send_telegram_notification(f"✅ *Copia finalizada*: {app_name}\nArchivo: `{filename}`\nDuración: {elapsed}s")
 
     except Exception as e:
-        # ROLLBACK: Eliminación de archivos parciales corruptos
         if dest_file.exists():
             try:
                 os.remove(dest_file)
@@ -472,6 +476,7 @@ def restore_backup(filename: str, background_tasks: BackgroundTasks):
 def get_job_status(job_id: str):
     return active_jobs.get(job_id, {"status": "unknown", "progress": 0, "message": "Iniciando..."})
 
+@app.post("/api/v1/backups/job-cancel/{job_id}")
 @app.post("/api/v1/backups/cancel/{job_id}")
 def cancel_job(job_id: str):
     if job_id in active_jobs:
