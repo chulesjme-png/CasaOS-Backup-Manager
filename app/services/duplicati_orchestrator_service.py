@@ -35,19 +35,28 @@ class DuplicatiOrchestratorService:
     def __init__(self):
         self.backend = DuplicatiBackend()
 
+    def _get_auth_headers(self, duplicati_password: str) -> Dict[str, str]:
+        """Genera las cabeceras requeridas por la API de Duplicati."""
+        headers = {}
+        if duplicati_password:
+            # Duplicati requiere autenticación por sesión o Auth header según la versión
+            headers["Authorization"] = f"Basic {duplicati_password}"
+        return headers
+
     def find_job_id_by_name(
         self,
         app_name: str,
         duplicati_url: str = DEFAULT_DUPLICATI_URL,
         duplicati_password: str = DEFAULT_DUPLICATI_PASS
-    ) -> int:
+    ) -> Optional[int]:
         """Busca dinámicamente el ID del trabajo en Duplicati según el nombre."""
         try:
-            headers = {}
-            if duplicati_password:
-                headers["X-XSRF-Token"] = duplicati_password
-
-            resp = requests.get(f"{duplicati_url.rstrip('/')}/api/v1/backups", headers=headers, timeout=5)
+            headers = self._get_auth_headers(duplicati_password)
+            resp = requests.get(
+                f"{duplicati_url.rstrip('/')}/api/v1/backups", 
+                headers=headers, 
+                timeout=15
+            )
             if resp.status_code == 200:
                 backups = resp.json()
                 if isinstance(backups, list):
@@ -55,12 +64,15 @@ class DuplicatiOrchestratorService:
                     for job in backups:
                         job_name = str(job.get("Name", "")).lower().replace("_", " ").strip()
                         if job_name == target_name or target_name in job_name:
-                            logger.info(f"🔎 Encontrado Job ID {job.get('ID')} para '{app_name}' en Duplicati")
-                            return int(job.get("ID", 1))
+                            job_id = int(job.get("ID"))
+                            logger.info(f"🔎 Encontrado Job ID {job_id} para '{app_name}' en Duplicati")
+                            return job_id
+            else:
+                logger.error(f"❌ Error al consultar la API de Duplicati: HTTP {resp.status_code}")
         except Exception as e:
             logger.warning(f"⚠️ No se pudo listar los trabajos de Duplicati: {e}")
         
-        return 1
+        return None
 
     def run_app_backup(
         self,
@@ -85,6 +97,11 @@ class DuplicatiOrchestratorService:
         if duplicati_job_id is None:
             duplicati_job_id = self.find_job_id_by_name(app_name, duplicati_url, duplicati_password)
 
+        if duplicati_job_id is None:
+            err_msg = f"No se encontró un Job ID válido en Duplicati para '{app_name}'."
+            logger.error(f"❌ [Orchestrator]: {err_msg}")
+            return {"success": False, "error": err_msg}
+
         dump_path: Optional[str] = None
         try:
             dump_path = db_hook_service.create_db_dump(app_name=app_name, app_path=app_path)
@@ -98,7 +115,7 @@ class DuplicatiOrchestratorService:
                     configuration={
                         "url": duplicati_url,
                         "password": duplicati_password,
-                        "timeout": 30
+                        "timeout": 60
                     }
                 ),
                 backup_configuration=BackupConfiguration(
@@ -159,15 +176,16 @@ class DuplicatiOrchestratorService:
     ) -> Dict[str, Any]:
         try:
             resolved_pass = password if password is not None else duplicati_password
-            headers = {}
-            if resolved_pass:
-                headers["X-XSRF-Token"] = resolved_pass
+            headers = self._get_auth_headers(resolved_pass)
 
-            resp = requests.get(f"{duplicati_url.rstrip('/')}/api/v1/progressstate", headers=headers, timeout=5)
+            resp = requests.get(
+                f"{duplicati_url.rstrip('/')}/api/v1/progressstate", 
+                headers=headers, 
+                timeout=15
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 
-                # Si data es None o vacia, Duplicati está inactivo (no ejecutando nada)
                 if not data:
                     return {"status": "idle", "phase": "Idle", "progress": 0.0}
 
