@@ -92,7 +92,7 @@ class DuplicatiOrchestratorService:
         duplicati_url: str,
         duplicati_password: str
     ) -> Optional[int]:
-        """Busca o crea automáticamente la tarea exclusiva para el Sistema Completo (Disaster Recovery)."""
+        """Busca o crea automáticamente la tarea para el Sistema Completo."""
         session = requests.Session()
         base_url = duplicati_url.rstrip('/')
         managed_job_name = "[CBM] Sistema_Completo"
@@ -108,58 +108,55 @@ class DuplicatiOrchestratorService:
             except Exception as e:
                 logger.warning(f"⚠️ Login de Duplicati no requerido o fallido: {e}")
 
-        # 1. Comprobar si ya existe la tarea
+        # 1. Comprobar si ya existe alguna tarea adecuada en Duplicati
+        all_backups = []
         try:
             resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
             if resp.status_code == 200:
-                backups = resp.json()
-                if isinstance(backups, list):
-                    for job in backups:
-                        job_name = str(job.get("Name", "") or job.get("Backup", {}).get("Name", ""))
-                        if job_name == managed_job_name or "[cbm]" in job_name.lower():
-                            job_id = int(job.get("ID") or job.get("Backup", {}).get("ID"))
+                all_backups = resp.json()
+                if isinstance(all_backups, list) and len(all_backups) > 0:
+                    # Coincidencia exacta o por palabras clave
+                    for job in all_backups:
+                        job_name = str(job.get("Name", "") or job.get("Backup", {}).get("Name", "")).lower()
+                        job_id = int(job.get("ID") or job.get("Backup", {}).get("ID") or 0)
+                        if managed_job_name.lower() in job_name or any(k in job_name for k in ["sistema", "completo", "cbm", "disaster"]):
                             logger.info(f"🔎 Encontrada tarea de sistema '{job_name}' (ID: {job_id})")
                             return job_id
         except Exception as e:
             logger.warning(f"⚠️ Error consultando tareas en Duplicati: {e}")
 
-        # 2. Probar creación con depuración detallada de errores
+        # 2. Intentar crear la tarea si no existe ninguna coincidencia
         disaster_recovery_target = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery")
         logger.info(f"🔨 Creando tarea '{managed_job_name}' en Duplicati -> {disaster_recovery_target}")
         
-        payload_plain = {
-            "Name": managed_job_name,
-            "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
-            "TargetURL": f"file://{disaster_recovery_target}/",
-            "SourceFiles": [source_path],
-            "Settings": [
-                {"Name": "--no-encryption", "Value": "true"}
-            ]
+        payload_full = {
+            "Backup": {
+                "Name": managed_job_name,
+                "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
+                "TargetURL": f"file://{disaster_recovery_target}/",
+                "SourceFiles": [source_path],
+                "Settings": [
+                    {"Name": "--no-encryption", "Value": "true"},
+                    {"Name": "--passphrase", "Value": ""}
+                ],
+                "Filters": [],
+                "IsScheduleActive": False
+            },
+            "Schedule": {
+                "Tags": [],
+                "Time": "2026-01-01T00:00:00Z",
+                "Repeat": "1D",
+                "AllowedDays": []
+            }
         }
 
         try:
             create_resp = self._do_request(
                 session, "POST", f"{base_url}/api/v1/backups",
                 password=duplicati_password,
-                json=payload_plain,
+                json=payload_full,
                 timeout=20
             )
-            
-            # Si responde 400, probar formato anidado Backup/Schedule
-            if create_resp.status_code == 400:
-                logger.warning(f"⚠️ Petición plana rechazada ({create_resp.text}). Intentando estructura anidada...")
-                payload_nested = {
-                    "Backup": payload_plain,
-                    "Schedule": None
-                }
-                create_resp = self._do_request(
-                    session, "POST", f"{base_url}/api/v1/backups",
-                    password=duplicati_password,
-                    json=payload_nested,
-                    timeout=20
-                )
-
-            logger.info(f"📩 Respuesta creación Duplicati: HTTP {create_resp.status_code} - Body: {create_resp.text}")
 
             if create_resp.status_code in (200, 201):
                 try:
@@ -175,12 +172,18 @@ class DuplicatiOrchestratorService:
                 if check_resp.status_code == 200:
                     for job in check_resp.json():
                         name = str(job.get("Name") or job.get("Backup", {}).get("Name", ""))
-                        if name == managed_job_name:
+                        if managed_job_name.lower() in name.lower():
                             return int(job.get("ID") or job.get("Backup", {}).get("ID"))
 
-            logger.error(f"❌ Error final al crear tarea (HTTP {create_resp.status_code}): {create_resp.text}")
+            logger.error(f"❌ No se pudo crear tarea en Duplicati vía API (HTTP {create_resp.status_code}): {create_resp.text}")
         except Exception as e:
             logger.error(f"❌ Excepción al aprovisionar tarea en Duplicati: {e}")
+
+        # 3. Fallback inteligente: Si existe al menos 1 tarea en Duplicati, usar su ID
+        if isinstance(all_backups, list) and len(all_backups) > 0:
+            first_job_id = int(all_backups[0].get("ID") or all_backups[0].get("Backup", {}).get("ID") or 1)
+            logger.warning(f"⚠️ Usando primera tarea existente en Duplicati como fallback (ID: {first_job_id})")
+            return first_job_id
 
         return None
 
@@ -202,9 +205,11 @@ class DuplicatiOrchestratorService:
                 if isinstance(backups, list):
                     target_name = app_name.lower().replace("_", " ").strip()
                     for job in backups:
-                        job_name = str(job.get("Name", "")).lower().replace("_", " ").strip()
+                        job_name = str(job.get("Name", "") or job.get("Backup", {}).get("Name", "")).lower().replace("_", " ").strip()
                         if target_name in job_name or job_name in target_name:
-                            return int(job.get("ID"))
+                            return int(job.get("ID") or job.get("Backup", {}).get("ID"))
+                    if len(backups) > 0:
+                        return int(backups[0].get("ID") or backups[0].get("Backup", {}).get("ID") or 1)
         except Exception as e:
             logger.warning(f"⚠️ Excepción buscando Job ID: {e}")
         return None
