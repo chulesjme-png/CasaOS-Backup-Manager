@@ -284,7 +284,10 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label small text-muted">Contraseña (si aplica)</label>
-                            <input type="password" class="form-control form-control-sm" id="cfgDuplicatiPassword" placeholder="••••••••">
+                            <div class="input-group input-group-sm">
+                                <input type="password" class="form-control" id="cfgDuplicatiPassword" placeholder="••••••••">
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfgDuplicatiPassword')">👁️</button>
+                            </div>
                         </div>
 
                         <hr class="my-3">
@@ -298,7 +301,7 @@
                             <label class="form-label small text-muted">Bot Token</label>
                             <div class="input-group input-group-sm">
                                 <input type="password" class="form-control" id="cfgTelegramToken" placeholder="123456789:ABCdef...">
-                                <button class="btn btn-outline-secondary" type="button" onclick="toggleTokenVisibility()">👁️</button>
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfgTelegramToken')">👁️</button>
                             </div>
                         </div>
                         <div class="mb-3">
@@ -324,9 +327,11 @@
         let currentJobId = null;
         let jobInterval = null;
 
-        function toggleTokenVisibility() {
-            const tokenInput = document.getElementById('cfgTelegramToken');
-            tokenInput.type = tokenInput.type === 'password' ? 'text' : 'password';
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.type = input.type === 'password' ? 'text' : 'password';
+            }
         }
 
         function switchTab(evt, tabName) {
