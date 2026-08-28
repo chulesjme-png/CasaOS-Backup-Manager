@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.services.disk_service import disk_service
+from app.services.duplicati_orchestrator_service import duplicati_orchestrator
 
 logger = logging.getLogger("casaos-backup")
 logging.basicConfig(level=logging.INFO)
@@ -248,7 +249,79 @@ def get_disks():
 def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
     active_jobs[job_id] = {"status": "running", "progress": 5, "message": "Iniciando comprobaciones...", "cancelled": False}
-    
+
+    normalized_app = app_name.replace("_", " ").strip().lower()
+
+    # --- RUTEO A DUPLICATI PARA SISTEMA COMPLETO / DISASTER RECOVERY ---
+    if normalized_app in ["sistema completo", "sistema_completo", "disaster recovery"]:
+        active_jobs[job_id]["message"] = "Conectando con motor Duplicati..."
+        active_jobs[job_id]["progress"] = 15
+
+        cfg = load_config()
+        dup_url = cfg.get("duplicati_url", "http://172.17.0.1:8200")
+
+        orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
+            app_name=app_name,
+            target_disk_path=target_disk,
+            duplicati_job_id=1
+        )
+
+        if not orchestration_res.get("success"):
+            err_msg = f"Error al iniciar en Duplicati: {orchestration_res.get('errors') or orchestration_res.get('error')}"
+            active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
+            
+            with get_db() as conn:
+                conn.cursor().execute(
+                    "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                    ("Backup", app_name, "failed", round(time.time() - start, 2), err_msg, int(time.time() * 1000))
+                )
+                conn.commit()
+            send_telegram_notification(f"❌ *Copia fallida en Duplicati*: {app_name}\n{err_msg}")
+            return
+
+        active_jobs[job_id]["message"] = "Duplicati procesando copia incremental..."
+        while True:
+            if active_jobs[job_id].get("cancelled"):
+                send_telegram_notification(f"⚠️ *Copia cancelada por el usuario*: {app_name}")
+                return
+
+            time.sleep(4)
+            status_info = duplicati_orchestrator.get_task_status(task_id=1, duplicati_url=dup_url)
+            
+            phase = status_info.get("phase", "Running")
+            progress = status_info.get("progress", 10.0)
+
+            active_jobs[job_id]["progress"] = max(15, min(99, int(progress)))
+            active_jobs[job_id]["message"] = f"Duplicati: {phase} ({round(progress, 1)}%)"
+
+            if phase in ["Completed", "Idle"] or status_info.get("status") == "completed":
+                break
+            elif status_info.get("status") == "error":
+                err_msg = "Error reportado durante la ejecución en Duplicati"
+                active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
+                with get_db() as conn:
+                    conn.cursor().execute(
+                        "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                        ("Backup", app_name, "failed", round(time.time() - start, 2), err_msg, int(time.time() * 1000))
+                    )
+                    conn.commit()
+                send_telegram_notification(f"❌ *Copia fallida en Duplicati*: {app_name}\n{err_msg}")
+                return
+
+        elapsed = round(time.time() - start, 2)
+        active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Copia de seguridad incremental completada en Duplicati"}
+
+        with get_db() as conn:
+            conn.cursor().execute(
+                "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                ("Backup (Duplicati)", app_name, "success", elapsed, "Duplicati Backup OK", int(time.time() * 1000))
+            )
+            conn.commit()
+
+        send_telegram_notification(f"✅ *Copia de Sistema Completo finalizada*: {app_name}\nMotor: `Duplicati`\nDuración: {elapsed}s")
+        return
+
+    # --- RESPALDO LOCAL TAR.GZ PARA APLICACIONES INDIVIDUALES ---
     real_target = None
     if target_disk:
         clean_target = target_disk[5:] if target_disk.startswith("/host/") else target_disk
@@ -273,14 +346,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{app_name.lower()}_backup_{timestamp}.tar.gz"
     dest_file = dest_dir / filename
-
-    normalized_app = app_name.replace("_", " ").strip().lower()
-    if normalized_app in ["sistema completo", "sistema_completo", "disaster recovery"]:
-        src_dir = Path("/DATA/AppData")
-        filename = f"sistema_completo_backup_{timestamp}.tar.gz"
-        dest_file = dest_dir / filename
-    else:
-        src_dir = Path(f"/DATA/AppData/{app_name}")
+    src_dir = Path(f"/DATA/AppData/{app_name}")
 
     try:
         if not src_dir.exists():
