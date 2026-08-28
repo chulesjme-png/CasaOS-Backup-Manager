@@ -1,6 +1,5 @@
 import os
 import json
-import time
 import logging
 import requests
 from types import SimpleNamespace
@@ -84,7 +83,7 @@ class DuplicatiOrchestratorService:
             return {
                 "success": True,
                 "execution_reference": result.execution_reference.dict() if hasattr(result.execution_reference, "dict") else str(result.execution_reference),
-                "metadata": result.metadata
+                "metadata": getattr(result, "metadata", {})
             }
 
         except Exception as e:
@@ -99,25 +98,41 @@ class DuplicatiOrchestratorService:
         app_name: str = "Sistema Completo",
         app_path: str = "/DATA",
         target_disk_path: Optional[str] = None,
-        duplicati_job_id: int = 1
+        target_disk: Optional[str] = None,
+        duplicati_job_id: int = 1,
+        duplicati_url: str = DEFAULT_DUPLICATI_URL,
+        duplicati_password: str = DEFAULT_DUPLICATI_PASS,
+        password: Optional[str] = None
     ) -> Dict[str, Any]:
-        if not target_disk_path or target_disk_path == "/var/lib/casaos":
-            target_disk_path = get_active_target_disk()
+        resolved_target = target_disk_path or target_disk
+        if not resolved_target or resolved_target == "/var/lib/casaos":
+            resolved_target = get_active_target_disk()
+
+        resolved_pass = password if password is not None else duplicati_password
 
         return self.run_app_backup(
             app_name=app_name,
             app_path=app_path,
-            target_disk_path=target_disk_path,
-            duplicati_job_id=duplicati_job_id
+            target_disk_path=resolved_target,
+            duplicati_job_id=duplicati_job_id,
+            duplicati_url=duplicati_url,
+            duplicati_password=resolved_pass
         )
 
     def get_task_status(
         self,
         task_id: int = 1,
-        duplicati_url: str = DEFAULT_DUPLICATI_URL
+        duplicati_url: str = DEFAULT_DUPLICATI_URL,
+        duplicati_password: str = DEFAULT_DUPLICATI_PASS,
+        password: Optional[str] = None
     ) -> Dict[str, Any]:
         try:
-            resp = requests.get(f"{duplicati_url.rstrip('/')}/api/v1/progressstate", timeout=5)
+            resolved_pass = password if password is not None else duplicati_password
+            headers = {}
+            if resolved_pass:
+                headers["X-XSRF-Token"] = resolved_pass
+
+            resp = requests.get(f"{duplicati_url.rstrip('/')}/api/v1/progressstate", headers=headers, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 if data:

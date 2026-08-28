@@ -17,7 +17,6 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Safe fallbacks for modular services if app submodules are optional
 try:
     from app.services.disk_service import disk_service
 except ImportError:
@@ -44,7 +43,7 @@ try:
 except ImportError:
     class DummyDuplicatiOrchestrator:
         def run_full_disaster_recovery(self, *args, **kwargs):
-            return {"success": False, "error": "Duplicati service orchestrator module not found."}
+            return {"success": False, "error": "Modulo orquestador de Duplicati no disponible."}
         def get_task_status(self, *args, **kwargs):
             return {"status": "error", "phase": "Failed", "progress": 0.0}
     duplicati_orchestrator = DummyDuplicatiOrchestrator()
@@ -327,23 +326,13 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         dup_url = cfg.get("duplicati_url", "http://172.17.0.1:8200")
         dup_password = cfg.get("duplicati_password", "")
 
-        try:
-            orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
-                target_disk=target_disk,
-                duplicati_url=dup_url,
-                password=dup_password
-            )
-        except TypeError:
-            try:
-                orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
-                    app_name=app_name,
-                    target_disk_path=target_disk,
-                    duplicati_job_id=1,
-                    duplicati_url=dup_url,
-                    password=dup_password
-                )
-            except Exception as ex:
-                orchestration_res = {"success": False, "error": str(ex)}
+        orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
+            app_name=app_name,
+            target_disk_path=target_disk,
+            duplicati_job_id=1,
+            duplicati_url=dup_url,
+            duplicati_password=dup_password
+        )
 
         if not orchestration_res.get("success"):
             raw_err = str(orchestration_res.get('errors') or orchestration_res.get('error') or '')
@@ -373,7 +362,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             status_info = duplicati_orchestrator.get_task_status(
                 task_id=1, 
                 duplicati_url=dup_url,
-                password=dup_password
+                duplicati_password=dup_password
             )
             
             phase = status_info.get("phase", "Running")
