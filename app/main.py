@@ -46,6 +46,8 @@ except ImportError:
             return {"success": False, "error": "Modulo orquestador de Duplicati no disponible."}
         def get_task_status(self, *args, **kwargs):
             return {"status": "error", "phase": "Failed", "progress": 0.0}
+        def find_job_id_by_name(self, *args, **kwargs):
+            return 1
     duplicati_orchestrator = DummyDuplicatiOrchestrator()
 
 logger = logging.getLogger("casaos-backup")
@@ -318,18 +320,20 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     normalized_app = app_name.replace("_", " ").strip().lower()
 
     # --- RUTEO A DUPLICATI PARA SISTEMA COMPLETO / DISASTER RECOVERY ---
-    if normalized_app in ["sistema completo", "sistema_completo", "disaster recovery"]:
+    if normalized_app in ["sistema completo", "casaos completo", "disaster recovery"]:
         active_jobs[job_id]["message"] = "Conectando con motor Duplicati..."
-        active_jobs[job_id]["progress"] = 15
+        active_jobs[job_id]["progress"] = 10
 
         cfg = load_config()
         dup_url = cfg.get("duplicati_url", "http://172.17.0.1:8200")
         dup_password = cfg.get("duplicati_password", "")
 
+        dup_job_id = duplicati_orchestrator.find_job_id_by_name(app_name, dup_url, dup_password)
+
         orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
             app_name=app_name,
             target_disk_path=target_disk,
-            duplicati_job_id=1,
+            duplicati_job_id=dup_job_id,
             duplicati_url=dup_url,
             duplicati_password=dup_password
         )
@@ -352,29 +356,57 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             send_telegram_notification(f"❌ *Copia fallida en Duplicati*: {app_name}\n{err_msg}")
             return
 
-        active_jobs[job_id]["message"] = "Duplicati procesando copia incremental..."
+        active_jobs[job_id]["message"] = "Esperando inicio de proceso en Duplicati..."
+        time.sleep(3)
+
+        was_running = False
+        idle_counter = 0
+
         while True:
             if active_jobs[job_id].get("cancelled"):
                 send_telegram_notification(f"⚠️ *Copia cancelada por el usuario*: {app_name}")
                 return
 
-            time.sleep(4)
             status_info = duplicati_orchestrator.get_task_status(
-                task_id=1, 
+                task_id=dup_job_id, 
                 duplicati_url=dup_url,
                 duplicati_password=dup_password
             )
             
-            phase = status_info.get("phase", "Running")
-            progress = status_info.get("progress", 10.0)
+            phase = status_info.get("phase", "Idle")
+            status = status_info.get("status")
+            progress = status_info.get("progress", 0.0)
 
-            active_jobs[job_id]["progress"] = max(15, min(99, int(progress)))
-            active_jobs[job_id]["message"] = f"Duplicati: {phase} ({round(progress, 1)}%)"
-
-            if phase in ["Completed", "Idle"] or status_info.get("status") == "completed":
+            if status == "running":
+                was_running = True
+                idle_counter = 0
+                active_jobs[job_id]["progress"] = max(15, min(99, int(progress)))
+                active_jobs[job_id]["message"] = f"Duplicati: {phase} ({round(progress, 1)}%)"
+            
+            elif status == "completed":
                 break
-            elif status_info.get("status") == "error":
-                err_msg = "Error reportado durante la ejecución en Duplicati"
+
+            elif status == "idle":
+                if was_running:
+                    # Si antes estuvo corriendo y ahora está idle, la tarea ha terminado con éxito
+                    break
+                else:
+                    idle_counter += 1
+                    if idle_counter > 5:  # ~15 segundos esperando inicio
+                        err_msg = f"Duplicati no inició el trabajo '{app_name}' (ID: {dup_job_id}). Revisa la app nativa."
+                        active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
+                        with get_db() as conn:
+                            conn.cursor().execute(
+                                "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                                ("Backup", app_name, "failed", round(time.time() - start, 2), err_msg, int(time.time() * 1000))
+                            )
+                            conn.commit()
+                        send_telegram_notification(f"❌ *Copia fallida en Duplicati*: {app_name}\n{err_msg}")
+                        return
+                    active_jobs[job_id]["message"] = f"Iniciando tarea en Duplicati ({idle_counter}/5)..."
+
+            elif status in ["error", "unknown"]:
+                err_msg = f"Error reportado por Duplicati ({phase})"
                 active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
                 with get_db() as conn:
                     conn.cursor().execute(
@@ -384,6 +416,8 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                     conn.commit()
                 send_telegram_notification(f"❌ *Copia fallida en Duplicati*: {app_name}\n{err_msg}")
                 return
+
+            time.sleep(3)
 
         elapsed = round(time.time() - start, 2)
         active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Copia de seguridad incremental completada en Duplicati"}

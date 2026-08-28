@@ -35,12 +35,39 @@ class DuplicatiOrchestratorService:
     def __init__(self):
         self.backend = DuplicatiBackend()
 
+    def find_job_id_by_name(
+        self,
+        app_name: str,
+        duplicati_url: str = DEFAULT_DUPLICATI_URL,
+        duplicati_password: str = DEFAULT_DUPLICATI_PASS
+    ) -> int:
+        """Busca dinámicamente el ID del trabajo en Duplicati según el nombre."""
+        try:
+            headers = {}
+            if duplicati_password:
+                headers["X-XSRF-Token"] = duplicati_password
+
+            resp = requests.get(f"{duplicati_url.rstrip('/')}/api/v1/backups", headers=headers, timeout=5)
+            if resp.status_code == 200:
+                backups = resp.json()
+                if isinstance(backups, list):
+                    target_name = app_name.lower().replace("_", " ").strip()
+                    for job in backups:
+                        job_name = str(job.get("Name", "")).lower().replace("_", " ").strip()
+                        if job_name == target_name or target_name in job_name:
+                            logger.info(f"🔎 Encontrado Job ID {job.get('ID')} para '{app_name}' en Duplicati")
+                            return int(job.get("ID", 1))
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo listar los trabajos de Duplicati: {e}")
+        
+        return 1
+
     def run_app_backup(
         self,
         app_name: str,
         app_path: str,
         target_disk_path: str,
-        duplicati_job_id: int = 1,
+        duplicati_job_id: Optional[int] = None,
         duplicati_url: str = DEFAULT_DUPLICATI_URL,
         duplicati_password: str = DEFAULT_DUPLICATI_PASS
     ) -> Dict[str, Any]:
@@ -54,6 +81,9 @@ class DuplicatiOrchestratorService:
         if not is_ok:
             logger.error(f"❌ [Orchestrator] Espacio insuficiente: {msg}")
             return {"success": False, "error": msg}
+
+        if duplicati_job_id is None:
+            duplicati_job_id = self.find_job_id_by_name(app_name, duplicati_url, duplicati_password)
 
         dump_path: Optional[str] = None
         try:
@@ -82,6 +112,7 @@ class DuplicatiOrchestratorService:
 
             return {
                 "success": True,
+                "job_id": duplicati_job_id,
                 "execution_reference": result.execution_reference.dict() if hasattr(result.execution_reference, "dict") else str(result.execution_reference),
                 "metadata": getattr(result, "metadata", {})
             }
@@ -95,11 +126,11 @@ class DuplicatiOrchestratorService:
 
     def run_full_disaster_recovery(
         self,
-        app_name: str = "Sistema Completo",
+        app_name: str = "CasaOS Completo",
         app_path: str = "/DATA",
         target_disk_path: Optional[str] = None,
         target_disk: Optional[str] = None,
-        duplicati_job_id: int = 1,
+        duplicati_job_id: Optional[int] = None,
         duplicati_url: str = DEFAULT_DUPLICATI_URL,
         duplicati_password: str = DEFAULT_DUPLICATI_PASS,
         password: Optional[str] = None
@@ -135,17 +166,28 @@ class DuplicatiOrchestratorService:
             resp = requests.get(f"{duplicati_url.rstrip('/')}/api/v1/progressstate", headers=headers, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
-                if data:
-                    phase = data.get("Phase", "Running")
-                    progress = float(data.get("OverallProgress", 0.0)) * 100
-                    return {
-                        "status": "running" if phase not in ["Completed", "Error"] else "completed",
-                        "phase": phase,
-                        "progress": round(progress, 2),
-                        "current_file": data.get("CurrentFilename", "")
-                    }
+                
+                # Si data es None o vacia, Duplicati está inactivo (no ejecutando nada)
+                if not data:
+                    return {"status": "idle", "phase": "Idle", "progress": 0.0}
 
-            return {"status": "completed", "phase": "Completed", "progress": 100.0}
+                phase = data.get("Phase", "Idle")
+                progress = float(data.get("OverallProgress", 0.0)) * 100
+
+                if phase in ["Completed", "Backup_Complete"]:
+                    return {"status": "completed", "phase": phase, "progress": 100.0}
+
+                if phase == "Idle":
+                    return {"status": "idle", "phase": "Idle", "progress": 0.0}
+
+                return {
+                    "status": "running",
+                    "phase": phase,
+                    "progress": round(progress, 2),
+                    "current_file": data.get("CurrentFilename", "")
+                }
+
+            return {"status": "error", "phase": f"HTTP {resp.status_code}", "progress": 0.0}
         except Exception as e:
             logger.error(f"⚠️ Error consultando API Duplicati: {e}")
             return {"status": "unknown", "phase": "Error", "progress": 0.0}
