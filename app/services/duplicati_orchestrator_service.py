@@ -35,13 +35,26 @@ class DuplicatiOrchestratorService:
     def __init__(self):
         self.backend = DuplicatiBackend()
 
-    def _get_auth_headers(self, duplicati_password: str) -> Dict[str, str]:
-        """Genera las cabeceras requeridas por la API de Duplicati."""
-        headers = {}
-        if duplicati_password:
-            # Duplicati requiere autenticación por sesión o Auth header según la versión
-            headers["Authorization"] = f"Basic {duplicati_password}"
-        return headers
+    def _get_session(self, url: str, password: str) -> requests.Session:
+        """Crea una sesión HTTP autenticada con Duplicati obteniendo el token XSRF."""
+        session = requests.Session()
+        base_url = url.rstrip('/')
+        
+        if password:
+            try:
+                login_resp = session.post(
+                    f"{base_url}/api/v1/login", 
+                    json={"password": password}, 
+                    timeout=10
+                )
+                if login_resp.status_code == 200:
+                    xsrf_token = login_resp.headers.get("X-XSRF-Token") or session.cookies.get("xsrf-token")
+                    if xsrf_token:
+                        session.headers.update({"X-XSRF-Token": xsrf_token})
+            except Exception as e:
+                logger.warning(f"⚠️ Error en autenticación con Duplicati: {e}")
+                
+        return session
 
     def find_job_id_by_name(
         self,
@@ -51,22 +64,26 @@ class DuplicatiOrchestratorService:
     ) -> Optional[int]:
         """Busca dinámicamente el ID del trabajo en Duplicati según el nombre."""
         try:
-            headers = self._get_auth_headers(duplicati_password)
-            resp = requests.get(
-                f"{duplicati_url.rstrip('/')}/api/v1/backups", 
-                headers=headers, 
-                timeout=15
-            )
+            session = self._get_session(duplicati_url, duplicati_password)
+            resp = session.get(f"{duplicati_url.rstrip('/')}/api/v1/backups", timeout=15)
+            
             if resp.status_code == 200:
                 backups = resp.json()
                 if isinstance(backups, list):
+                    # Normalizar nombres para la búsqueda
                     target_name = app_name.lower().replace("_", " ").strip()
                     for job in backups:
                         job_name = str(job.get("Name", "")).lower().replace("_", " ").strip()
-                        if job_name == target_name or target_name in job_name:
+                        if target_name in job_name or job_name in target_name:
                             job_id = int(job.get("ID"))
                             logger.info(f"🔎 Encontrado Job ID {job_id} para '{app_name}' en Duplicati")
                             return job_id
+                            
+                    # Si solo hay 1 backup configurado en Duplicati, usarlo por defecto
+                    if len(backups) == 1 and "ID" in backups[0]:
+                        fallback_id = int(backups[0]["ID"])
+                        logger.info(f"ℹ️ Usando el único Job ID {fallback_id} disponible en Duplicati ('{backups[0].get('Name')}')")
+                        return fallback_id
             else:
                 logger.error(f"❌ Error al consultar la API de Duplicati: HTTP {resp.status_code}")
         except Exception as e:
@@ -98,7 +115,10 @@ class DuplicatiOrchestratorService:
             duplicati_job_id = self.find_job_id_by_name(app_name, duplicati_url, duplicati_password)
 
         if duplicati_job_id is None:
-            err_msg = f"No se encontró un Job ID válido en Duplicati para '{app_name}'."
+            err_msg = (
+                f"No existe un trabajo configurado en Duplicati para '{app_name}'. "
+                f"Crea una copia de seguridad en Duplicati (http://localhost:8200) llamada '{app_name}'."
+            )
             logger.error(f"❌ [Orchestrator]: {err_msg}")
             return {"success": False, "error": err_msg}
 
@@ -143,7 +163,7 @@ class DuplicatiOrchestratorService:
 
     def run_full_disaster_recovery(
         self,
-        app_name: str = "CasaOS Completo",
+        app_name: str = "Sistema_Completo",
         app_path: str = "/DATA",
         target_disk_path: Optional[str] = None,
         target_disk: Optional[str] = None,
@@ -176,13 +196,9 @@ class DuplicatiOrchestratorService:
     ) -> Dict[str, Any]:
         try:
             resolved_pass = password if password is not None else duplicati_password
-            headers = self._get_auth_headers(resolved_pass)
+            session = self._get_session(duplicati_url, resolved_pass)
 
-            resp = requests.get(
-                f"{duplicati_url.rstrip('/')}/api/v1/progressstate", 
-                headers=headers, 
-                timeout=15
-            )
+            resp = session.get(f"{duplicati_url.rstrip('/')}/api/v1/progressstate", timeout=15)
             if resp.status_code == 200:
                 data = resp.json()
                 
