@@ -4,185 +4,772 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CasaOS Backup Manager</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f4f6f9; }
-        .card-custom { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .progress-bar-danger { background-color: #dc3545 !important; }
+        body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .card { border-radius: 12px; }
+        .nav-tabs .nav-link { border: none; background: transparent; padding: 0.5rem 0.8rem; cursor: pointer; color: #6c757d; }
+        .nav-tabs .nav-link.active { border-bottom: 2px solid #0d6efd; background: transparent; color: #0d6efd; font-weight: bold; }
+        .app-list-scroll { max-height: 720px; overflow-y: auto; padding-right: 6px; }
     </style>
 </head>
 <body>
 
-<div class="container py-4">
-    <!-- Encabezado y resumen del sistema -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold text-primary">CasaOS Backup Manager <span class="badge bg-secondary fs-6">v0.6.0-alpha1</span></h2>
-        <button class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#configModal">⚙️ Configuración</button>
+    <!-- Cabecera Principal -->
+    <nav class="navbar navbar-light bg-white border-bottom shadow-sm py-2 mb-4">
+        <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <img src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" height="36" onerror="this.style.display='none'">
+                <span class="fw-bold text-primary fs-5">CasaOS Backup Manager</span>
+                <span class="badge bg-light text-secondary border rounded-pill px-2 py-1 ms-2" style="font-size: 0.75rem;">v0.6.0-alpha1</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 pb-4">
+        <!-- Métricas del Sistema -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0">
+                    <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Estado General</span>
+                    <div class="d-flex align-items-center mt-2">
+                        <span class="badge rounded-circle bg-success p-1 me-2"></span>
+                        <span class="fw-bold text-dark">Sistema Operativo</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0">
+                    <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Motores de Backup</span>
+                    <div class="fw-bold text-dark mt-2">Tar.gz / Duplicati (OK)</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0">
+                    <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Aplicaciones CasaOS</span>
+                    <div class="fw-bold text-dark mt-2" id="appsCountHeader">Cargando...</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0">
+                    <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Almacenamiento Host</span>
+                    <div class="fw-bold text-dark mt-2">/DATA Protegido</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Control de Respaldos -->
+        <div class="card p-3 shadow-sm border-0 mb-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fs-5">⚙️</span>
+                    <h5 class="fw-bold text-dark mb-0">Panel de Control de Respaldos</h5>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="loadApps()">🔍 Escanear</button>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
+                    <button class="btn btn-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalConfig">⚙️ Configuración</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Selector de Destino -->
+        <div class="card p-3 shadow-sm border-0 mb-4">
+            <div class="row align-items-center">
+                <div class="col-md-4 d-flex align-items-center gap-2">
+                    <span class="fs-4">💾</span>
+                    <span class="fw-bold text-dark">Destino Activo de Copias:</span>
+                </div>
+                <div class="col-md-8">
+                    <select class="form-select border-primary-subtle" id="targetDiskSelect" onchange="saveSelectedDisk(this.value)"></select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grid Principal -->
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Backup Completo -->
+                <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex gap-3 align-items-center">
+                            <div class="fs-1 text-primary">🛡️</div>
+                            <div>
+                                <h5 class="fw-bold text-dark mb-1">Copia de Seguridad del Sistema (Disaster Recovery)</h5>
+                                <p class="text-muted small mb-2">Resguarda la configuración de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>).</p>
+                                <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Completa</span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle" id="system-status-badge">🟢 Listo para resguardo</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary px-4 py-2 fw-semibold shadow-sm" onclick="triggerAppBackup('Sistema_Completo')">
+                            📦 Copiar Sistema Completo
+                        </button>
+                    </div>
+
+                    <!-- Progreso en tarjeta (Inline) -->
+                    <div id="systemBackupProgressContainer" class="mt-3 d-none">
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span id="systemBackupProgressText">Iniciando proceso...</span>
+                            <span id="systemBackupProgressPercent">0%</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div id="systemBackupProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Perfiles de Aplicación -->
+                <div class="card p-4 shadow-sm border-0 mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-dark mb-0">🚀 PERFILES DE APLICACIÓN GENERADOS</h6>
+                        <span class="badge bg-primary rounded-pill" id="appsCountBadge">0 Apps</span>
+                    </div>
+                    <div class="app-list-scroll">
+                        <div class="list-group list-group-flush" id="appsContainer"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel Lateral (Pestañas) -->
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white border-bottom-0 pt-3 px-3">
+                        <ul class="nav nav-tabs card-header-tabs" id="sideTabs">
+                            <li class="nav-item">
+                                <button class="nav-link active" onclick="switchTab(event, 'rpi')">🍓 Sistema</button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" onclick="switchTab(event, 'docker')">🐳 Docker</button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" onclick="switchTab(event, 'disks')">💾 Discos</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div id="tabContentRpi" class="tab-pane-content">
+                            <div class="small" id="rpiDetails">
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">💻 Dispositivo:</span>
+                                    <span class="fw-bold text-dark" id="rpiModel">Cargando...</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">🐧 Sistema Operativo:</span>
+                                    <span class="fw-semibold text-dark" id="rpiOs">Cargando...</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">🏗️ Arquitectura:</span>
+                                    <span class="fw-semibold text-dark" id="rpiArch">Cargando...</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">🧠 Memoria RAM:</span>
+                                    <span class="fw-semibold text-dark" id="rpiRam">Cargando...</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">🔥 CPU / Temp:</span>
+                                    <span class="fw-semibold text-dark" id="rpiCpu">Cargando...</span>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">📁 Ruta AppData:</span>
+                                    <code>/DATA/AppData</code>
+                                </div>
+                                <div class="d-flex justify-content-between py-2 border-bottom">
+                                    <span class="text-muted">🛡️ Estado AppData:</span>
+                                    <span class="fw-semibold text-success">🟢 Disponible</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="tabContentDocker" class="tab-pane-content d-none">
+                            <div class="small" id="dockerList"></div>
+                        </div>
+
+                        <div id="tabContentDisks" class="tab-pane-content d-none">
+                            <div class="small" id="disksList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Modal de Configuración -->
-    <div class="modal fade" id="configModal" tabindex="-1" aria-hidden="true">
+    <!-- Modal Progreso -->
+    <div class="modal fade" id="modalProgress" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="progressTitle">Procesando...</h5>
+                    <button type="button" class="btn-close" id="btnCloseProgressHeader" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <p class="text-muted small mb-2" id="progressStatusText">Iniciando proceso...</p>
+                    <div class="progress mb-3" style="height: 22px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;">0%</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="btnCancelJob" onclick="cancelCurrentJob()">🛑 Cancelar Proceso</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnCloseProgress" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Historial -->
+    <div class="modal fade" id="modalLogs" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">📜 Historial de Ejecuciones</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted small">Últimos registros de copias y restauraciones.</span>
+                        <button class="btn btn-outline-danger btn-sm" onclick="clearLogs()">🗑️ Limpiar Historial</button>
+                    </div>
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-hover align-middle small mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Fecha</th><th>Tipo</th><th>Objetivo</th><th>Estado</th><th>Duración</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Restauración -->
+    <div class="modal fade" id="modalRestore" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">📦 Copias Disponibles para Restauración</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="list-group list-group-flush border rounded" id="restoreBackupsList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Configuración -->
+    <div class="modal fade" id="modalConfig" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">⚙️ Configuración del Sistema</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Destino de Copias por Defecto</label>
-                        <input type="text" id="cfg_target_disk" class="form-control" placeholder="/media/usb/backups">
-                    </div>
-
-                    <h6 class="fw-bold mt-4">🔄 Motor Duplicati</h6>
-                    <div class="mb-3">
-                        <label class="form-label">URL del Servicio Duplicati</label>
-                        <input type="text" id="cfg_duplicati_url" class="form-control" value="http://172.17.0.1:8200">
-                    </div>
-                    
-                    <!-- Campo Contraseña con botón Ojo -->
-                    <div class="mb-3">
-                        <label class="form-label">Contraseña (si aplica)</label>
-                        <div class="input-group">
-                            <input type="password" id="cfg_duplicati_password" class="form-control" placeholder="••••••••••••••••">
-                            <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfg_duplicati_password', this)">👁️</button>
+                    <form id="configForm">
+                        <h6 class="fw-bold text-dark mb-3">💾 Destino de Copias por Defecto</h6>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Ruta o Punto de Montaje</label>
+                            <input type="text" class="form-control form-control-sm" id="cfgTargetDisk" placeholder="/DATA/Backups">
                         </div>
-                    </div>
 
-                    <h6 class="fw-bold mt-4">📢 Notificaciones de Telegram</h6>
-                    <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" id="cfg_telegram_enabled">
-                        <label class="form-check-label" for="cfg_telegram_enabled">Activar notificaciones tras cada backup</label>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Bot Token</label>
-                        <div class="input-group">
-                            <input type="password" id="cfg_telegram_token" class="form-control" placeholder="••••••••••••••••">
-                            <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfg_telegram_token', this)">👁️</button>
+                        <hr class="my-3">
+
+                        <h6 class="fw-bold text-dark mb-3">🔄 Motor Duplicati</h6>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">URL del Servicio Duplicati</label>
+                            <input type="text" class="form-control form-control-sm" id="cfgDuplicatiUrl" placeholder="http://172.17.0.1:8200">
                         </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Chat ID</label>
-                        <input type="text" id="cfg_telegram_chat_id" class="form-control" placeholder="1164121314">
-                    </div>
-                    <button class="btn btn-outline-success btn-sm w-100" onclick="testTelegram()">🧪 Probar Telegram</button>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Contraseña (si aplica)</label>
+                            <input type="password" class="form-control form-control-sm" id="cfgDuplicatiPassword" placeholder="••••••••">
+                        </div>
+
+                        <hr class="my-3">
+
+                        <h6 class="fw-bold text-dark mb-3">📢 Notificaciones de Telegram</h6>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="cfgTelegramEnabled">
+                            <label class="form-check-label small fw-semibold" for="cfgTelegramEnabled">Activar notificaciones tras cada backup</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Bot Token</label>
+                            <div class="input-group input-group-sm">
+                                <input type="password" class="form-control" id="cfgTelegramToken" placeholder="123456789:ABCdef...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="toggleTokenVisibility()">👁️</button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Chat ID</label>
+                            <input type="text" class="form-control form-control-sm" id="cfgTelegramChatId" placeholder="987654321">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span id="telegramTestResult" class="small"></span>
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="testTelegram()">🧪 Probar Telegram</button>
+                        </div>
+                    </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="saveConfig()">💾 Guardar Configuración</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="saveConfiguration()">💾 Guardar Configuración</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Modal Estado de Ejecución de Tarea -->
-    <div class="modal fade" id="jobModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold" id="jobModalTitle">Copia de seguridad</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p id="jobStatusMessage" class="text-muted mb-2">Iniciando proceso...</p>
-                    <div class="progress" style="height: 22px;">
-                        <div id="jobProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;">
-                            <span id="jobProgressText">0%</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button id="btnCancelJob" type="button" class="btn btn-outline-danger" onclick="cancelCurrentJob()">⛔ Cancelar Proceso</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentJobId = null;
+        let jobInterval = null;
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    let currentJobId = null;
-    let pollInterval = null;
-
-    // Función para mostrar / ocultar contraseña
-    function togglePasswordVisibility(inputId, btn) {
-        const input = document.getElementById(inputId);
-        if (!input) return;
-        if (input.type === "password") {
-            input.type = "text";
-            btn.textContent = "🙈";
-        } else {
-            input.type = "password";
-            btn.textContent = "👁️";
+        function toggleTokenVisibility() {
+            const tokenInput = document.getElementById('cfgTelegramToken');
+            tokenInput.type = tokenInput.type === 'password' ? 'text' : 'password';
         }
-    }
 
-    async function loadConfig() {
-        try {
-            const res = await fetch('/api/v1/config');
-            if (res.ok) {
+        function switchTab(evt, tabName) {
+            document.querySelectorAll('#sideTabs .nav-link').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane-content').forEach(pane => pane.classList.add('d-none'));
+
+            evt.target.classList.add('active');
+            if (tabName === 'rpi') { document.getElementById('tabContentRpi').classList.remove('d-none'); loadRpiInfo(); }
+            if (tabName === 'docker') { document.getElementById('tabContentDocker').classList.remove('d-none'); loadDockerInfo(); }
+            if (tabName === 'disks') { document.getElementById('tabContentDisks').classList.remove('d-none'); loadDisksInfo(); }
+        }
+
+        async function loadRpiInfo() {
+            try {
+                const res = await fetch('/api/v1/system/info');
+                if (!res.ok) return;
                 const data = await res.json();
-                document.getElementById('cfg_target_disk').value = data.target_disk || '';
-                document.getElementById('cfg_duplicati_url').value = data.duplicati_url || 'http://172.17.0.1:8200';
-                document.getElementById('cfg_duplicati_password').value = data.duplicati_password || '';
-                document.getElementById('cfg_telegram_enabled').checked = !!data.telegram_enabled;
-                document.getElementById('cfg_telegram_token').value = data.telegram_token || '';
-                document.getElementById('cfg_telegram_chat_id').value = data.telegram_chat_id || '';
+                document.getElementById('rpiModel').innerText = data.model || 'Raspberry Pi / Host';
+                document.getElementById('rpiOs').innerText = data.os || 'CasaOS Linux';
+                document.getElementById('rpiArch').innerText = data.arch || 'aarch64';
+                document.getElementById('rpiRam').innerText = data.ram || 'Disponible';
+                document.getElementById('rpiCpu').innerText = data.cpu || 'Normal';
+            } catch (e) {
+                console.error("Error cargando información de sistema:", e);
             }
-        } catch (e) {
-            console.error("Error al cargar la configuración:", e);
         }
-    }
 
-    async function saveConfig() {
-        const payload = {
-            target_disk: document.getElementById('cfg_target_disk').value,
-            duplicati_url: document.getElementById('cfg_duplicati_url').value,
-            duplicati_password: document.getElementById('cfg_duplicati_password').value,
-            telegram_enabled: document.getElementById('cfg_telegram_enabled').checked,
-            telegram_token: document.getElementById('cfg_telegram_token').value,
-            telegram_chat_id: document.getElementById('cfg_telegram_chat_id').value
-        };
-        const res = await fetch('/api/v1/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+        async function loadApps() {
+            try {
+                const res = await fetch('/api/v1/apps');
+                const data = await res.json();
+                const apps = data.apps || [];
+                document.getElementById('appsCountHeader').innerText = `${apps.length} Detectadas`;
+                document.getElementById('appsCountBadge').innerText = `${apps.length} Apps`;
+                
+                const container = document.getElementById('appsContainer');
+                if (!apps.length) {
+                    container.innerHTML = '<div class="text-center text-muted py-4">No se detectaron aplicaciones en /DATA/AppData</div>';
+                    return;
+                }
+
+                container.innerHTML = apps.map(app => `
+                    <div class="list-group-item px-0 py-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold text-dark text-capitalize fs-6">${app.name}</div>
+                                <div class="text-muted small mt-1">Ruta: <code>${app.path}</code></div>
+                            </div>
+                            <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('${app.name}')">⚡ Copiar Ahora</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error("Error cargando aplicaciones:", err);
+            }
+        }
+
+        async function loadDockerInfo() {
+            const container = document.getElementById('dockerList');
+            container.innerHTML = '<div class="text-muted py-2 text-center">Cargando contenedores...</div>';
+            try {
+                const res = await fetch('/api/v1/system/docker');
+                const data = await res.json();
+                const list = data.containers || [];
+                
+                container.innerHTML = list.length ? list.map(c => `
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom overflow-hidden">
+                        <div style="min-width: 0; flex: 1;" class="me-2">
+                            <div class="fw-bold text-dark text-truncate">${c.name}</div>
+                            <div class="text-muted text-truncate" style="font-size: 0.75rem;" title="${c.image}">${c.image}</div>
+                        </div>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle text-nowrap">${c.status}</span>
+                    </div>
+                `).join('') : '<div class="text-muted py-2 text-center">No hay contenedores ejecutándose</div>';
+            } catch (err) {
+                container.innerHTML = '<div class="text-danger py-2 text-center">Error al obtener Docker</div>';
+            }
+        }
+
+        async function loadDisksInfo() {
+            const container = document.getElementById('disksList');
+            const select = document.getElementById('targetDiskSelect');
+            container.innerHTML = '<div class="text-muted py-2 text-center">Cargando discos...</div>';
+            
+            try {
+                const res = await fetch('/api/v1/system/disks');
+                const data = await res.json();
+                const list = data.disks || [];
+
+                const savedTargetDisk = localStorage.getItem('selected_target_disk');
+
+                if (list.length > 0) {
+                    select.innerHTML = list.map(d => {
+                        const path = d.mountpoint || d.mount || '';
+                        return `<option value="${path}">Disco: ${d.name || path} (${path}) - ${d.free_gb ?? '?'} GB libres</option>`;
+                    }).join('');
+
+                    if (savedTargetDisk && list.some(d => (d.mountpoint || d.mount) === savedTargetDisk)) {
+                        select.value = savedTargetDisk;
+                    } else if (select.options.length > 0) {
+                        localStorage.setItem('selected_target_disk', select.value);
+                    }
+                } else {
+                    select.innerHTML = '<option value="">Almacenamiento por defecto (/DATA/Backups)</option>';
+                }
+
+                container.innerHTML = list.length ? list.map(d => {
+                    const path = d.mountpoint || d.mount || '';
+                    const percent = d.percent || 0;
+                    return `
+                        <div class="py-2 border-bottom">
+                            <div class="d-flex justify-content-between text-dark fw-bold mb-1">
+                                <span class="text-truncate me-2" style="max-width: 150px;">${path}</span>
+                                <span>${d.used_gb ?? '?'} GB / ${d.total_gb ?? '?'} GB</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar ${percent > 85 ? 'bg-danger' : 'bg-primary'}" style="width: ${percent}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('') : '<div class="text-muted py-2 text-center">No se encontraron discos montados adicionales</div>';
+            } catch (err) {
+                container.innerHTML = '<div class="text-danger py-2 text-center">Error al leer discos</div>';
+            }
+        }
+
+        function saveSelectedDisk(value) {
+            localStorage.setItem('selected_target_disk', value);
+        }
+
+        async function triggerAppBackup(appName) {
+            const targetDisk = document.getElementById('targetDiskSelect').value || localStorage.getItem('selected_target_disk') || '';
+            
+            const modalProgressEl = document.getElementById('modalProgress');
+            const modalProgress = bootstrap.Modal.getOrCreateInstance(modalProgressEl);
+            document.getElementById('progressTitle').innerText = `Copia de seguridad: ${appName}`;
+            document.getElementById('progressStatusText').innerText = 'Iniciando copia de seguridad...';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressBar').innerText = '0%';
+            document.getElementById('progressBar').className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
+            modalProgress.show();
+
+            if (appName === 'Sistema_Completo') {
+                const inlineCard = document.getElementById('systemBackupProgressContainer');
+                if (inlineCard) {
+                    inlineCard.classList.remove('d-none');
+                    document.getElementById('systemBackupProgressText').innerText = 'Iniciando copia...';
+                    document.getElementById('systemBackupProgressPercent').innerText = '0%';
+                    document.getElementById('systemBackupProgressBar').style.width = '0%';
+                }
+            }
+
+            try {
+                const endpoint = appName === 'Sistema_Completo' ? '/api/v1/backups/run-system' : `/api/v1/backups/run-app/${encodeURIComponent(appName)}`;
+                const res = await fetch(`${endpoint}?target_disk=${encodeURIComponent(targetDisk)}`, {
+                    method: 'POST'
+                });
+                
+                if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+
+                const data = await res.json();
+                const jobId = data.job_id || data.id || data.job;
+
+                if (jobId) {
+                    currentJobId = jobId;
+                    startPollingJobStatus(jobId);
+                } else {
+                    updateProgressUI(100, '✅ Copia completada');
+                    setTimeout(() => modalProgress.hide(), 1500);
+                }
+            } catch (err) {
+                console.error("Error iniciando backup:", err);
+                document.getElementById('progressStatusText').innerText = '❌ Error al iniciar respaldo';
+                document.getElementById('progressBar').className = 'progress-bar bg-danger';
+            }
+        }
+
+        function resetSystemUIState() {
+            const inlineCard = document.getElementById('systemBackupProgressContainer');
+            if (inlineCard) inlineCard.classList.add('d-none');
+
+            const systemBadge = document.getElementById('system-status-badge');
+            if (systemBadge) {
+                systemBadge.textContent = '🟢 Listo para resguardo';
+                systemBadge.className = 'badge bg-success-subtle text-success border border-success-subtle';
+            }
+        }
+
+        function startPollingJobStatus(jobId) {
+            if (jobInterval) clearInterval(jobInterval);
+
+            jobInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/v1/backups/job-status/${jobId}`);
+                    if (!res.ok) return;
+
+                    const data = await res.json();
+                    const progress = data.progress !== undefined ? data.progress : (data.percent || 0);
+                    const status = (data.status || data.state || '').toLowerCase();
+                    const message = data.message || data.msg || 'Procesando...';
+
+                    updateProgressUI(progress, message);
+
+                    if (status === 'completed' || status === 'success' || status === 'finished' || progress >= 100) {
+                        clearInterval(jobInterval);
+                        jobInterval = null;
+                        updateProgressUI(100, message || '✅ Copia completada correctamente');
+                        document.getElementById('progressBar').className = 'progress-bar bg-success';
+                        setTimeout(() => resetSystemUIState(), 3000);
+                    } else if (status === 'failed' || status === 'error') {
+                        clearInterval(jobInterval);
+                        jobInterval = null;
+                        document.getElementById('progressStatusText').innerText = `❌ Error: ${message}`;
+                        document.getElementById('progressBar').className = 'progress-bar bg-danger';
+                        resetSystemUIState();
+                    } else if (status === 'cancelled') {
+                        clearInterval(jobInterval);
+                        jobInterval = null;
+                        updateProgressUI(0, '⚠️ Proceso cancelado');
+                        document.getElementById('progressBar').className = 'progress-bar bg-warning';
+                        resetSystemUIState();
+                    }
+                } catch (err) {
+                    console.error("Error consultando estado del proceso:", err);
+                }
+            }, 1000);
+        }
+
+        function updateProgressUI(percent, text) {
+            const p = Math.min(100, Math.max(0, Math.round(percent)));
+            
+            const progressBar = document.getElementById('progressBar');
+            const statusText = document.getElementById('progressStatusText');
+            if (progressBar) {
+                progressBar.style.width = `${p}%`;
+                progressBar.innerText = `${p}%`;
+            }
+            if (statusText && text) statusText.innerText = text;
+
+            const inlineText = document.getElementById('systemBackupProgressText');
+            const inlinePercent = document.getElementById('systemBackupProgressPercent');
+            const inlineBar = document.getElementById('systemBackupProgressBar');
+            if (inlineText && text) inlineText.innerText = text;
+            if (inlinePercent) inlinePercent.innerText = `${p}%`;
+            if (inlineBar) inlineBar.style.width = `${p}%`;
+        }
+
+        async function cancelCurrentJob() {
+            if (jobInterval) {
+                clearInterval(jobInterval);
+                jobInterval = null;
+            }
+            if (currentJobId) {
+                try {
+                    await fetch(`/api/v1/backups/job-cancel/${currentJobId}`, { method: 'POST' });
+                } catch (e) {}
+                currentJobId = null;
+            }
+            updateProgressUI(0, 'Proceso cancelado');
+            resetSystemUIState();
+
+            const modalEl = document.getElementById('modalProgress');
+            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) modalInstance.hide();
+        }
+
+        async function triggerRestore(filename) {
+            if (!confirm(`¿Restaurar la copia "${filename}"? Sobrescribirá los datos actuales.`)) return;
+
+            const modalRestoreEl = document.getElementById('modalRestore');
+            const modalRestoreInstance = bootstrap.Modal.getInstance(modalRestoreEl);
+            if (modalRestoreInstance) modalRestoreInstance.hide();
+
+            const modalProgressEl = document.getElementById('modalProgress');
+            const modalProgress = bootstrap.Modal.getOrCreateInstance(modalProgressEl);
+            document.getElementById('progressTitle').innerText = `Restaurando: ${filename}`;
+            document.getElementById('progressStatusText').innerText = 'Iniciando restauración...';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressBar').innerText = '0%';
+            modalProgress.show();
+
+            try {
+                const res = await fetch(`/api/v1/backups/restore/${encodeURIComponent(filename)}`, { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.job_id) {
+                        currentJobId = data.job_id;
+                        startPollingJobStatus(data.job_id);
+                    } else {
+                        updateProgressUI(100, '✅ Restauración completada');
+                    }
+                } else {
+                    document.getElementById('progressStatusText').innerText = '❌ Error al restaurar';
+                    document.getElementById('progressBar').className = 'progress-bar bg-danger';
+                }
+            } catch (e) {
+                document.getElementById('progressStatusText').innerText = '❌ Error de conexión';
+                document.getElementById('progressBar').className = 'progress-bar bg-danger';
+            }
+        }
+
+        async function clearLogs() {
+            if (!confirm("¿Deseas borrar el historial de ejecuciones?")) return;
+            try {
+                const res = await fetch('/api/v1/executions', { method: 'DELETE' });
+                if (res.ok) {
+                    document.getElementById('logsTableBody').innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">Historial limpiado.</td></tr>';
+                }
+            } catch (e) {
+                console.error("Error borrando historial:", e);
+            }
+        }
+
+        document.getElementById('modalConfig').addEventListener('show.bs.modal', async () => {
+            const currentSelectedDisk = document.getElementById('targetDiskSelect').value || localStorage.getItem('selected_target_disk') || '';
+            document.getElementById('cfgTargetDisk').value = currentSelectedDisk;
+
+            try {
+                const res = await fetch('/api/v1/config');
+                if (res.ok) {
+                    const cfg = await res.json();
+                    if (cfg.target_disk) document.getElementById('cfgTargetDisk').value = cfg.target_disk;
+                    document.getElementById('cfgTelegramEnabled').checked = !!cfg.telegram_enabled;
+                    document.getElementById('cfgTelegramToken').value = cfg.telegram_token || '';
+                    document.getElementById('cfgTelegramChatId').value = cfg.telegram_chat_id || '';
+                    document.getElementById('cfgDuplicatiUrl').value = cfg.duplicati_url || 'http://172.17.0.1:8200';
+                    document.getElementById('cfgDuplicatiPassword').value = cfg.duplicati_password || '';
+                }
+            } catch (e) {}
         });
-        if (res.ok) {
-            alert("Configuración guardada correctamente");
-            bootstrap.Modal.getInstance(document.getElementById('configModal')).hide();
+
+        async function saveConfiguration() {
+            const payload = {
+                target_disk: document.getElementById('cfgTargetDisk').value,
+                telegram_enabled: document.getElementById('cfgTelegramEnabled').checked,
+                telegram_token: document.getElementById('cfgTelegramToken').value,
+                telegram_chat_id: document.getElementById('cfgTelegramChatId').value,
+                duplicati_url: document.getElementById('cfgDuplicatiUrl').value,
+                duplicati_password: document.getElementById('cfgDuplicatiPassword').value
+            };
+
+            try {
+                const res = await fetch('/api/v1/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    if (payload.target_disk) {
+                        localStorage.setItem('selected_target_disk', payload.target_disk);
+                        document.getElementById('targetDiskSelect').value = payload.target_disk;
+                    }
+                    const modalEl = document.getElementById('modalConfig');
+                    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                    if (modalInstance) modalInstance.hide();
+                    alert("✅ Configuración guardada correctamente");
+                } else {
+                    alert("❌ Error al guardar configuración");
+                }
+            } catch (e) {
+                alert("❌ Error de conexión al guardar configuración");
+            }
         }
-    }
 
-    function updateProgressUI(jobData) {
-        const progressBar = document.getElementById("jobProgressBar");
-        const progressText = document.getElementById("jobProgressText");
-        const statusMessage = document.getElementById("jobStatusMessage");
+        async function testTelegram() {
+            const resultSpan = document.getElementById('telegramTestResult');
+            resultSpan.className = "small text-muted";
+            resultSpan.innerText = "Enviando prueba...";
 
-        if (!progressBar) return;
+            const payload = {
+                telegram_token: document.getElementById('cfgTelegramToken').value,
+                telegram_chat_id: document.getElementById('cfgTelegramChatId').value
+            };
 
-        if (jobData.status === "failed") {
-            progressBar.className = "progress-bar bg-danger";
-            progressBar.style.width = "100%";
-            if (progressText) progressText.textContent = "Error";
-            if (statusMessage) statusMessage.textContent = jobData.message || "Error reportado en la tarea";
-            clearInterval(pollInterval);
-        } else if (jobData.status === "running") {
-            progressBar.className = "progress-bar progress-bar-striped progress-bar-animated bg-primary";
-            progressBar.style.width = `${jobData.progress}%`;
-            if (progressText) progressText.textContent = `${jobData.progress}%`;
-            if (statusMessage) statusMessage.textContent = jobData.message;
-        } else if (jobData.status === "success") {
-            progressBar.className = "progress-bar bg-success";
-            progressBar.style.width = "100%";
-            if (progressText) progressText.textContent = "100%";
-            if (statusMessage) statusMessage.textContent = jobData.message || "Completado con éxito";
-            clearInterval(pollInterval);
+            try {
+                const res = await fetch('/api/v1/config/test-telegram', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    resultSpan.className = "small text-success fw-bold";
+                    resultSpan.innerText = "✅ Mensaje enviado";
+                } else {
+                    const data = await res.json();
+                    resultSpan.className = "small text-danger fw-bold";
+                    resultSpan.innerText = `❌ ${data.detail || 'Fallo al enviar'}`;
+                }
+            } catch (e) {
+                resultSpan.className = "small text-danger fw-bold";
+                resultSpan.innerText = "❌ Error de red";
+            }
         }
-    }
 
-    document.addEventListener("DOMContentLoaded", loadConfig);
-</script>
+        document.getElementById('modalLogs').addEventListener('show.bs.modal', async () => {
+            const tbody = document.getElementById('logsTableBody');
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3">Cargando...</td></tr>';
+            try {
+                const res = await fetch('/api/v1/executions?limit=50');
+                const logs = await res.json();
+                tbody.innerHTML = logs.length ? logs.map(l => `
+                    <tr>
+                        <td class="text-nowrap">${l.fecha}</td>
+                        <td class="fw-semibold">${l.tipo}</td>
+                        <td><code>${l.objetivo}</code></td>
+                        <td><span class="badge ${l.estado === 'success' ? 'bg-success' : 'bg-danger'}">${l.estado}</span></td>
+                        <td><b>${l.duracion}</b></td>
+                    </tr>
+                `).join('') : '<tr><td colspan="5" class="text-center py-3 text-muted">No hay registros aún.</td></tr>';
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-danger">Error al cargar registros</td></tr>';
+            }
+        });
+
+        document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
+            const list = document.getElementById('restoreBackupsList');
+            list.innerHTML = '<div class="p-3 text-center text-muted">Buscando copias reales...</div>';
+            try {
+                const res = await fetch('/api/v1/backups/list');
+                const data = await res.json();
+                const backups = data.backups || [];
+                
+                list.innerHTML = backups.length ? backups.map(b => `
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                        <div>
+                            <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
+                            <div class="small text-muted mt-1">App: <strong class="text-primary">${b.app_name}</strong> &nbsp;|&nbsp; Peso: <strong>${b.size_str}</strong> &nbsp;|&nbsp; Fecha: ${b.fecha}</div>
+                        </div>
+                        <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore('${b.filename}')">🔄 Restaurar</button>
+                    </div>
+                `).join('') : '<div class="p-4 text-center text-muted">No hay copias válidas registradas.</div>';
+            } catch (e) {
+                list.innerHTML = '<div class="p-4 text-center text-danger">Error al obtener las copias de seguridad.</div>';
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadApps();
+            loadDisksInfo();
+            loadRpiInfo();
+        });
+    </script>
 </body>
 </html>
