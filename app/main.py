@@ -7,6 +7,7 @@ import subprocess
 import shutil
 import socket
 import json
+import platform
 import requests
 from datetime import datetime
 from pathlib import Path
@@ -16,8 +17,37 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.services.disk_service import disk_service
-from app.services.duplicati_orchestrator_service import duplicati_orchestrator
+# Safe fallbacks for modular services if app submodules are optional
+try:
+    from app.services.disk_service import disk_service
+except ImportError:
+    class DummyDiskService:
+        def get_disks(self):
+            disks = []
+            try:
+                du = shutil.disk_usage("/DATA")
+                disks.append({
+                    "name": "DATA",
+                    "mountpoint": "/DATA",
+                    "total_gb": round(du.total / (1024**3), 2),
+                    "used_gb": round(du.used / (1024**3), 2),
+                    "free_gb": round(du.free / (1024**3), 2),
+                    "percent": round((du.used / du.total) * 100, 1)
+                })
+            except Exception:
+                pass
+            return disks
+    disk_service = DummyDiskService()
+
+try:
+    from app.services.duplicati_orchestrator_service import duplicati_orchestrator
+except ImportError:
+    class DummyDuplicatiOrchestrator:
+        def run_full_disaster_recovery(self, app_name, target_disk_path, duplicati_job_id, password=""):
+            return {"success": False, "error": "Duplicati service orchestrator module non found."}
+        def get_task_status(self, task_id, duplicati_url="", password=""):
+            return {"status": "error", "phase": "Failed", "progress": 0.0}
+    duplicati_orchestrator = DummyDuplicatiOrchestrator()
 
 logger = logging.getLogger("casaos-backup")
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +64,8 @@ class ConfigModel(BaseModel):
     telegram_enabled: bool = False
     telegram_token: str = ""
     telegram_chat_id: str = ""
+    duplicati_url: str = "http://172.17.0.1:8200"
+    duplicati_password: str = ""
 
 class TelegramTestModel(BaseModel):
     telegram_token: str = ""
@@ -43,17 +75,22 @@ class TelegramTestModel(BaseModel):
 
 # --- GESTIÓN DE CONFIGURACIÓN Y TELEGRAM ---
 def load_config():
-    if CONFIG_PATH.exists():
-        try:
-            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-        except Exception as e:
-            logger.error(f"Error al leer la configuración: {e}")
-    return {
+    defaults = {
         "target_disk": "",
         "telegram_enabled": False,
         "telegram_token": "",
-        "telegram_chat_id": ""
+        "telegram_chat_id": "",
+        "duplicati_url": "http://172.17.0.1:8200",
+        "duplicati_password": ""
     }
+    if CONFIG_PATH.exists():
+        try:
+            data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            defaults.update(data)
+            return defaults
+        except Exception as e:
+            logger.error(f"Error al leer la configuración: {e}")
+    return defaults
 
 def save_config_file(data: dict):
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -117,12 +154,41 @@ def read_root():
 # --- ENDPOINTS DE CONFIGURACIÓN Y SISTEMA ---
 @app.get("/api/v1/system/info")
 def get_system_info():
+    model = "Raspberry Pi / Linux Host"
+    try:
+        if os.path.exists("/proc/device-tree/model"):
+            model = Path("/proc/device-tree/model").read_text().strip().replace("\x00", "")
+    except Exception:
+        pass
+
+    ram_info = "Disponible"
+    try:
+        if os.path.exists("/proc/meminfo"):
+            lines = Path("/proc/meminfo").read_text().splitlines()
+            mem_total = 0
+            for l in lines:
+                if l.startswith("MemTotal:"):
+                    mem_total = int(l.split()[1]) // 1024
+                    break
+            if mem_total:
+                ram_info = f"{round(mem_total / 1024, 1)} GB (Total)"
+    except Exception:
+        pass
+
+    temp_info = "Normal / OK"
+    try:
+        if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
+            raw_temp = int(Path("/sys/class/thermal/thermal_zone0/temp").read_text().strip())
+            temp_info = f"{round(raw_temp / 1000, 1)} °C"
+    except Exception:
+        pass
+
     return {
-        "model": "Raspberry Pi",
-        "os": "CasaOS Linux",
-        "arch": "aarch64 (64-bit)",
-        "ram": "8 GB (Disponible)",
-        "cpu": "Normal / OK"
+        "model": model,
+        "os": f"CasaOS ({platform.system()})",
+        "arch": platform.machine() or "aarch64",
+        "ram": ram_info,
+        "cpu": temp_info
     }
 
 @app.get("/api/v1/config")
@@ -170,7 +236,7 @@ def test_telegram(data: TelegramTestModel):
         logger.error(f"Error de conexión con Telegram: {e}")
         raise HTTPException(status_code=500, detail=f"Error de conexión: {str(e)}")
 
-# --- ENDPOINTS EXISTENTES DE APPS Y DOCKER ---
+# --- ENDPOINTS DE APPS Y DOCKER ---
 @app.get("/api/v1/apps")
 def get_apps():
     appdata_dir = Path("/DATA/AppData")
@@ -259,11 +325,13 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
 
         cfg = load_config()
         dup_url = cfg.get("duplicati_url", "http://172.17.0.1:8200")
+        dup_password = cfg.get("duplicati_password", "")
 
         orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
             app_name=app_name,
             target_disk_path=target_disk,
-            duplicati_job_id=1
+            duplicati_job_id=1,
+            password=dup_password
         )
 
         if not orchestration_res.get("success"):
@@ -286,7 +354,11 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                 return
 
             time.sleep(4)
-            status_info = duplicati_orchestrator.get_task_status(task_id=1, duplicati_url=dup_url)
+            status_info = duplicati_orchestrator.get_task_status(
+                task_id=1, 
+                duplicati_url=dup_url,
+                password=dup_password
+            )
             
             phase = status_info.get("phase", "Running")
             progress = status_info.get("progress", 10.0)
@@ -493,7 +565,11 @@ def perform_real_restore(filename: str, job_id: str):
         active_jobs[job_id]["message"] = f"Descomprimiendo en {dest_dir}..."
 
         with tarfile.open(target_file, "r:gz") as tar:
-            tar.extractall(path=dest_dir)
+            # Safe extraction compatibility for Python 3.12+
+            if hasattr(tarfile, 'data_filter'):
+                tar.extractall(path=dest_dir, filter='data')
+            else:
+                tar.extractall(path=dest_dir)
 
         elapsed = round(time.time() - start, 2)
         active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Restauración completada con éxito", "file": filename}
@@ -523,15 +599,16 @@ def perform_real_restore(filename: str, job_id: str):
 @app.post("/api/v1/backups/run-app/{app_name}")
 def run_backup(app_name: str, background_tasks: BackgroundTasks, target_disk: str = Query(None)):
     job_id = f"job_{app_name}_{int(time.time())}"
-    background_tasks.add_task(perform_real_backup, app_name, target_disk, job_id)
+    background_tasks.add_task(perform_real_backup, app_name, target_disk or "", job_id)
     return {"status": "started", "job_id": job_id}
 
 @app.post("/api/v1/backups/run-system")
 def run_system_backup(background_tasks: BackgroundTasks, target_disk: str = Query(None)):
     job_id = f"job_Sistema_Completo_{int(time.time())}"
-    background_tasks.add_task(perform_real_backup, "Sistema_Completo", target_disk, job_id)
+    background_tasks.add_task(perform_real_backup, "Sistema_Completo", target_disk or "", job_id)
     return {"status": "started", "job_id": job_id}
 
+@app.post("/api/v1/backups/restore/{filename}")
 @app.post("/api/v1/backups/restore")
 def restore_backup(filename: str, background_tasks: BackgroundTasks):
     job_id = f"job_restore_{int(time.time())}"
@@ -673,6 +750,7 @@ def get_logs(limit: int = 50):
             })
         return result
 
+@app.delete("/api/v1/executions")
 @app.delete("/api/v1/logs")
 def clear_logs():
     with get_db() as conn:

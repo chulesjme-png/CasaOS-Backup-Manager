@@ -19,7 +19,8 @@
     <nav class="navbar navbar-light bg-white border-bottom shadow-sm py-2 mb-4">
         <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">
-                <img src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" height="36">
+                <img src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" height="36" onerror="this.style.display='none'">
+                <span class="fw-bold text-primary fs-5">CasaOS Backup Manager</span>
                 <span class="badge bg-light text-secondary border rounded-pill px-2 py-1 ms-2" style="font-size: 0.75rem;">v0.6.0-alpha1</span>
             </div>
         </div>
@@ -40,7 +41,7 @@
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
                     <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Motores de Backup</span>
-                    <div class="fw-bold text-dark mt-2">Tar.gz Engine (OK)</div>
+                    <div class="fw-bold text-dark mt-2">Tar.gz / Duplicati (OK)</div>
                 </div>
             </div>
             <div class="col-md-3">
@@ -67,7 +68,6 @@
                 <div class="d-flex gap-2 flex-wrap">
                     <button class="btn btn-outline-secondary btn-sm" onclick="loadApps()">🔍 Escanear</button>
                     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
-                    <button class="btn btn-outline-secondary btn-sm">📅 Programación</button>
                     <button class="btn btn-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
                     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalConfig">⚙️ Configuración</button>
                 </div>
@@ -96,7 +96,7 @@
                         <div class="d-flex gap-3 align-items-center">
                             <div class="fs-1 text-primary">🛡️</div>
                             <div>
-                                <h5 class="fw-bold text-dark mb-1">Copia de Seguridad de la Raspberry Pi (Disaster Recovery)</h5>
+                                <h5 class="fw-bold text-dark mb-1">Copia de Seguridad del Sistema (Disaster Recovery)</h5>
                                 <p class="text-muted small mb-2">Resguarda la configuración de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>).</p>
                                 <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Completa</span>
                                 <span class="badge bg-success-subtle text-success border border-success-subtle">🟢 Listo para resguardo</span>
@@ -137,7 +137,7 @@
                     <div class="card-header bg-white border-bottom-0 pt-3 px-3">
                         <ul class="nav nav-tabs card-header-tabs" id="sideTabs">
                             <li class="nav-item">
-                                <button class="nav-link active" onclick="switchTab(event, 'rpi')">🍓 Raspberry</button>
+                                <button class="nav-link active" onclick="switchTab(event, 'rpi')">🍓 Sistema</button>
                             </li>
                             <li class="nav-item">
                                 <button class="nav-link" onclick="switchTab(event, 'docker')">🐳 Docker</button>
@@ -152,23 +152,23 @@
                             <div class="small" id="rpiDetails">
                                 <div class="d-flex justify-content-between py-2 border-bottom">
                                     <span class="text-muted">💻 Dispositivo:</span>
-                                    <span class="fw-bold text-dark" id="rpiModel">Raspberry Pi</span>
+                                    <span class="fw-bold text-dark" id="rpiModel">Cargando...</span>
                                 </div>
                                 <div class="d-flex justify-content-between py-2 border-bottom">
                                     <span class="text-muted">🐧 Sistema Operativo:</span>
-                                    <span class="fw-semibold text-dark" id="rpiOs">CasaOS Linux</span>
+                                    <span class="fw-semibold text-dark" id="rpiOs">Cargando...</span>
                                 </div>
                                 <div class="d-flex justify-content-between py-2 border-bottom">
                                     <span class="text-muted">🏗️ Arquitectura:</span>
-                                    <span class="fw-semibold text-dark" id="rpiArch">aarch64 (64-bit)</span>
+                                    <span class="fw-semibold text-dark" id="rpiArch">Cargando...</span>
                                 </div>
                                 <div class="d-flex justify-content-between py-2 border-bottom">
                                     <span class="text-muted">🧠 Memoria RAM:</span>
-                                    <span class="fw-semibold text-dark" id="rpiRam">8 GB (Disponible)</span>
+                                    <span class="fw-semibold text-dark" id="rpiRam">Cargando...</span>
                                 </div>
                                 <div class="d-flex justify-content-between py-2 border-bottom">
-                                    <span class="text-muted">🔥 Estado CPU / Temp:</span>
-                                    <span class="fw-semibold text-dark" id="rpiCpu">Normal / OK</span>
+                                    <span class="text-muted">🔥 CPU / Temp:</span>
+                                    <span class="fw-semibold text-dark" id="rpiCpu">Cargando...</span>
                                 </div>
                                 <div class="d-flex justify-content-between py-2 border-bottom">
                                     <span class="text-muted">📁 Ruta AppData:</span>
@@ -226,7 +226,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="d-flex justify-content-between mb-3">
-                        <span class="text-muted small">Últimos registros en la base de datos.</span>
+                        <span class="text-muted small">Últimos registros de copias y restauraciones.</span>
                         <button class="btn btn-outline-danger btn-sm" onclick="clearLogs()">🗑️ Limpiar Historial</button>
                     </div>
                     <div class="table-responsive" style="max-height: 400px;">
@@ -272,7 +272,19 @@
                         <h6 class="fw-bold text-dark mb-3">💾 Destino de Copias por Defecto</h6>
                         <div class="mb-3">
                             <label class="form-label small text-muted">Ruta o Punto de Montaje</label>
-                            <input type="text" class="form-control form-control-sm" id="cfgTargetDisk" placeholder="/media/pichules/...">
+                            <input type="text" class="form-control form-control-sm" id="cfgTargetDisk" placeholder="/DATA/Backups">
+                        </div>
+
+                        <hr class="my-3">
+
+                        <h6 class="fw-bold text-dark mb-3">🔄 Motor Duplicati</h6>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">URL del Servicio Duplicati</label>
+                            <input type="text" class="form-control form-control-sm" id="cfgDuplicatiUrl" placeholder="http://172.17.0.1:8200">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Contraseña (si aplica)</label>
+                            <input type="password" class="form-control form-control-sm" id="cfgDuplicatiPassword" placeholder="••••••••">
                         </div>
 
                         <hr class="my-3">
@@ -332,12 +344,14 @@
                 const res = await fetch('/api/v1/system/info');
                 if (!res.ok) return;
                 const data = await res.json();
-                document.getElementById('rpiModel').innerText = data.model || 'Raspberry Pi';
+                document.getElementById('rpiModel').innerText = data.model || 'Raspberry Pi / Host';
                 document.getElementById('rpiOs').innerText = data.os || 'CasaOS Linux';
-                document.getElementById('rpiArch').innerText = data.arch || 'aarch64 (64-bit)';
-                document.getElementById('rpiRam').innerText = data.ram || '8 GB (Disponible)';
-                document.getElementById('rpiCpu').innerText = data.cpu || 'Normal / OK';
-            } catch (e) {}
+                document.getElementById('rpiArch').innerText = data.arch || 'aarch64';
+                document.getElementById('rpiRam').innerText = data.ram || 'Disponible';
+                document.getElementById('rpiCpu').innerText = data.cpu || 'Normal';
+            } catch (e) {
+                console.error("Error cargando información de sistema:", e);
+            }
         }
 
         async function loadApps() {
@@ -348,12 +362,18 @@
                 document.getElementById('appsCountHeader').innerText = `${apps.length} Detectadas`;
                 document.getElementById('appsCountBadge').innerText = `${apps.length} Apps`;
                 
-                document.getElementById('appsContainer').innerHTML = apps.map(app => `
+                const container = document.getElementById('appsContainer');
+                if (!apps.length) {
+                    container.innerHTML = '<div class="text-center text-muted py-4">No se detectaron aplicaciones en /DATA/AppData</div>';
+                    return;
+                }
+
+                container.innerHTML = apps.map(app => `
                     <div class="list-group-item px-0 py-3 border-bottom">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <div class="fw-bold text-dark text-capitalize fs-6">${app.name}</div>
-                                <div class="text-muted small mt-1">Rutas: <code>${app.path}</code></div>
+                                <div class="text-muted small mt-1">Ruta: <code>${app.path}</code></div>
                             </div>
                             <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('${app.name}')">⚡ Copiar Ahora</button>
                         </div>
@@ -398,31 +418,36 @@
 
                 const savedTargetDisk = localStorage.getItem('selected_target_disk');
 
-                select.innerHTML = list.map(d => {
-                    const path = d.mountpoint || d.mount || '';
-                    return `<option value="${path}">Disco: ${d.name} (${path}) - ${d.free_gb} GB libres</option>`;
-                }).join('');
+                if (list.length > 0) {
+                    select.innerHTML = list.map(d => {
+                        const path = d.mountpoint || d.mount || '';
+                        return `<option value="${path}">Disco: ${d.name || path} (${path}) - ${d.free_gb ?? '?'} GB libres</option>`;
+                    }).join('');
 
-                if (savedTargetDisk && list.some(d => (d.mountpoint || d.mount) === savedTargetDisk)) {
-                    select.value = savedTargetDisk;
-                } else if (select.options.length > 0) {
-                    localStorage.setItem('selected_target_disk', select.value);
+                    if (savedTargetDisk && list.some(d => (d.mountpoint || d.mount) === savedTargetDisk)) {
+                        select.value = savedTargetDisk;
+                    } else if (select.options.length > 0) {
+                        localStorage.setItem('selected_target_disk', select.value);
+                    }
+                } else {
+                    select.innerHTML = '<option value="">Almacenamiento por defecto (/DATA/Backups)</option>';
                 }
 
                 container.innerHTML = list.length ? list.map(d => {
                     const path = d.mountpoint || d.mount || '';
+                    const percent = d.percent || 0;
                     return `
                         <div class="py-2 border-bottom">
                             <div class="d-flex justify-content-between text-dark fw-bold mb-1">
-                                <span>${path}</span>
-                                <span>${d.used_gb} GB / ${d.total_gb} GB</span>
+                                <span class="text-truncate me-2" style="max-width: 150px;">${path}</span>
+                                <span>${d.used_gb ?? '?'} GB / ${d.total_gb ?? '?'} GB</span>
                             </div>
                             <div class="progress" style="height: 10px;">
-                                <div class="progress-bar ${d.percent > 85 ? 'bg-danger' : 'bg-primary'}" style="width: ${d.percent}%"></div>
+                                <div class="progress-bar ${percent > 85 ? 'bg-danger' : 'bg-primary'}" style="width: ${percent}%"></div>
                             </div>
                         </div>
                     `;
-                }).join('') : '<div class="text-muted py-2 text-center">No se encontraron discos montados</div>';
+                }).join('') : '<div class="text-muted py-2 text-center">No se encontraron discos montados adicionales</div>';
             } catch (err) {
                 container.innerHTML = '<div class="text-danger py-2 text-center">Error al leer discos</div>';
             }
@@ -435,9 +460,8 @@
         async function triggerAppBackup(appName) {
             const targetDisk = document.getElementById('targetDiskSelect').value || localStorage.getItem('selected_target_disk') || '';
             
-            // Modal de progreso
             const modalProgressEl = document.getElementById('modalProgress');
-            const modalProgress = new bootstrap.Modal(modalProgressEl);
+            const modalProgress = bootstrap.Modal.getOrCreateInstance(modalProgressEl);
             document.getElementById('progressTitle').innerText = `Copia de seguridad: ${appName}`;
             document.getElementById('progressStatusText').innerText = 'Iniciando copia de seguridad...';
             document.getElementById('progressBar').style.width = '0%';
@@ -445,7 +469,6 @@
             document.getElementById('progressBar').className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
             modalProgress.show();
 
-            // Si es la copia completa, también muestra la barra en la tarjeta
             if (appName === 'Sistema_Completo') {
                 const inlineCard = document.getElementById('systemBackupProgressContainer');
                 if (inlineCard) {
@@ -457,7 +480,8 @@
             }
 
             try {
-                const res = await fetch(`/api/v1/backups/run-app/${encodeURIComponent(appName)}?target_disk=${encodeURIComponent(targetDisk)}`, {
+                const endpoint = appName === 'Sistema_Completo' ? '/api/v1/backups/run-system' : `/api/v1/backups/run-app/${encodeURIComponent(appName)}`;
+                const res = await fetch(`${endpoint}?target_disk=${encodeURIComponent(targetDisk)}`, {
                     method: 'POST'
                 });
                 
@@ -495,7 +519,6 @@
 
                     updateProgressUI(progress, message);
 
-                    // Detiene la consulta cuando el trabajo finaliza para no saturar el servidor
                     if (status === 'completed' || status === 'success' || status === 'finished' || progress >= 100) {
                         clearInterval(jobInterval);
                         jobInterval = null;
@@ -506,9 +529,14 @@
                         jobInterval = null;
                         document.getElementById('progressStatusText').innerText = `❌ Error: ${message}`;
                         document.getElementById('progressBar').className = 'progress-bar bg-danger';
+                    } else if (status === 'cancelled') {
+                        clearInterval(jobInterval);
+                        jobInterval = null;
+                        updateProgressUI(0, '⚠️ Proceso cancelado');
+                        document.getElementById('progressBar').className = 'progress-bar bg-warning';
                     }
                 } catch (err) {
-                    console.error("Error consultando job status:", err);
+                    console.error("Error consultando estado del proceso:", err);
                 }
             }, 1000);
         }
@@ -516,7 +544,6 @@
         function updateProgressUI(percent, text) {
             const p = Math.min(100, Math.max(0, Math.round(percent)));
             
-            // Actualizar Modal
             const progressBar = document.getElementById('progressBar');
             const statusText = document.getElementById('progressStatusText');
             if (progressBar) {
@@ -525,7 +552,6 @@
             }
             if (statusText && text) statusText.innerText = text;
 
-            // Actualizar Tarjeta Disaster Recovery
             const inlineText = document.getElementById('systemBackupProgressText');
             const inlinePercent = document.getElementById('systemBackupProgressPercent');
             const inlineBar = document.getElementById('systemBackupProgressBar');
@@ -559,7 +585,7 @@
             if (modalRestoreInstance) modalRestoreInstance.hide();
 
             const modalProgressEl = document.getElementById('modalProgress');
-            const modalProgress = new bootstrap.Modal(modalProgressEl);
+            const modalProgress = bootstrap.Modal.getOrCreateInstance(modalProgressEl);
             document.getElementById('progressTitle').innerText = `Restaurando: ${filename}`;
             document.getElementById('progressStatusText').innerText = 'Iniciando restauración...';
             document.getElementById('progressBar').style.width = '0%';
@@ -598,7 +624,6 @@
             }
         }
 
-        // Cargar configuración al abrir el modal
         document.getElementById('modalConfig').addEventListener('show.bs.modal', async () => {
             const currentSelectedDisk = document.getElementById('targetDiskSelect').value || localStorage.getItem('selected_target_disk') || '';
             document.getElementById('cfgTargetDisk').value = currentSelectedDisk;
@@ -611,6 +636,8 @@
                     document.getElementById('cfgTelegramEnabled').checked = !!cfg.telegram_enabled;
                     document.getElementById('cfgTelegramToken').value = cfg.telegram_token || '';
                     document.getElementById('cfgTelegramChatId').value = cfg.telegram_chat_id || '';
+                    document.getElementById('cfgDuplicatiUrl').value = cfg.duplicati_url || 'http://172.17.0.1:8200';
+                    document.getElementById('cfgDuplicatiPassword').value = cfg.duplicati_password || '';
                 }
             } catch (e) {}
         });
@@ -620,7 +647,9 @@
                 target_disk: document.getElementById('cfgTargetDisk').value,
                 telegram_enabled: document.getElementById('cfgTelegramEnabled').checked,
                 telegram_token: document.getElementById('cfgTelegramToken').value,
-                telegram_chat_id: document.getElementById('cfgTelegramChatId').value
+                telegram_chat_id: document.getElementById('cfgTelegramChatId').value,
+                duplicati_url: document.getElementById('cfgDuplicatiUrl').value,
+                duplicati_password: document.getElementById('cfgDuplicatiPassword').value
             };
 
             try {
@@ -668,8 +697,9 @@
                     resultSpan.className = "small text-success fw-bold";
                     resultSpan.innerText = "✅ Mensaje enviado";
                 } else {
+                    const data = await res.json();
                     resultSpan.className = "small text-danger fw-bold";
-                    resultSpan.innerText = "❌ Fallo al enviar";
+                    resultSpan.innerText = `❌ ${data.detail || 'Fallo al enviar'}`;
                 }
             } catch (e) {
                 resultSpan.className = "small text-danger fw-bold";
