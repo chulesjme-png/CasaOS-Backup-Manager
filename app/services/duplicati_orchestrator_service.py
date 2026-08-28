@@ -115,60 +115,70 @@ class DuplicatiOrchestratorService:
                 backups = resp.json()
                 if isinstance(backups, list):
                     for job in backups:
-                        job_name = str(job.get("Name", ""))
+                        job_name = str(job.get("Name", "") or job.get("Backup", {}).get("Name", ""))
                         if job_name == managed_job_name or "[cbm]" in job_name.lower():
-                            job_id = int(job.get("ID"))
+                            job_id = int(job.get("ID") or job.get("Backup", {}).get("ID"))
                             logger.info(f"🔎 Encontrada tarea de sistema '{job_name}' (ID: {job_id})")
                             return job_id
         except Exception as e:
             logger.warning(f"⚠️ Error consultando tareas en Duplicati: {e}")
 
-        # 2. Crear la tarea con el esquema exacto de la API de Duplicati
+        # 2. Probar creación con depuración detallada de errores
         disaster_recovery_target = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery")
-        logger.info(f"🔨 Creando automáticamente la tarea '{managed_job_name}' en Duplicati -> {disaster_recovery_target}")
+        logger.info(f"🔨 Creando tarea '{managed_job_name}' en Duplicati -> {disaster_recovery_target}")
         
-        payload = {
-            "Backup": {
-                "Name": managed_job_name,
-                "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
-                "TargetURL": f"file://{disaster_recovery_target}/",
-                "SourceFiles": [source_path],
-                "Settings": [
-                    {"Name": "--no-encryption", "Value": "true"}
-                ],
-                "Filters": [],
-                "IsScheduleActive": False
-            },
-            "Schedule": None
+        payload_plain = {
+            "Name": managed_job_name,
+            "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
+            "TargetURL": f"file://{disaster_recovery_target}/",
+            "SourceFiles": [source_path],
+            "Settings": [
+                {"Name": "--no-encryption", "Value": "true"}
+            ]
         }
 
         try:
             create_resp = self._do_request(
                 session, "POST", f"{base_url}/api/v1/backups",
                 password=duplicati_password,
-                json=payload,
+                json=payload_plain,
                 timeout=20
             )
-            if create_resp.status_code in (200, 201):
-                new_job = create_resp.json()
-                job_id = None
-                if isinstance(new_job, dict):
-                    job_id = new_job.get("ID") or new_job.get("id") or (new_job.get("Backup", {}).get("ID") if isinstance(new_job.get("Backup"), dict) else None)
-                elif isinstance(new_job, (int, str)):
-                    job_id = int(new_job)
+            
+            # Si responde 400, probar formato anidado Backup/Schedule
+            if create_resp.status_code == 400:
+                logger.warning(f"⚠️ Petición plana rechazada ({create_resp.text}). Intentando estructura anidada...")
+                payload_nested = {
+                    "Backup": payload_plain,
+                    "Schedule": None
+                }
+                create_resp = self._do_request(
+                    session, "POST", f"{base_url}/api/v1/backups",
+                    password=duplicati_password,
+                    json=payload_nested,
+                    timeout=20
+                )
 
-                if job_id is not None:
-                    logger.info(f"✅ Tarea '{managed_job_name}' creada exitosamente con ID {job_id}")
-                    return int(job_id)
-                
-                # Re-consultar para obtener la ID recién creada en caso de respuesta simplificada
+            logger.info(f"📩 Respuesta creación Duplicati: HTTP {create_resp.status_code} - Body: {create_resp.text}")
+
+            if create_resp.status_code in (200, 201):
+                try:
+                    new_job = create_resp.json()
+                    if isinstance(new_job, dict):
+                        job_id = new_job.get("ID") or new_job.get("id") or (new_job.get("Backup", {}).get("ID") if isinstance(new_job.get("Backup"), dict) else None)
+                        if job_id:
+                            return int(job_id)
+                except Exception:
+                    pass
+
                 check_resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
                 if check_resp.status_code == 200:
                     for job in check_resp.json():
-                        if str(job.get("Name", "")) == managed_job_name:
-                            return int(job.get("ID"))
+                        name = str(job.get("Name") or job.get("Backup", {}).get("Name", ""))
+                        if name == managed_job_name:
+                            return int(job.get("ID") or job.get("Backup", {}).get("ID"))
 
-            logger.error(f"❌ Error al crear la tarea en Duplicati (HTTP {create_resp.status_code}): {create_resp.text}")
+            logger.error(f"❌ Error final al crear tarea (HTTP {create_resp.status_code}): {create_resp.text}")
         except Exception as e:
             logger.error(f"❌ Excepción al aprovisionar tarea en Duplicati: {e}")
 
