@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import urllib.parse
 import requests
 from types import SimpleNamespace
 from typing import Optional, Dict, Any
@@ -17,6 +18,21 @@ logger = logging.getLogger("casaos-backup")
 
 DEFAULT_DUPLICATI_URL = os.getenv("DUPLICATI_URL", "http://172.17.0.1:8200")
 DEFAULT_DUPLICATI_PASS = os.getenv("DUPLICATI_PASSWORD", "")
+
+def get_duplicati_credentials() -> tuple[str, str]:
+    """Obtiene la URL y contraseña de Duplicati desde config.json o variables de entorno."""
+    url = DEFAULT_DUPLICATI_URL
+    password = DEFAULT_DUPLICATI_PASS
+    config_path = "/DATA/AppData/casaos-backup-manager/config.json"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                url = data.get("duplicati_url") or data.get("duplicati_host") or url
+                password = data.get("duplicati_password") or data.get("password") or password
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudieron leer credenciales de config.json: {e}")
+    return url, password
 
 def get_active_target_disk() -> str:
     config_path = "/DATA/AppData/casaos-backup-manager/config.json"
@@ -35,18 +51,31 @@ class DuplicatiOrchestratorService:
     def __init__(self):
         self.backend = DuplicatiBackend()
 
+    def _update_xsrf_header(self, session: requests.Session, response: Optional[requests.Response] = None):
+        """Extrae y decodifica el token XSRF necesario para peticiones POST/PUT en Duplicati."""
+        xsrf_val = None
+        for cookie_name, cookie_val in session.cookies.items():
+            if "xsrf" in cookie_name.lower():
+                xsrf_val = cookie_val
+                break
+        
+        if not xsrf_val and response:
+            xsrf_val = response.headers.get("X-XSRF-Token") or response.headers.get("xsrf-token")
+
+        if xsrf_val:
+            unquoted_token = urllib.parse.unquote(xsrf_val)
+            session.headers.update({"X-XSRF-Token": unquoted_token})
+
     def _get_session(self, url: str, password: str = "") -> requests.Session:
-        """Crea una sesión HTTP autenticada con Duplicati."""
+        """Crea una sesión HTTP autenticada con Duplicati y sus cabeceras XSRF."""
         session = requests.Session()
         base_url = url.rstrip('/')
         
         try:
             resp = session.get(f"{base_url}/api/v1/systemstate", timeout=10)
-            xsrf = session.cookies.get("xsrf-token") or resp.headers.get("X-XSRF-Token")
-            if xsrf:
-                session.headers.update({"X-XSRF-Token": xsrf})
+            self._update_xsrf_header(session, resp)
         except Exception as e:
-            logger.debug(f"No se pudo obtener el estado inicial de Duplicati: {e}")
+            logger.debug(f"Error consultando estado inicial de Duplicati: {e}")
 
         if password and password.strip():
             try:
@@ -55,10 +84,7 @@ class DuplicatiOrchestratorService:
                     json={"password": password}, 
                     timeout=10
                 )
-                if login_resp.status_code == 200:
-                    xsrf_token = login_resp.headers.get("X-XSRF-Token") or session.cookies.get("xsrf-token")
-                    if xsrf_token:
-                        session.headers.update({"X-XSRF-Token": xsrf_token})
+                self._update_xsrf_header(session, login_resp)
             except Exception as e:
                 logger.warning(f"⚠️ Error en autenticación con Duplicati: {e}")
                 
@@ -106,6 +132,8 @@ class DuplicatiOrchestratorService:
         }
 
         try:
+            # Re-verificar token XSRF antes del POST
+            self._update_xsrf_header(session)
             create_resp = session.post(f"{base_url}/api/v1/backups", json=payload, timeout=20)
             if create_resp.status_code in (200, 201):
                 new_job = create_resp.json()
@@ -147,9 +175,13 @@ class DuplicatiOrchestratorService:
         app_path: str,
         target_disk_path: str,
         duplicati_job_id: Optional[int] = None,
-        duplicati_url: str = DEFAULT_DUPLICATI_URL,
-        duplicati_password: str = DEFAULT_DUPLICATI_PASS
+        duplicati_url: Optional[str] = None,
+        duplicati_password: Optional[str] = None
     ) -> Dict[str, Any]:
+        cfg_url, cfg_pass = get_duplicati_credentials()
+        resolved_url = duplicati_url or cfg_url
+        resolved_pass = duplicati_password if duplicati_password is not None else cfg_pass
+
         logger.info(f"🚀 [Orchestrator] Enviando orden de backup para: {app_name}")
 
         is_ok, msg = preflight_service.check_disk_space(
@@ -162,7 +194,7 @@ class DuplicatiOrchestratorService:
             return {"success": False, "error": msg}
 
         if duplicati_job_id is None:
-            duplicati_job_id = self.find_job_id_by_name(app_name, duplicati_url, duplicati_password)
+            duplicati_job_id = self.find_job_id_by_name(app_name, resolved_url, resolved_pass)
 
         if duplicati_job_id is None:
             err_msg = f"No se encontró un Job ID válido en Duplicati para '{app_name}'."
@@ -180,8 +212,8 @@ class DuplicatiOrchestratorService:
                 backend_configuration=BackendConfiguration(
                     backend_name="duplicati",
                     configuration={
-                        "url": duplicati_url,
-                        "password": duplicati_password,
+                        "url": resolved_url,
+                        "password": resolved_pass,
                         "timeout": 60
                     }
                 ),
@@ -215,22 +247,24 @@ class DuplicatiOrchestratorService:
         target_disk_path: Optional[str] = None,
         target_disk: Optional[str] = None,
         duplicati_job_id: Optional[int] = None,
-        duplicati_url: str = DEFAULT_DUPLICATI_URL,
-        duplicati_password: str = DEFAULT_DUPLICATI_PASS,
+        duplicati_url: Optional[str] = None,
+        duplicati_password: Optional[str] = None,
         password: Optional[str] = None
     ) -> Dict[str, Any]:
+        cfg_url, cfg_pass = get_duplicati_credentials()
+        resolved_url = duplicati_url or cfg_url
+        resolved_pass = password if password is not None else (duplicati_password or cfg_pass)
+
         resolved_target = target_disk_path or target_disk
         if not resolved_target or resolved_target == "/var/lib/casaos":
             resolved_target = get_active_target_disk()
-
-        resolved_pass = password if password is not None else duplicati_password
 
         # Auto-crear o recuperar la tarea única de Disaster Recovery
         if duplicati_job_id is None:
             duplicati_job_id = self._get_or_create_disaster_recovery_job(
                 source_path=app_path,
                 target_disk_path=resolved_target,
-                duplicati_url=duplicati_url,
+                duplicati_url=resolved_url,
                 duplicati_password=resolved_pass
             )
 
@@ -239,22 +273,25 @@ class DuplicatiOrchestratorService:
             app_path=app_path,
             target_disk_path=resolved_target,
             duplicati_job_id=duplicati_job_id,
-            duplicati_url=duplicati_url,
+            duplicati_url=resolved_url,
             duplicati_password=resolved_pass
         )
 
     def get_task_status(
         self,
         task_id: int = 1,
-        duplicati_url: str = DEFAULT_DUPLICATI_URL,
-        duplicati_password: str = DEFAULT_DUPLICATI_PASS,
+        duplicati_url: Optional[str] = None,
+        duplicati_password: Optional[str] = None,
         password: Optional[str] = None
     ) -> Dict[str, Any]:
         try:
-            resolved_pass = password if password is not None else duplicati_password
-            session = self._get_session(duplicati_url, resolved_pass)
+            cfg_url, cfg_pass = get_duplicati_credentials()
+            resolved_url = duplicati_url or cfg_url
+            resolved_pass = password if password is not None else (duplicati_password or cfg_pass)
 
-            resp = session.get(f"{duplicati_url.rstrip('/')}/api/v1/progressstate", timeout=15)
+            session = self._get_session(resolved_url, resolved_pass)
+
+            resp = session.get(f"{resolved_url.rstrip('/')}/api/v1/progressstate", timeout=15)
             if resp.status_code == 200:
                 data = resp.json()
                 
