@@ -59,10 +59,9 @@ class DuplicatiOrchestratorService:
         password: str = "",
         **kwargs
     ) -> requests.Response:
-        """Wrapper HTTP que inyecta automáticamente autenticación X-UI-Password y X-XSRF-Token."""
+        """Wrapper HTTP con gestión de headers de autenticación XSRF y X-UI-Password."""
         base_url = url.rsplit('/api/', 1)[0] if '/api/' in url else url
         
-        # 1. Obtener estado inicial si la sesión no tiene cookies de XSRF
         has_xsrf = any("xsrf" in c.name.lower() for c in session.cookies)
         if not has_xsrf:
             try:
@@ -70,20 +69,16 @@ class DuplicatiOrchestratorService:
             except Exception:
                 pass
 
-        # 2. Inyectar token XSRF desde cookies
         for cookie in session.cookies:
             if "xsrf" in cookie.name.lower():
                 session.headers["X-XSRF-Token"] = urllib.parse.unquote(cookie.value)
                 break
 
-        # 3. Inyectar contraseña directa de UI si existe
         if password and password.strip():
             session.headers["X-UI-Password"] = password.strip()
 
-        # 4. Realizar petición
         resp = session.request(method, url, **kwargs)
 
-        # 5. Actualizar token XSRF si se renovó en la respuesta
         for cookie in session.cookies:
             if "xsrf" in cookie.name.lower():
                 session.headers["X-XSRF-Token"] = urllib.parse.unquote(cookie.value)
@@ -102,7 +97,6 @@ class DuplicatiOrchestratorService:
         base_url = duplicati_url.rstrip('/')
         managed_job_name = "[CBM] Sistema_Completo"
 
-        # 1. Intento de login previo si hay clave
         if duplicati_password and duplicati_password.strip():
             try:
                 self._do_request(
@@ -114,7 +108,7 @@ class DuplicatiOrchestratorService:
             except Exception as e:
                 logger.warning(f"⚠️ Login de Duplicati no requerido o fallido: {e}")
 
-        # 2. Comprobar si ya existe la tarea
+        # 1. Comprobar si ya existe la tarea
         try:
             resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
             if resp.status_code == 200:
@@ -129,18 +123,23 @@ class DuplicatiOrchestratorService:
         except Exception as e:
             logger.warning(f"⚠️ Error consultando tareas en Duplicati: {e}")
 
-        # 3. Crear automáticamente la tarea apuntando a /DisasterRecovery
+        # 2. Crear la tarea con el esquema exacto de la API de Duplicati
         disaster_recovery_target = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery")
         logger.info(f"🔨 Creando automáticamente la tarea '{managed_job_name}' en Duplicati -> {disaster_recovery_target}")
         
         payload = {
-            "Name": managed_job_name,
-            "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
-            "TargetURL": f"file://{disaster_recovery_target}/",
-            "SourceFiles": [source_path],
-            "Settings": [
-                {"Name": "--no-encryption", "Value": "true"}
-            ]
+            "Backup": {
+                "Name": managed_job_name,
+                "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
+                "TargetURL": f"file://{disaster_recovery_target}/",
+                "SourceFiles": [source_path],
+                "Settings": [
+                    {"Name": "--no-encryption", "Value": "true"}
+                ],
+                "Filters": [],
+                "IsScheduleActive": False
+            },
+            "Schedule": None
         }
 
         try:
@@ -152,11 +151,24 @@ class DuplicatiOrchestratorService:
             )
             if create_resp.status_code in (200, 201):
                 new_job = create_resp.json()
-                job_id = int(new_job.get("ID") or new_job.get("id"))
-                logger.info(f"✅ Tarea '{managed_job_name}' creada exitosamente con ID {job_id}")
-                return job_id
-            else:
-                logger.error(f"❌ Error al crear la tarea en Duplicati (HTTP {create_resp.status_code}): {create_resp.text}")
+                job_id = None
+                if isinstance(new_job, dict):
+                    job_id = new_job.get("ID") or new_job.get("id") or (new_job.get("Backup", {}).get("ID") if isinstance(new_job.get("Backup"), dict) else None)
+                elif isinstance(new_job, (int, str)):
+                    job_id = int(new_job)
+
+                if job_id is not None:
+                    logger.info(f"✅ Tarea '{managed_job_name}' creada exitosamente con ID {job_id}")
+                    return int(job_id)
+                
+                # Re-consultar para obtener la ID recién creada en caso de respuesta simplificada
+                check_resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
+                if check_resp.status_code == 200:
+                    for job in check_resp.json():
+                        if str(job.get("Name", "")) == managed_job_name:
+                            return int(job.get("ID"))
+
+            logger.error(f"❌ Error al crear la tarea en Duplicati (HTTP {create_resp.status_code}): {create_resp.text}")
         except Exception as e:
             logger.error(f"❌ Excepción al aprovisionar tarea en Duplicati: {e}")
 
@@ -277,7 +289,6 @@ class DuplicatiOrchestratorService:
         if not resolved_target or resolved_target == "/var/lib/casaos":
             resolved_target = get_active_target_disk()
 
-        # Auto-crear o recuperar la tarea única de Disaster Recovery
         if duplicati_job_id is None:
             duplicati_job_id = self._get_or_create_disaster_recovery_job(
                 source_path=app_path,
