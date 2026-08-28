@@ -43,9 +43,9 @@ try:
     from app.services.duplicati_orchestrator_service import duplicati_orchestrator
 except ImportError:
     class DummyDuplicatiOrchestrator:
-        def run_full_disaster_recovery(self, app_name, target_disk_path, duplicati_job_id, password=""):
-            return {"success": False, "error": "Duplicati service orchestrator module non found."}
-        def get_task_status(self, task_id, duplicati_url="", password=""):
+        def run_full_disaster_recovery(self, *args, **kwargs):
+            return {"success": False, "error": "Duplicati service orchestrator module not found."}
+        def get_task_status(self, *args, **kwargs):
             return {"status": "error", "phase": "Failed", "progress": 0.0}
     duplicati_orchestrator = DummyDuplicatiOrchestrator()
 
@@ -327,12 +327,20 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         dup_url = cfg.get("duplicati_url", "http://172.17.0.1:8200")
         dup_password = cfg.get("duplicati_password", "")
 
-        orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
-            app_name=app_name,
-            target_disk_path=target_disk,
-            duplicati_job_id=1,
-            password=dup_password
-        )
+        # CORRECCIÓN: Compatibilidad de firma al llamar al orquestador Duplicati
+        try:
+            orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
+                target_disk=target_disk
+            )
+        except TypeError:
+            try:
+                orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
+                    app_name=app_name,
+                    target_disk_path=target_disk,
+                    duplicati_job_id=1
+                )
+            except Exception as ex:
+                orchestration_res = {"success": False, "error": str(ex)}
 
         if not orchestration_res.get("success"):
             err_msg = f"Error al iniciar en Duplicati: {orchestration_res.get('errors') or orchestration_res.get('error')}"
@@ -565,7 +573,6 @@ def perform_real_restore(filename: str, job_id: str):
         active_jobs[job_id]["message"] = f"Descomprimiendo en {dest_dir}..."
 
         with tarfile.open(target_file, "r:gz") as tar:
-            # Safe extraction compatibility for Python 3.12+
             if hasattr(tarfile, 'data_filter'):
                 tar.extractall(path=dest_dir, filter='data')
             else:

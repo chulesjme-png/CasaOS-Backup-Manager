@@ -99,7 +99,7 @@
                                 <h5 class="fw-bold text-dark mb-1">Copia de Seguridad del Sistema (Disaster Recovery)</h5>
                                 <p class="text-muted small mb-2">Resguarda la configuración de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>).</p>
                                 <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Completa</span>
-                                <span class="badge bg-success-subtle text-success border border-success-subtle">🟢 Listo para resguardo</span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle" id="system-status-badge">🟢 Listo para resguardo</span>
                             </div>
                         </div>
                         <button class="btn btn-primary px-4 py-2 fw-semibold shadow-sm" onclick="triggerAppBackup('Sistema_Completo')">
@@ -504,6 +504,17 @@
             }
         }
 
+        function resetSystemUIState() {
+            const inlineCard = document.getElementById('systemBackupProgressContainer');
+            if (inlineCard) inlineCard.classList.add('d-none');
+
+            const systemBadge = document.getElementById('system-status-badge');
+            if (systemBadge) {
+                systemBadge.textContent = '🟢 Listo para resguardo';
+                systemBadge.className = 'badge bg-success-subtle text-success border border-success-subtle';
+            }
+        }
+
         function startPollingJobStatus(jobId) {
             if (jobInterval) clearInterval(jobInterval);
 
@@ -524,16 +535,19 @@
                         jobInterval = null;
                         updateProgressUI(100, message || '✅ Copia completada correctamente');
                         document.getElementById('progressBar').className = 'progress-bar bg-success';
+                        setTimeout(() => resetSystemUIState(), 3000);
                     } else if (status === 'failed' || status === 'error') {
                         clearInterval(jobInterval);
                         jobInterval = null;
                         document.getElementById('progressStatusText').innerText = `❌ Error: ${message}`;
                         document.getElementById('progressBar').className = 'progress-bar bg-danger';
+                        resetSystemUIState();
                     } else if (status === 'cancelled') {
                         clearInterval(jobInterval);
                         jobInterval = null;
                         updateProgressUI(0, '⚠️ Proceso cancelado');
                         document.getElementById('progressBar').className = 'progress-bar bg-warning';
+                        resetSystemUIState();
                     }
                 } catch (err) {
                     console.error("Error consultando estado del proceso:", err);
@@ -572,6 +586,8 @@
                 currentJobId = null;
             }
             updateProgressUI(0, 'Proceso cancelado');
+            resetSystemUIState();
+
             const modalEl = document.getElementById('modalProgress');
             const modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) modalInstance.hide();
