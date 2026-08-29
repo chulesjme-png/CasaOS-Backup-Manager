@@ -1,104 +1,384 @@
-import urllib.parse
+import os
+import json
 import logging
-from typing import Dict, Any, List, Optional
+import urllib.parse
+import requests
+from types import SimpleNamespace
+from typing import Optional, Dict, Any
 
-logger = logging.getLogger(__name__)
+from app.core.backends.duplicati_backend import DuplicatiBackend
+from app.models.backup_execution_request import BackupExecutionRequest
+from app.models.backend_configuration import BackendConfiguration
+from app.models.backup_configuration import BackupConfiguration
+from app.models.backup_operation import BackupOperationType
+from app.services.preflight_service import preflight_service
+from app.services.db_hook_service import db_hook_service
+
+logger = logging.getLogger("casaos-backup")
+
+DEFAULT_DUPLICATI_URL = os.getenv("DUPLICATI_URL", "http://172.17.0.1:8200")
+DEFAULT_DUPLICATI_PASS = os.getenv("DUPLICATI_PASSWORD", "")
+
+def get_duplicati_credentials() -> tuple[str, str]:
+    """Obtiene la URL y contraseña de Duplicati desde config.json o variables de entorno."""
+    url = DEFAULT_DUPLICATI_URL
+    password = DEFAULT_DUPLICATI_PASS
+    config_path = "/DATA/AppData/casaos-backup-manager/config.json"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                url = data.get("duplicati_url") or data.get("duplicati_host") or url
+                password = data.get("duplicati_password") or data.get("password") or password
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudieron leer credenciales de config.json: {e}")
+    return url, password
+
+def get_active_target_disk() -> str:
+    config_path = "/DATA/AppData/casaos-backup-manager/config.json"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                path = data.get("active_target_path") or data.get("target_disk")
+                if path:
+                    return path
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo leer config.json: {e}")
+    return "/DATA"
 
 class DuplicatiOrchestratorService:
-    def __init__(self, duplicati_backend):
-        """
-        Inyecta el adaptador de infraestructura que se comunica directamente 
-        con la API REST de Duplicati (puerto 8200).
-        """
-        self.duplicati = duplicati_backend
+    def __init__(self):
+        self.backend = DuplicatiBackend()
 
     def _sanitize_target_url(self, raw_path: str) -> str:
         """
         Fuerza la codificación estricta de la URI para evitar HTTP 400 Bad Request
         en el backend de C# de Duplicati.
         Mantiene los separadores de ruta ('/') intactos pero codifica espacios, 
-        corchetes y otros caracteres especiales (ej. %5BCBM%5D%20Sistema_Completo).
+        corchetes y otros caracteres especiales.
         """
-        # Limpiamos el prefijo file:// si el orquestador o la BD ya lo incluyó por error humano
         clean_path = raw_path.replace("file://", "")
-        
-        # Sanitización estricta respetando los slashes de los directorios
         sanitized_path = urllib.parse.quote(clean_path, safe='/')
-        
-        # Garantizar que la ruta comience con '/' antes de aplicar el prefijo de protocolo
         if not sanitized_path.startswith('/'):
             sanitized_path = f"/{sanitized_path}"
-            
         return f"file://{sanitized_path}"
 
-    def _build_task_payload(self, task_name: str, source_paths: List[str], destination_path: str) -> Dict[str, Any]:
-        """
-        Construye el contrato JSON estricto esperado por Duplicati para la autocreación.
-        """
-        target_url = self._sanitize_target_url(destination_path)
+    def _do_request(
+        self,
+        session: requests.Session,
+        method: str,
+        url: str,
+        password: str = "",
+        **kwargs
+    ) -> requests.Response:
+        """Wrapper HTTP con gestión de headers de autenticación XSRF y X-UI-Password."""
+        base_url = url.rsplit('/api/', 1)[0] if '/api/' in url else url
         
-        return {
-            "Schedule": None,
+        has_xsrf = any("xsrf" in c.name.lower() for c in session.cookies)
+        if not has_xsrf:
+            try:
+                session.get(f"{base_url}/api/v1/systemstate", timeout=5)
+            except Exception:
+                pass
+
+        for cookie in session.cookies:
+            if "xsrf" in cookie.name.lower():
+                session.headers["X-XSRF-Token"] = urllib.parse.unquote(cookie.value)
+                break
+
+        if password and password.strip():
+            session.headers["X-UI-Password"] = password.strip()
+
+        resp = session.request(method, url, **kwargs)
+
+        for cookie in session.cookies:
+            if "xsrf" in cookie.name.lower():
+                session.headers["X-XSRF-Token"] = urllib.parse.unquote(cookie.value)
+
+        return resp
+
+    def _get_or_create_disaster_recovery_job(
+        self,
+        source_path: str,
+        target_disk_path: str,
+        duplicati_url: str,
+        duplicati_password: str
+    ) -> Optional[int]:
+        """Busca o crea automáticamente la tarea para el Sistema Completo."""
+        session = requests.Session()
+        base_url = duplicati_url.rstrip('/')
+        managed_job_name = "[CBM] Sistema_Completo"
+
+        if duplicati_password and duplicati_password.strip():
+            try:
+                self._do_request(
+                    session, "POST", f"{base_url}/api/v1/login",
+                    password=duplicati_password,
+                    json={"password": duplicati_password},
+                    timeout=10
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Login de Duplicati no requerido o fallido: {e}")
+
+        # 1. Comprobar si ya existe alguna tarea adecuada en Duplicati
+        all_backups = []
+        try:
+            resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
+            if resp.status_code == 200:
+                all_backups = resp.json()
+                if isinstance(all_backups, list) and len(all_backups) > 0:
+                    for job in all_backups:
+                        job_name = str(job.get("Name", "") or job.get("Backup", {}).get("Name", "")).lower()
+                        job_id = int(job.get("ID") or job.get("Backup", {}).get("ID") or 0)
+                        if managed_job_name.lower() in job_name or any(k in job_name for k in ["sistema", "completo", "cbm", "disaster"]):
+                            logger.info(f"🔎 Encontrada tarea de sistema '{job_name}' (ID: {job_id})")
+                            return job_id
+        except Exception as e:
+            logger.warning(f"⚠️ Error consultando tareas en Duplicati: {e}")
+
+        # 2. Intentar crear la tarea si no existe ninguna coincidencia
+        disaster_recovery_target = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery")
+        
+        # AQUI ES DONDE APLICAMOS LA SANITIZACIÓN ESTRICTA DE LA RUTA:
+        target_url_encoded = self._sanitize_target_url(disaster_recovery_target)
+
+        logger.info(f"🔨 Creando tarea '{managed_job_name}' en Duplicati -> {target_url_encoded}")
+        
+        payload_full = {
             "Backup": {
-                "Name": task_name,
-                "Description": "Backup autogestionado por CasaOS Backup Manager",
-                "Tags": ["CasaOS", "CBM-Auto"],
-                "TargetURL": target_url,
-                "DBPath": "", 
+                "Name": managed_job_name,
+                "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
+                "TargetURL": target_url_encoded,
+                "SourceFiles": [source_path],
+                "Settings": [
+                    {"Name": "--no-encryption", "Value": "true"},
+                    {"Name": "--passphrase", "Value": ""}
+                ],
+                "Filters": [],
+                "IsScheduleActive": False
             },
-            "Filters": [],
-            "Options": [
-                {
-                    "Name": "no-encryption",
-                    "Value": "true"
-                }
-            ],
-            "Sources": source_paths
+            "Schedule": {
+                "Tags": [],
+                "Time": "2026-01-01T00:00:00Z",
+                "Repeat": "1D",
+                "AllowedDays": []
+            }
         }
 
-    async def _get_task_id_by_name(self, task_name: str) -> Optional[str]:
-        """
-        Consulta la API de Duplicati para buscar si la tarea ya existe y recupera su ID.
-        """
-        tasks_response = await self.duplicati.get_all_tasks()
-        
-        # Duplicati devuelve una lista de diccionarios, iteramos para validar existencia
-        for task in tasks_response:
-            backup_data = task.get("Backup", {})
-            if backup_data.get("Name") == task_name:
-                return str(task.get("Id"))
-                
+        try:
+            create_resp = self._do_request(
+                session, "POST", f"{base_url}/api/v1/backups",
+                password=duplicati_password,
+                json=payload_full,
+                timeout=20
+            )
+
+            if create_resp.status_code in (200, 201):
+                try:
+                    new_job = create_resp.json()
+                    if isinstance(new_job, dict):
+                        job_id = new_job.get("ID") or new_job.get("id") or (new_job.get("Backup", {}).get("ID") if isinstance(new_job.get("Backup"), dict) else None)
+                        if job_id:
+                            return int(job_id)
+                except Exception:
+                    pass
+
+                check_resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
+                if check_resp.status_code == 200:
+                    for job in check_resp.json():
+                        name = str(job.get("Name") or job.get("Backup", {}).get("Name", ""))
+                        if managed_job_name.lower() in name.lower():
+                            return int(job.get("ID") or job.get("Backup", {}).get("ID"))
+
+            logger.error(f"❌ No se pudo crear tarea en Duplicati vía API (HTTP {create_resp.status_code}): {create_resp.text}")
+        except Exception as e:
+            logger.error(f"❌ Excepción al aprovisionar tarea en Duplicati: {e}")
+
+        # 3. Fallback inteligente
+        if isinstance(all_backups, list) and len(all_backups) > 0:
+            first_job_id = int(all_backups[0].get("ID") or all_backups[0].get("Backup", {}).get("ID") or 1)
+            logger.warning(f"⚠️ Usando primera tarea existente en Duplicati como fallback (ID: {first_job_id})")
+            return first_job_id
+
         return None
 
-    async def run_system_backup(self, task_name: str, source_paths: List[str], destination_path: str) -> Dict[str, Any]:
-        """
-        Orquesta la ejecución de "Sistema Completo".
-        Si la tarea no existe (primer clic del usuario), la autoconfigura en Duplicati 
-        antes de desencadenar la ejecución.
-        """
-        logger.info(f"[CBM-Duplicati] Solicitud de backup recibida: {task_name}")
-        
-        task_id = await self._get_task_id_by_name(task_name)
-        
-        if not task_id:
-            logger.info(f"[CBM-Duplicati] La tarea '{task_name}' no existe. Autocreando...")
-            payload = self._build_task_payload(task_name, source_paths, destination_path)
-            
-            creation_response = await self.duplicati.create_task(payload)
-            
-            if "Id" not in creation_response:
-                logger.error(f"[CBM-Duplicati] Fallo crítico al crear tarea. Payload: {payload} | Respuesta: {creation_response}")
-                raise ValueError("La API de Duplicati rechazó la creación de la tarea. Verifique los logs del backend.")
-                
-            task_id = str(creation_response["Id"])
-            logger.info(f"[CBM-Duplicati] Tarea creada exitosamente con ID: {task_id}")
+    def find_job_id_by_name(
+        self,
+        app_name: str,
+        duplicati_url: str = DEFAULT_DUPLICATI_URL,
+        duplicati_password: str = DEFAULT_DUPLICATI_PASS
+    ) -> Optional[int]:
+        """Busca el ID de un trabajo existente sin crear nuevos."""
+        try:
+            session = requests.Session()
+            resp = self._do_request(
+                session, "GET", f"{duplicati_url.rstrip('/')}/api/v1/backups",
+                password=duplicati_password, timeout=15
+            )
+            if resp.status_code == 200:
+                backups = resp.json()
+                if isinstance(backups, list):
+                    target_name = app_name.lower().replace("_", " ").strip()
+                    for job in backups:
+                        job_name = str(job.get("Name", "") or job.get("Backup", {}).get("Name", "")).lower().replace("_", " ").strip()
+                        if target_name in job_name or job_name in target_name:
+                            return int(job.get("ID") or job.get("Backup", {}).get("ID"))
+                    if len(backups) > 0:
+                        return int(backups[0].get("ID") or backups[0].get("Backup", {}).get("ID") or 1)
+        except Exception as e:
+            logger.warning(f"⚠️ Excepción buscando Job ID: {e}")
+        return None
 
-        logger.info(f"[CBM-Duplicati] Lanzando ejecución para tarea ID: {task_id}")
-        execution_response = await self.duplicati.run_task(task_id)
-        
-        return {
-            "status": "success",
-            "message": "Backup encolado correctamente en el motor de Duplicati.",
-            "task_id": task_id,
-            "engine_response": execution_response
-        }
+    def run_app_backup(
+        self,
+        app_name: str,
+        app_path: str,
+        target_disk_path: str,
+        duplicati_job_id: Optional[int] = None,
+        duplicati_url: Optional[str] = None,
+        duplicati_password: Optional[str] = None
+    ) -> Dict[str, Any]:
+        cfg_url, cfg_pass = get_duplicati_credentials()
+        resolved_url = duplicati_url or cfg_url
+        resolved_pass = duplicati_password if duplicati_password is not None else cfg_pass
+
+        logger.info(f"🚀 [Orchestrator] Enviando orden de backup para: {app_name}")
+
+        is_ok, msg = preflight_service.check_disk_space(
+            target_path=target_disk_path,
+            required_bytes_estimate=2 * 1024 * 1024 * 1024,
+            safety_margin_gb=10.0
+        )
+        if not is_ok:
+            logger.error(f"❌ [Orchestrator] Espacio insuficiente: {msg}")
+            return {"success": False, "error": msg}
+
+        if duplicati_job_id is None:
+            duplicati_job_id = self.find_job_id_by_name(app_name, resolved_url, resolved_pass)
+
+        if duplicati_job_id is None:
+            err_msg = f"No se encontró un Job ID válido en Duplicati para '{app_name}'."
+            logger.error(f"❌ [Orchestrator]: {err_msg}")
+            return {"success": False, "error": err_msg}
+
+        dump_path: Optional[str] = None
+        try:
+            dump_path = db_hook_service.create_db_dump(app_name=app_name, app_path=app_path)
+
+            request = BackupExecutionRequest(
+                backend_name="duplicati",
+                operation=BackupOperationType.RUN_BACKUP,
+                manifest=SimpleNamespace(application=app_name),
+                backend_configuration=BackendConfiguration(
+                    backend_name="duplicati",
+                    configuration={
+                        "url": resolved_url,
+                        "password": resolved_pass,
+                        "timeout": 60
+                    }
+                ),
+                backup_configuration=BackupConfiguration(
+                    options={"backup_id": duplicati_job_id}
+                )
+            )
+
+            result = self.backend.execute(request)
+            if not result.success:
+                return {"success": False, "errors": result.errors}
+
+            return {
+                "success": True,
+                "job_id": duplicati_job_id,
+                "execution_reference": result.execution_reference.dict() if hasattr(result.execution_reference, "dict") else str(result.execution_reference),
+                "metadata": getattr(result, "metadata", {})
+            }
+
+        except Exception as e:
+            logger.error(f"❌ [Orchestrator Exception]: {e}")
+            return {"success": False, "error": str(e)}
+
+        finally:
+            db_hook_service.cleanup_db_dump(app_path=app_path)
+
+    def run_full_disaster_recovery(
+        self,
+        app_name: str = "Sistema_Completo",
+        app_path: str = "/DATA",
+        target_disk_path: Optional[str] = None,
+        target_disk: Optional[str] = None,
+        duplicati_job_id: Optional[int] = None,
+        duplicati_url: Optional[str] = None,
+        duplicati_password: Optional[str] = None,
+        password: Optional[str] = None
+    ) -> Dict[str, Any]:
+        cfg_url, cfg_pass = get_duplicati_credentials()
+        resolved_url = duplicati_url or cfg_url
+        resolved_pass = password if password is not None else (duplicati_password or cfg_pass)
+
+        resolved_target = target_disk_path or target_disk
+        if not resolved_target or resolved_target == "/var/lib/casaos":
+            resolved_target = get_active_target_disk()
+
+        if duplicati_job_id is None:
+            duplicati_job_id = self._get_or_create_disaster_recovery_job(
+                source_path=app_path,
+                target_disk_path=resolved_target,
+                duplicati_url=resolved_url,
+                duplicati_password=resolved_pass
+            )
+
+        return self.run_app_backup(
+            app_name=app_name,
+            app_path=app_path,
+            target_disk_path=resolved_target,
+            duplicati_job_id=duplicati_job_id,
+            duplicati_url=resolved_url,
+            duplicati_password=resolved_pass
+        )
+
+    def get_task_status(
+        self,
+        task_id: int = 1,
+        duplicati_url: Optional[str] = None,
+        duplicati_password: Optional[str] = None,
+        password: Optional[str] = None
+    ) -> Dict[str, Any]:
+        try:
+            cfg_url, cfg_pass = get_duplicati_credentials()
+            resolved_url = duplicati_url or cfg_url
+            resolved_pass = password if password is not None else (duplicati_password or cfg_pass)
+
+            session = requests.Session()
+            resp = self._do_request(
+                session, "GET", f"{resolved_url.rstrip('/')}/api/v1/progressstate",
+                password=resolved_pass, timeout=15
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                
+                if not data:
+                    return {"status": "idle", "phase": "Idle", "progress": 0.0}
+
+                phase = data.get("Phase", "Idle")
+                progress = float(data.get("OverallProgress", 0.0)) * 100
+
+                if phase in ["Completed", "Backup_Complete"]:
+                    return {"status": "completed", "phase": phase, "progress": 100.0}
+
+                if phase == "Idle":
+                    return {"status": "idle", "phase": "Idle", "progress": 0.0}
+
+                return {
+                    "status": "running",
+                    "phase": phase,
+                    "progress": round(progress, 2),
+                    "current_file": data.get("CurrentFilename", "")
+                }
+
+            return {"status": "error", "phase": f"HTTP {resp.status_code}", "progress": 0.0}
+        except Exception as e:
+            logger.error(f"⚠️ Error consultando API Duplicati: {e}")
+            return {"status": "unknown", "phase": "Error", "progress": 0.0}
+
+duplicati_orchestrator = DuplicatiOrchestratorService()
