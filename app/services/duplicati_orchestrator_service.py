@@ -144,19 +144,16 @@ class DuplicatiOrchestratorService:
         logger.info(f"🔨 Creando tarea '{managed_job_name}' en Duplicati -> {target_url_encoded}")
         
         # Corrección del HTTP 400: El backend de C# exige estrictamente este esquema
-        # (Sources a nivel raíz, Options a nivel raíz, DBPath presente)
         payload_full = {
-            "Schedule": None,
             "Backup": {
                 "Name": managed_job_name,
                 "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
                 "Tags": ["CasaOS", "CBM-Auto"],
-                "TargetURL": target_url_encoded,
-                "DBPath": ""
+                "TargetURL": target_url_encoded
             },
             "Filters": [],
-            "Options": [
-                {"Name": "no-encryption", "Value": "true"}
+            "Settings": [
+                {"Name": "--no-encryption", "Value": "true"}
             ],
             "Sources": [source_path]
         }
