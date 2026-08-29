@@ -55,8 +55,6 @@ class DuplicatiOrchestratorService:
         """
         Fuerza la codificación estricta de la URI para evitar HTTP 400 Bad Request
         en el backend de C# de Duplicati.
-        Mantiene los separadores de ruta ('/') intactos pero codifica espacios, 
-        corchetes y otros caracteres especiales.
         """
         clean_path = raw_path.replace("file://", "")
         sanitized_path = urllib.parse.quote(clean_path, safe='/')
@@ -139,31 +137,28 @@ class DuplicatiOrchestratorService:
 
         # 2. Intentar crear la tarea si no existe ninguna coincidencia
         disaster_recovery_target = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery")
-        
-        # AQUI ES DONDE APLICAMOS LA SANITIZACIÓN ESTRICTA DE LA RUTA:
         target_url_encoded = self._sanitize_target_url(disaster_recovery_target)
+        if not target_url_encoded.endswith('/'):
+            target_url_encoded += '/'
 
         logger.info(f"🔨 Creando tarea '{managed_job_name}' en Duplicati -> {target_url_encoded}")
         
+        # Corrección del HTTP 400: El backend de C# exige estrictamente este esquema
+        # (Sources a nivel raíz, Options a nivel raíz, DBPath presente)
         payload_full = {
+            "Schedule": None,
             "Backup": {
                 "Name": managed_job_name,
                 "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
+                "Tags": ["CasaOS", "CBM-Auto"],
                 "TargetURL": target_url_encoded,
-                "SourceFiles": [source_path],
-                "Settings": [
-                    {"Name": "--no-encryption", "Value": "true"},
-                    {"Name": "--passphrase", "Value": ""}
-                ],
-                "Filters": [],
-                "IsScheduleActive": False
+                "DBPath": ""
             },
-            "Schedule": {
-                "Tags": [],
-                "Time": "2026-01-01T00:00:00Z",
-                "Repeat": "1D",
-                "AllowedDays": []
-            }
+            "Filters": [],
+            "Options": [
+                {"Name": "no-encryption", "Value": "true"}
+            ],
+            "Sources": [source_path]
         }
 
         try:
