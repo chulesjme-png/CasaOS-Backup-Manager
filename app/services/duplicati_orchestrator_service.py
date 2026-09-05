@@ -53,14 +53,12 @@ class DuplicatiOrchestratorService:
 
     def _sanitize_target_url(self, raw_path: str) -> str:
         """
-        Fuerza la codificación estricta de la URI para evitar HTTP 400 Bad Request
-        en el backend de C# de Duplicati.
+        Fuerza la codificación estricta y el esquema file:/// para evitar HTTP 400
+        en la API REST de Duplicati.
         """
-        clean_path = raw_path.replace("file://", "")
+        clean_path = raw_path.replace("file://", "").lstrip('/')
         sanitized_path = urllib.parse.quote(clean_path, safe='/')
-        if not sanitized_path.startswith('/'):
-            sanitized_path = f"/{sanitized_path}"
-        return f"file://{sanitized_path}"
+        return f"file:///{sanitized_path}"
 
     def _do_request(
         self,
@@ -143,60 +141,75 @@ class DuplicatiOrchestratorService:
 
         logger.info(f"🔨 Creando tarea '{managed_job_name}' en Duplicati -> {target_url_encoded}")
         
-        # Corrección del HTTP 400: Fuentes, filtros y parámetros de configuración dentro del objeto Backup
-        payload_full = {
-            "Backup": {
-                "Name": managed_job_name,
-                "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
-                "Tags": ["CasaOS", "CBM-Auto"],
-                "TargetURL": target_url_encoded,
-                "DBPath": "",
-                "Sources": [source_path],
-                "Settings": [
-                    {"Name": "--no-encryption", "Value": "true"},
-                    {"Name": "--compression-module", "Value": "zip"},
-                    {"Name": "--dblock-size", "Value": "50MB"}
-                ],
-                "Filters": [],
-                "Metadata": {}
-            },
-            "Schedule": {
-                "Time": "2020-01-01T00:00:00",
-                "Repeat": "1D",
-                "AllowedDays": []
-            }
+        # Estrategias de payloads compatibles con la API C# de Duplicati v1/v2
+        backup_base = {
+            "Name": managed_job_name,
+            "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
+            "Tags": [],
+            "TargetURL": target_url_encoded,
+            "DBPath": "",
+            "Sources": [source_path],
+            "Settings": [
+                {"Filter": "", "Name": "--no-encryption", "Value": "true"},
+                {"Filter": "", "Name": "--compression-module", "Value": "zip"},
+                {"Filter": "", "Name": "--dblock-size", "Value": "50MB"}
+            ],
+            "Filters": [],
+            "Metadata": {}
         }
 
-        try:
-            create_resp = self._do_request(
-                session, "POST", f"{base_url}/api/v1/backups",
-                password=duplicati_password,
-                json=payload_full,
-                timeout=20
-            )
+        payload_candidates = [
+            # Formato estándar con Schedule=null y campo Filter obligatorio en Settings
+            {"Backup": backup_base, "Schedule": None},
+            # Formato con objeto Schedule explícito
+            {
+                "Backup": backup_base,
+                "Schedule": {
+                    "Time": "2026-01-01T00:00:00",
+                    "Repeat": "1D",
+                    "AllowedDays": []
+                }
+            },
+            # Formato plano
+            backup_base
+        ]
 
-            if create_resp.status_code in (200, 201):
-                try:
-                    new_job = create_resp.json()
-                    if isinstance(new_job, dict):
-                        job_id = new_job.get("ID") or new_job.get("id") or (new_job.get("Backup", {}).get("ID") if isinstance(new_job.get("Backup"), dict) else None)
-                        if job_id:
-                            return int(job_id)
-                except Exception:
-                    pass
+        for idx, payload in enumerate(payload_candidates, 1):
+            try:
+                create_resp = self._do_request(
+                    session, "POST", f"{base_url}/api/v1/backups",
+                    password=duplicati_password,
+                    json=payload,
+                    timeout=20
+                )
 
-                check_resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
-                if check_resp.status_code == 200:
-                    for job in check_resp.json():
-                        name = str(job.get("Name") or job.get("Backup", {}).get("Name", ""))
-                        if managed_job_name.lower() in name.lower():
-                            return int(job.get("ID") or job.get("Backup", {}).get("ID"))
+                if create_resp.status_code in (200, 201):
+                    try:
+                        new_job = create_resp.json()
+                        if isinstance(new_job, dict):
+                            job_id = new_job.get("ID") or new_job.get("id") or (
+                                new_job.get("Backup", {}).get("ID") if isinstance(new_job.get("Backup"), dict) else None
+                            )
+                            if job_id:
+                                logger.info(f"✅ Tarea creada exitosamente (ID: {job_id})")
+                                return int(job_id)
+                    except Exception:
+                        pass
 
-            logger.error(f"❌ No se pudo crear tarea en Duplicati vía API (HTTP {create_resp.status_code}): {create_resp.text}")
-        except Exception as e:
-            logger.error(f"❌ Excepción al aprovisionar tarea en Duplicati: {e}")
+                    check_resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
+                    if check_resp.status_code == 200:
+                        for job in check_resp.json():
+                            name = str(job.get("Name") or job.get("Backup", {}).get("Name", ""))
+                            if managed_job_name.lower() in name.lower():
+                                job_id = int(job.get("ID") or job.get("Backup", {}).get("ID"))
+                                logger.info(f"✅ Tarea confirmada en el listado (ID: {job_id})")
+                                return job_id
 
-        # 3. Fallback inteligente
+                logger.warning(f"⚠️ Intento {idx} de creación falló (HTTP {create_resp.status_code}): {create_resp.text}")
+            except Exception as e:
+                logger.warning(f"⚠️ Excepción en intento {idx} de creación: {e}")
+
+        # 3. Fallback a la primera tarea disponible si existe alguna
         if isinstance(all_backups, list) and len(all_backups) > 0:
             first_job_id = int(all_backups[0].get("ID") or all_backups[0].get("Backup", {}).get("ID") or 1)
             logger.warning(f"⚠️ Usando primera tarea existente en Duplicati como fallback (ID: {first_job_id})")
