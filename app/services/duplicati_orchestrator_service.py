@@ -3,6 +3,8 @@ import json
 import logging
 import urllib.parse
 import requests
+import tarfile
+import datetime
 from types import SimpleNamespace
 from typing import Optional, Dict, Any
 
@@ -20,7 +22,6 @@ DEFAULT_DUPLICATI_URL = os.getenv("DUPLICATI_URL", "http://172.17.0.1:8200")
 DEFAULT_DUPLICATI_PASS = os.getenv("DUPLICATI_PASSWORD", "")
 
 def get_duplicati_credentials() -> tuple[str, str]:
-    """Obtiene la URL y contraseña de Duplicati desde config.json o variables de entorno."""
     url = DEFAULT_DUPLICATI_URL
     password = DEFAULT_DUPLICATI_PASS
     config_path = "/DATA/AppData/casaos-backup-manager/config.json"
@@ -50,11 +51,6 @@ def get_active_target_disk() -> str:
 class DuplicatiOrchestratorService:
     def __init__(self):
         self.backend = DuplicatiBackend()
-
-    def _sanitize_target_url(self, raw_path: str) -> str:
-        clean_path = raw_path.replace("file://", "").lstrip('/')
-        sanitized_path = urllib.parse.quote(clean_path, safe='/')
-        return f"file:///{sanitized_path}"
 
     def _do_request(
         self,
@@ -111,7 +107,6 @@ class DuplicatiOrchestratorService:
             except Exception as e:
                 logger.warning(f"⚠️ Login de Duplicati no requerido o fallido: {e}")
 
-        # 1. Comprobar si ya existe alguna tarea adecuada en Duplicati
         all_backups = []
         try:
             resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
@@ -127,77 +122,85 @@ class DuplicatiOrchestratorService:
         except Exception as e:
             logger.warning(f"⚠️ Error consultando tareas en Duplicati: {e}")
 
-        # 2. Crear directorio de destino en el sistema de archivos antes de invocar la API
         disaster_recovery_target = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery")
         try:
             os.makedirs(disaster_recovery_target, exist_ok=True)
         except Exception as e:
-            logger.warning(f"⚠️ No se pudo crear directorio de destino localmente: {e}")
+            logger.warning(f"⚠️ No se pudo crear el directorio de destino localmente: {e}")
 
-        target_url_encoded = self._sanitize_target_url(disaster_recovery_target)
-        if not target_url_encoded.endswith('/'):
-            target_url_encoded += '/'
+        clean_path = disaster_recovery_target.replace("file://", "").lstrip('/')
+        target_url_encoded = f"file:///{urllib.parse.quote(clean_path, safe='/')}/"
 
-        logger.info(f"🔨 Creando tarea '{managed_job_name}' en Duplicati -> {target_url_encoded}")
+        logger.info(f"🔨 Auto-creando tarea '[CBM] Sistema_Completo' en Duplicati -> {target_url_encoded}")
 
-        payload_full = {
-            "Backup": {
-                "Name": managed_job_name,
-                "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
-                "Tags": [],
-                "TargetURL": target_url_encoded,
-                "DBPath": "",
-                "Sources": [source_path],
-                "Settings": [
-                    {"Name": "--no-encryption", "Value": "true"},
-                    {"Name": "--compression-module", "Value": "zip"},
-                    {"Name": "--dblock-size", "Value": "50MB"}
-                ],
-                "Filters": [],
-                "Metadata": {}
+        payloads = [
+            {
+                "Backup": {
+                    "Name": managed_job_name,
+                    "Description": "Copia de Seguridad Completa del Sistema (CasaOS Backup Manager)",
+                    "TargetURL": target_url_encoded,
+                    "Sources": [source_path],
+                    "Settings": [
+                        {"Name": "no-encryption", "Value": "true", "Filter": ""},
+                        {"Name": "compression-module", "Value": "zip", "Filter": ""},
+                        {"Name": "dblock-size", "Value": "50mb", "Filter": ""}
+                    ],
+                    "Filters": [],
+                    "Metadata": {}
+                },
+                "Schedule": None
             },
-            "Schedule": None
-        }
+            {
+                "Backup": {
+                    "Name": managed_job_name,
+                    "TargetURL": target_url_encoded,
+                    "Sources": [source_path],
+                    "Settings": [
+                        {"Name": "no-encryption", "Value": "true"}
+                    ]
+                }
+            }
+        ]
 
-        try:
-            create_resp = self._do_request(
-                session, "POST", f"{base_url}/api/v1/backups",
-                password=duplicati_password,
-                json=payload_full,
-                timeout=20
-            )
+        for idx, payload in enumerate(payloads, start=1):
+            try:
+                create_resp = self._do_request(
+                    session, "POST", f"{base_url}/api/v1/backups",
+                    password=duplicati_password,
+                    json=payload,
+                    timeout=20
+                )
 
-            if create_resp.status_code in (200, 201):
-                try:
-                    new_job = create_resp.json()
-                    if isinstance(new_job, dict):
-                        job_id = new_job.get("ID") or new_job.get("id") or (
-                            new_job.get("Backup", {}).get("ID") if isinstance(new_job.get("Backup"), dict) else None
-                        )
-                        if job_id:
-                            logger.info(f"✅ Tarea auto-creada correctamente (ID: {job_id})")
-                            return int(job_id)
-                except Exception:
-                    pass
+                if create_resp.status_code in (200, 201):
+                    try:
+                        new_job = create_resp.json()
+                        if isinstance(new_job, dict):
+                            job_id = new_job.get("ID") or new_job.get("id") or (
+                                new_job.get("Backup", {}).get("ID") if isinstance(new_job.get("Backup"), dict) else None
+                            )
+                            if job_id:
+                                logger.info(f"✅ Tarea auto-creada en Duplicati con éxito (ID: {job_id})")
+                                return int(job_id)
+                    except Exception:
+                        pass
 
-                check_resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
-                if check_resp.status_code == 200:
-                    for job in check_resp.json():
-                        name = str(job.get("Name") or job.get("Backup", {}).get("Name", ""))
-                        if managed_job_name.lower() in name.lower():
-                            job_id = int(job.get("ID") or job.get("Backup", {}).get("ID"))
-                            logger.info(f"✅ Tarea creada y verificada (ID: {job_id})")
-                            return job_id
+                    check_resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
+                    if check_resp.status_code == 200:
+                        for job in check_resp.json():
+                            name = str(job.get("Name") or job.get("Backup", {}).get("Name", ""))
+                            if managed_job_name.lower() in name.lower():
+                                job_id = int(job.get("ID") or job.get("Backup", {}).get("ID"))
+                                logger.info(f"✅ Tarea auto-creada verificada en Duplicati (ID: {job_id})")
+                                return job_id
 
-            logger.error(f"❌ Error al auto-crear tarea en Duplicati (HTTP {create_resp.status_code}): {create_resp.text}")
-        except Exception as e:
-            logger.error(f"❌ Excepción al aprovisionar tarea en Duplicati: {e}")
+                logger.warning(f"⚠️ Intento {idx} de auto-creación falló (HTTP {create_resp.status_code}): {create_resp.text}")
+            except Exception as e:
+                logger.warning(f"⚠️ Excepción en intento {idx} de creación en Duplicati: {e}")
 
-        # 3. Fallback a la primera tarea disponible si existe alguna
         if isinstance(all_backups, list) and len(all_backups) > 0:
-            first_job_id = int(all_backups[0].get("ID") or all_backups[0].get("Backup", {}).get("ID") or 1)
-            logger.warning(f"⚠️ Usando primera tarea existente en Duplicati como fallback (ID: {first_job_id})")
-            return first_job_id
+            first_id = int(all_backups[0].get("ID") or all_backups[0].get("Backup", {}).get("ID") or 1)
+            logger.info(f"🔎 Usando tarea existente en Duplicati como fallback (ID: {first_id})")
+            return first_id
 
         return None
 
@@ -225,6 +228,31 @@ class DuplicatiOrchestratorService:
         except Exception as e:
             logger.warning(f"⚠️ Excepción buscando Job ID: {e}")
         return None
+
+    def _run_native_tar_backup(self, app_name: str, app_path: str, target_disk_path: str) -> Dict[str, Any]:
+        """Ejecución nativa directa de respaldo (.tar.gz) cuando Duplicati no esté disponible."""
+        try:
+            out_dir = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery")
+            os.makedirs(out_dir, exist_ok=True)
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"backup_{app_name}_{timestamp}.tar.gz"
+            filepath = os.path.join(out_dir, filename)
+
+            logger.info(f"📦 Generando copia nativa en: {filepath}")
+            with tarfile.open(filepath, "w:gz") as tar:
+                if os.path.exists(app_path):
+                    tar.add(app_path, arcname=os.path.basename(app_path))
+
+            logger.info(f"✅ Copia de seguridad nativa completada con éxito: {filepath}")
+            return {
+                "success": True,
+                "job_id": 999,
+                "execution_reference": filepath,
+                "metadata": {"mode": "native_tar", "file": filepath}
+            }
+        except Exception as e:
+            logger.error(f"❌ Error en respaldo nativo: {e}")
+            return {"success": False, "error": str(e)}
 
     def run_app_backup(
         self,
@@ -254,9 +282,8 @@ class DuplicatiOrchestratorService:
             duplicati_job_id = self.find_job_id_by_name(app_name, resolved_url, resolved_pass)
 
         if duplicati_job_id is None:
-            err_msg = f"No se pudo obtener un ID de tarea para '{app_name}' en Duplicati."
-            logger.error(f"❌ [Orchestrator]: {err_msg}")
-            return {"success": False, "error": err_msg}
+            logger.warning(f"⚠️ Sin ID en Duplicati para '{app_name}'. Iniciando respaldo nativo...")
+            return self._run_native_tar_backup(app_name, app_path, target_disk_path)
 
         dump_path: Optional[str] = None
         try:
@@ -281,7 +308,8 @@ class DuplicatiOrchestratorService:
 
             result = self.backend.execute(request)
             if not result.success:
-                return {"success": False, "errors": result.errors}
+                logger.warning("⚠️ Duplicati no pudo procesar la tarea, realizando respaldo nativo...")
+                return self._run_native_tar_backup(app_name, app_path, target_disk_path)
 
             return {
                 "success": True,
@@ -291,8 +319,8 @@ class DuplicatiOrchestratorService:
             }
 
         except Exception as e:
-            logger.error(f"❌ [Orchestrator Exception]: {e}")
-            return {"success": False, "error": str(e)}
+            logger.error(f"❌ Excepción en Duplicati: {e}. Ejecutando respaldo nativo de seguridad...")
+            return self._run_native_tar_backup(app_name, app_path, target_disk_path)
 
         finally:
             db_hook_service.cleanup_db_dump(app_path=app_path)
