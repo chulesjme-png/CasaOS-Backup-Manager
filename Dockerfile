@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     curl \
     docker.io \
+    rsync \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
