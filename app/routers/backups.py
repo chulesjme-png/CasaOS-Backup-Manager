@@ -17,7 +17,6 @@ logger = logging.getLogger("casaos-backup")
 
 router = APIRouter(prefix="/api/v1/backups", tags=["backups"])
 
-# Registro global de trabajos activos para cancelación en tiempo real
 active_jobs: Dict[str, Dict[str, Any]] = {}
 
 
@@ -35,12 +34,17 @@ def get_backup_status(task_id: int):
 
 @router.get("/job-status/{job_id}")
 def get_job_status(job_id: str):
-    """Consulta el estado de una tarea activa o recién finalizada."""
-    if job_id in active_jobs:
-        return active_jobs[job_id]
-    
-    # Consultar a Duplicati si no está en el registro local
+    """Consulta el estado de una tarea activa o recién finalizada actualizando con el estado real de Duplicati."""
     duplicati_status = duplicati_orchestrator.get_task_status(task_id=1)
+    
+    if job_id in active_jobs:
+        job_data = active_jobs[job_id]
+        if job_data.get("status") == "running":
+            if duplicati_status.get("status") in ["running", "completed"]:
+                job_data["progress"] = duplicati_status.get("progress", job_data.get("progress", 0.0))
+                job_data["phase"] = duplicati_status.get("phase", job_data.get("phase", "Procesando..."))
+        return job_data
+
     return {
         "job_id": job_id,
         "status": duplicati_status.get("status", "idle"),
@@ -64,7 +68,6 @@ async def cancel_job(job_id: str):
         except Exception as e:
             logger.warning(f"⚠️ Error al matar el proceso {proc.pid}: {e}")
 
-    # Forzar la muerte de cualquier proceso secundario de compresión en el sistema
     os.system("pkill -9 -f tar > /dev/null 2>&1")
     os.system("pkill -9 -f rsync > /dev/null 2>&1")
 
@@ -89,14 +92,14 @@ async def run_system_backup(
     target_disk: Optional[str] = None,
     background_tasks: BackgroundTasks = BackgroundTasks()
 ):
-    """Inicia la copia de seguridad incremental del sistema completo."""
+    """Inicia la copia de seguridad orquestada con Duplicati."""
     job_id = f"job_Sistema_Completo_{int(time.time())}"
     
     active_jobs[job_id] = {
         "job_id": job_id,
         "status": "running",
-        "progress": 10.0,
-        "phase": "Iniciando respaldo incremental..."
+        "progress": 5.0,
+        "phase": "Conectando con motor de respaldo..."
     }
 
     def _execute():
@@ -106,10 +109,12 @@ async def run_system_backup(
                 app_path="/DATA",
                 target_disk_path=target_disk
             )
+            success = res.get("success", False)
             active_jobs[job_id] = {
                 "job_id": job_id,
-                "status": "completed" if res.get("success") else "failed",
-                "progress": 100.0 if res.get("success") else 0.0,
+                "status": "completed" if success else "failed",
+                "progress": 100.0 if success else 0.0,
+                "phase": "Completado" if success else f"Error: {res.get('error', 'Fallo en respaldo')}",
                 "result": res
             }
         except Exception as e:
@@ -117,6 +122,8 @@ async def run_system_backup(
             active_jobs[job_id] = {
                 "job_id": job_id,
                 "status": "failed",
+                "progress": 0.0,
+                "phase": f"Error: {str(e)}",
                 "error": str(e)
             }
 
