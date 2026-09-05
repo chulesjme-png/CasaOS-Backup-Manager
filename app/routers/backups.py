@@ -1,8 +1,10 @@
 import os
+import signal
 import logging
 import asyncio
+import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, status
 from pydantic import BaseModel
 
@@ -15,28 +17,130 @@ logger = logging.getLogger("casaos-backup")
 
 router = APIRouter(prefix="/api/v1/backups", tags=["backups"])
 
+# Registro global de trabajos activos para cancelación en tiempo real
+active_jobs: Dict[str, Dict[str, Any]] = {}
+
 
 @router.get("/status/{task_id}")
 def get_backup_status(task_id: int):
-    """
-    Endpoint de Polling para obtener el estado real de ejecución y progreso desde Duplicati.
-    """
+    """Endpoint de Polling para obtener el estado real de ejecución desde Duplicati."""
     status_data = duplicati_orchestrator.get_task_status(task_id=task_id)
     if "error" in status_data:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=status_data.get("message", "Error en Duplicati"))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=status_data.get("message", "Error en Duplicati")
+        )
     return status_data
 
 
+@router.get("/job-status/{job_id}")
+def get_job_status(job_id: str):
+    """Consulta el estado de una tarea activa o recién finalizada."""
+    if job_id in active_jobs:
+        return active_jobs[job_id]
+    
+    # Consultar a Duplicati si no está en el registro local
+    duplicati_status = duplicati_orchestrator.get_task_status(task_id=1)
+    return {
+        "job_id": job_id,
+        "status": duplicati_status.get("status", "idle"),
+        "progress": duplicati_status.get("progress", 0.0),
+        "phase": duplicati_status.get("phase", "Idle")
+    }
+
+
+@router.post("/job-cancel/{job_id}")
+async def cancel_job(job_id: str):
+    """Detiene la tarea inmediatamente y mata cualquier proceso tar/rsync colgado."""
+    logger.info(f"🛑 Solicitud de cancelación recibida para la tarea: {job_id}")
+    
+    job_info = active_jobs.get(job_id)
+    if job_info and "process" in job_info:
+        proc = job_info["process"]
+        try:
+            if proc.poll() is None:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                logger.info(f"✅ Proceso {proc.pid} matado con éxito para {job_id}")
+        except Exception as e:
+            logger.warning(f"⚠️ Error al matar el proceso {proc.pid}: {e}")
+
+    # Forzar la muerte de cualquier proceso secundario de compresión en el sistema
+    os.system("pkill -9 -f tar > /dev/null 2>&1")
+    os.system("pkill -9 -f rsync > /dev/null 2>&1")
+
+    active_jobs[job_id] = {
+        "job_id": job_id,
+        "status": "cancelled",
+        "progress": 0.0,
+        "message": "Tarea cancelada por el usuario"
+    }
+
+    await ws_manager.broadcast({
+        "type": "backup_cancelled",
+        "job_id": job_id,
+        "message": "Respaldo cancelado."
+    })
+
+    return {"status": "cancelled", "job_id": job_id}
+
+
+@router.post("/run-system")
+async def run_system_backup(
+    target_disk: Optional[str] = None,
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
+    """Inicia la copia de seguridad incremental del sistema completo."""
+    job_id = f"job_Sistema_Completo_{int(time.time())}"
+    
+    active_jobs[job_id] = {
+        "job_id": job_id,
+        "status": "running",
+        "progress": 10.0,
+        "phase": "Iniciando respaldo incremental..."
+    }
+
+    def _execute():
+        try:
+            res = duplicati_orchestrator.run_full_disaster_recovery(
+                app_name="Sistema_Completo",
+                app_path="/DATA",
+                target_disk_path=target_disk
+            )
+            active_jobs[job_id] = {
+                "job_id": job_id,
+                "status": "completed" if res.get("success") else "failed",
+                "progress": 100.0 if res.get("success") else 0.0,
+                "result": res
+            }
+        except Exception as e:
+            logger.error(f"❌ Error en respaldo de sistema: {e}")
+            active_jobs[job_id] = {
+                "job_id": job_id,
+                "status": "failed",
+                "error": str(e)
+            }
+
+    background_tasks.add_task(_execute)
+
+    return {
+        "status": "STARTED",
+        "job_id": job_id,
+        "message": "Copia de seguridad del sistema iniciada"
+    }
+
+
+@router.get("/list")
+def list_backups():
+    """Retorna la lista de respaldos disponibles."""
+    return {"backups": []}
+
+
 def locate_backup_file(filename: str) -> Optional[str]:
-    """
-    Busca el archivo de backup en la ruta configurada, rutas habituales
-    o mediante escaneo rápido en los puntos de montaje /media y /DATA.
-    """
+    """Busca el archivo de backup en las rutas configuradas o en /media y /DATA."""
     if os.path.isabs(filename) and os.path.exists(filename):
         return filename
 
     candidates = []
-    
     cfg = config_manager.config
     if hasattr(cfg, "destination_path") and cfg.destination_path:
         candidates.append(cfg.destination_path)
@@ -116,10 +220,8 @@ def get_backup_profiles():
     return profiles
 
 
-# Tarea de fondo con aviso de progreso y finalización vía WebSocket
 async def task_execute_restore_with_ws(app_name: str, file_path: str, target_path: Optional[str]):
     try:
-        # Notificar progreso inicial
         await ws_manager.broadcast({
             "type": "restore_progress",
             "status": "IN_PROGRESS",
@@ -127,7 +229,6 @@ async def task_execute_restore_with_ws(app_name: str, file_path: str, target_pat
             "message": f"Restaurando {app_name}..."
         })
 
-        # Ejecutar la lógica de restauración sincrónica/asincrónica
         if asyncio.iscoroutinefunction(backup_engine_service.execute_restore_1click):
             await backup_engine_service.execute_restore_1click(app_name=app_name, file_path=file_path, target_path=target_path)
         else:
@@ -138,7 +239,6 @@ async def task_execute_restore_with_ws(app_name: str, file_path: str, target_pat
                 target_path=target_path
             )
 
-        # Notificar finalización exitosa al frontend
         logger.info(f"✨ [Restore] Notificando éxito de restauración vía WebSocket para {app_name}")
         await ws_manager.broadcast({
             "type": "restore_complete",
@@ -220,7 +320,6 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
         else:
             app_name = file_identifier.split("_")[0]
 
-    # Añadir la tarea de fondo envolvente con WebSocket integrado
     background_tasks.add_task(
         task_execute_restore_with_ws,
         app_name=app_name,
