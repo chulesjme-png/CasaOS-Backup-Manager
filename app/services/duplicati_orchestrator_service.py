@@ -143,17 +143,27 @@ class DuplicatiOrchestratorService:
 
         logger.info(f"🔨 Creando tarea '{managed_job_name}' en Duplicati -> {target_url_encoded}")
         
-        # Corrección del HTTP 400: El backend de C# exige estrictamente este esquema
+        # Corrección del HTTP 400: Estructura JSON exacta compatible con el parser de la API de Duplicati v1
         payload_full = {
+            "Schedule": {
+                "Time": "2020-01-01T00:00:00",
+                "Repeat": "1D",
+                "AllowedDays": []
+            },
             "Backup": {
                 "Name": managed_job_name,
                 "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
                 "Tags": ["CasaOS", "CBM-Auto"],
-                "TargetURL": target_url_encoded
+                "TargetURL": target_url_encoded,
+                "DBPath": "",
+                "VolumeSize": "50MB",
+                "CompressionModule": "zip",
+                "EncryptionModule": "",
+                "Metadata": None
             },
             "Filters": [],
             "Settings": [
-                {"Name": "--no-encryption", "Value": "true"}
+                {"Name": "no-encryption", "Value": "true"}
             ],
             "Sources": [source_path]
         }
