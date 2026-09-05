@@ -159,11 +159,11 @@ class DuplicatiOrchestratorService:
                 "VolumeSize": "50MB",
                 "CompressionModule": "zip",
                 "EncryptionModule": "",
-                "Metadata": None
+                "Metadata": {}
             },
             "Filters": [],
             "Settings": [
-                {"Name": "no-encryption", "Value": "true"}
+                {"Name": "--no-encryption", "Value": "true"}
             ],
             "Sources": [source_path]
         }
