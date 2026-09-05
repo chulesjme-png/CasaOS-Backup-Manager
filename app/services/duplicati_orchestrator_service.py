@@ -3,9 +3,7 @@ import json
 import logging
 import urllib.parse
 import requests
-import tarfile
-import datetime
-import threading
+import subprocess
 from types import SimpleNamespace
 from typing import Optional, Dict, Any
 
@@ -22,10 +20,9 @@ logger = logging.getLogger("casaos-backup")
 DEFAULT_DUPLICATI_URL = os.getenv("DUPLICATI_URL", "http://172.17.0.1:8200")
 DEFAULT_DUPLICATI_PASS = os.getenv("DUPLICATI_PASSWORD", "")
 
-# Registro global de tareas nativas
-NATIVE_JOBS: Dict[str, Dict[str, Any]] = {}
 
 def get_duplicati_credentials() -> tuple[str, str]:
+    """Obtiene URL y contraseña configuradas para Duplicati desde config.json o variables de entorno."""
     url = DEFAULT_DUPLICATI_URL
     password = DEFAULT_DUPLICATI_PASS
     config_path = "/DATA/AppData/casaos-backup-manager/config.json"
@@ -39,7 +36,9 @@ def get_duplicati_credentials() -> tuple[str, str]:
             logger.warning(f"⚠️ No se pudieron leer credenciales de config.json: {e}")
     return url, password
 
+
 def get_active_target_disk() -> str:
+    """Obtiene la ruta del disco activo configurado."""
     config_path = "/DATA/AppData/casaos-backup-manager/config.json"
     if os.path.exists(config_path):
         try:
@@ -51,6 +50,7 @@ def get_active_target_disk() -> str:
         except Exception as e:
             logger.warning(f"⚠️ No se pudo leer config.json: {e}")
     return "/DATA"
+
 
 class DuplicatiOrchestratorService:
     def __init__(self):
@@ -64,8 +64,9 @@ class DuplicatiOrchestratorService:
         password: str = "",
         **kwargs
     ) -> requests.Response:
+        """Realiza peticiones HTTP a Duplicati gestionando tokens XSRF y autenticación."""
         base_url = url.rsplit('/api/', 1)[0] if '/api/' in url else url
-        
+
         has_xsrf = any("xsrf" in c.name.lower() for c in session.cookies)
         if not has_xsrf:
             try:
@@ -96,6 +97,7 @@ class DuplicatiOrchestratorService:
         duplicati_url: str,
         duplicati_password: str
     ) -> Optional[int]:
+        """Obtiene el ID de la tarea en Duplicati o la crea automáticamente vía API."""
         session = requests.Session()
         base_url = duplicati_url.rstrip('/')
         managed_job_name = "[CBM] Sistema_Completo"
@@ -109,54 +111,53 @@ class DuplicatiOrchestratorService:
                     timeout=10
                 )
             except Exception as e:
-                logger.warning(f"⚠️ Login de Duplicati no requerido o fallido: {e}")
+                logger.warning(f"⚠️ Autenticación en Duplicati no requerida o fallida: {e}")
 
+        # 1. Buscar si la tarea ya existe
         all_backups = []
         try:
             resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
             if resp.status_code == 200:
                 all_backups = resp.json()
-                if isinstance(all_backups, list) and len(all_backups) > 0:
+                if isinstance(all_backups, list):
                     for job in all_backups:
                         job_name = str(job.get("Name", "") or job.get("Backup", {}).get("Name", "")).lower()
                         job_id = int(job.get("ID") or job.get("Backup", {}).get("ID") or 0)
                         if managed_job_name.lower() in job_name or any(k in job_name for k in ["sistema", "completo", "cbm", "disaster"]):
-                            logger.info(f"🔎 Encontrada tarea de sistema '{job_name}' (ID: {job_id})")
+                            logger.info(f"🔎 Tarea encontrada en Duplicati: '{job_name}' (ID: {job_id})")
                             return job_id
         except Exception as e:
-            logger.warning(f"⚠️ Error consultando tareas en Duplicati: {e}")
+            logger.warning(f"⚠️ Error al consultar tareas en Duplicati: {e}")
 
+        # 2. Crear directorio de destino y preparar URL de Duplicati
         disaster_recovery_target = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery")
         try:
             os.makedirs(disaster_recovery_target, exist_ok=True)
         except Exception as e:
-            logger.warning(f"⚠️ No se pudo crear el directorio de destino localmente: {e}")
+            logger.warning(f"⚠️ No se pudo crear directorio de destino: {e}")
 
         clean_path = disaster_recovery_target.replace("file://", "").lstrip('/')
         target_url_encoded = f"file:///{urllib.parse.quote(clean_path, safe='/')}/"
 
         logger.info(f"🔨 Auto-creando tarea '[CBM] Sistema_Completo' en Duplicati -> {target_url_encoded}")
 
-        payloads = [
-            {
-                "Backup": {
-                    "Name": managed_job_name,
-                    "Description": "Copia de Seguridad Completa del Sistema",
-                    "TargetURL": target_url_encoded,
-                    "Sources": [source_path],
-                    "Settings": [
-                        {"Name": "no-encryption", "Value": "true", "Filter": ""},
-                        {"Name": "compression-module", "Value": "zip", "Filter": ""},
-                        {"Name": "dblock-size", "Value": "50mb", "Filter": ""}
-                    ],
-                    "Filters": [],
-                    "Metadata": {}
-                },
-                "Schedule": None
-            }
-        ]
+        backup_body = {
+            "Name": managed_job_name,
+            "Description": "Copia de Seguridad Completa del Sistema",
+            "TargetURL": target_url_encoded,
+            "Sources": [source_path],
+            "Settings": [
+                {"Name": "no-encryption", "Value": "true", "Filter": ""},
+                {"Name": "compression-module", "Value": "zip", "Filter": ""},
+                {"Name": "dblock-size", "Value": "50mb", "Filter": ""}
+            ],
+            "Filters": [],
+            "Metadata": {}
+        }
 
-        for idx, payload in enumerate(payloads, start=1):
+        payloads = [backup_body, {"Backup": backup_body, "Schedule": None}]
+
+        for payload in payloads:
             try:
                 create_resp = self._do_request(
                     session, "POST", f"{base_url}/api/v1/backups",
@@ -166,15 +167,27 @@ class DuplicatiOrchestratorService:
                 )
 
                 if create_resp.status_code in (200, 201):
+                    res_data = create_resp.json()
+                    job_id = None
+                    if isinstance(res_data, dict):
+                        job_id = res_data.get("ID") or res_data.get("id") or (
+                            res_data.get("Backup", {}).get("ID") if isinstance(res_data.get("Backup"), dict) else None
+                        )
+                    if job_id:
+                        logger.info(f"✅ Tarea creada en Duplicati con ID: {job_id}")
+                        return int(job_id)
+
                     check_resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
                     if check_resp.status_code == 200:
                         for job in check_resp.json():
                             name = str(job.get("Name") or job.get("Backup", {}).get("Name", ""))
                             if managed_job_name.lower() in name.lower():
-                                job_id = int(job.get("ID") or job.get("Backup", {}).get("ID"))
-                                return job_id
+                                return int(job.get("ID") or job.get("Backup", {}).get("ID"))
             except Exception as e:
-                logger.warning(f"⚠️ Excepción en intento de creación: {e}")
+                logger.warning(f"⚠️ Excepción en intento de creación de tarea: {e}")
+
+        if isinstance(all_backups, list) and len(all_backups) > 0:
+            return int(all_backups[0].get("ID") or all_backups[0].get("Backup", {}).get("ID") or 1)
 
         return None
 
@@ -198,43 +211,28 @@ class DuplicatiOrchestratorService:
                         job_name = str(job.get("Name", "") or job.get("Backup", {}).get("Name", "")).lower().replace("_", " ").strip()
                         if target_name in job_name or job_name in target_name:
                             return int(job.get("ID") or job.get("Backup", {}).get("ID"))
+                    return int(backups[0].get("ID") or backups[0].get("Backup", {}).get("ID") or 1)
         except Exception as e:
-            logger.warning(f"⚠️ Excepción buscando Job ID: {e}")
+            logger.warning(f"⚠️ Excepción buscando Job ID por nombre: {e}")
         return None
 
-    def _run_native_tar_backup(self, app_name: str, app_path: str, target_disk_path: str) -> Dict[str, Any]:
-        """Ejecución nativa asíncrona de respaldo (.tar.gz)."""
-        job_key = f"job_{app_name}"
-        NATIVE_JOBS[job_key] = {"status": "running", "phase": "Comprimiendo sistema (.tar.gz)...", "progress": 50.0}
-
-        def _worker():
-            try:
-                out_dir = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery")
-                os.makedirs(out_dir, exist_ok=True)
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"backup_{app_name}_{timestamp}.tar.gz"
-                filepath = os.path.join(out_dir, filename)
-
-                logger.info(f"📦 Generando copia nativa en: {filepath}")
-                with tarfile.open(filepath, "w:gz") as tar:
-                    if os.path.exists(app_path):
-                        tar.add(app_path, arcname=os.path.basename(app_path))
-
-                logger.info(f"✅ Copia de seguridad nativa completada: {filepath}")
-                NATIVE_JOBS[job_key] = {"status": "completed", "phase": "Finalizado", "progress": 100.0}
-            except Exception as e:
-                logger.error(f"❌ Error en respaldo nativo: {e}")
-                NATIVE_JOBS[job_key] = {"status": "error", "phase": f"Error: {e}", "progress": 0.0}
-
-        thread = threading.Thread(target=_worker, daemon=True)
-        thread.start()
-
-        return {
-            "success": True,
-            "job_id": 999,
-            "execution_reference": f"native_{app_name}",
-            "metadata": {"mode": "native_tar"}
-        }
+    def _run_incremental_rsync_fallback(self, app_name: str, app_path: str, target_disk_path: str) -> Dict[str, Any]:
+        """Respaldo incremental ligero con rsync para evitar bloqueos y archivos .tar.gz pesados."""
+        try:
+            out_dir = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery", f"incremental_{app_name}")
+            os.makedirs(out_dir, exist_ok=True)
+            logger.info(f"🔄 Ejecutando rsync incremental hacia: {out_dir}")
+            cmd = ["rsync", "-av", "--delete", f"{app_path.rstrip('/')}/", f"{out_dir}/"]
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            return {
+                "success": True,
+                "job_id": 999,
+                "execution_reference": out_dir,
+                "metadata": {"mode": "native_incremental_rsync", "destination": out_dir}
+            }
+        except Exception as e:
+            logger.error(f"❌ Error en sincronización rsync incremental: {e}")
+            return {"success": False, "error": str(e)}
 
     def run_app_backup(
         self,
@@ -261,8 +259,8 @@ class DuplicatiOrchestratorService:
             duplicati_job_id = self.find_job_id_by_name(app_name, resolved_url, resolved_pass)
 
         if duplicati_job_id is None:
-            logger.warning(f"⚠️ Sin ID en Duplicati para '{app_name}'. Iniciando respaldo nativo...")
-            return self._run_native_tar_backup(app_name, app_path, target_disk_path)
+            logger.warning(f"⚠️ Sin ID en Duplicati para '{app_name}'. Usando sincronización incremental rsync...")
+            return self._run_incremental_rsync_fallback(app_name, app_path, target_disk_path)
 
         try:
             db_hook_service.create_db_dump(app_name=app_name, app_path=app_path)
@@ -278,11 +276,16 @@ class DuplicatiOrchestratorService:
             )
             result = self.backend.execute(request)
             if not result.success:
-                return self._run_native_tar_backup(app_name, app_path, target_disk_path)
+                return self._run_incremental_rsync_fallback(app_name, app_path, target_disk_path)
 
-            return {"success": True, "job_id": duplicati_job_id}
-        except Exception:
-            return self._run_native_tar_backup(app_name, app_path, target_disk_path)
+            return {
+                "success": True,
+                "job_id": duplicati_job_id,
+                "execution_reference": str(result.execution_reference)
+            }
+        except Exception as e:
+            logger.error(f"❌ Error durante la ejecución en Duplicati: {e}")
+            return self._run_incremental_rsync_fallback(app_name, app_path, target_disk_path)
         finally:
             db_hook_service.cleanup_db_dump(app_path=app_path)
 
@@ -300,7 +303,10 @@ class DuplicatiOrchestratorService:
         cfg_url, cfg_pass = get_duplicati_credentials()
         resolved_url = duplicati_url or cfg_url
         resolved_pass = password if password is not None else (duplicati_password or cfg_pass)
-        resolved_target = target_disk_path or target_disk or get_active_target_disk()
+
+        resolved_target = target_disk_path or target_disk
+        if not resolved_target or resolved_target == "/var/lib/casaos":
+            resolved_target = get_active_target_disk()
 
         if duplicati_job_id is None:
             duplicati_job_id = self._get_or_create_disaster_recovery_job(
@@ -326,13 +332,6 @@ class DuplicatiOrchestratorService:
         duplicati_password: Optional[str] = None,
         password: Optional[str] = None
     ) -> Dict[str, Any]:
-        # Si hay una tarea nativa registrada, devolver su estado
-        for job_key, status in NATIVE_JOBS.items():
-            if status.get("status") == "running":
-                return status
-            if status.get("status") == "completed":
-                return {"status": "completed", "phase": "Completed", "progress": 100.0}
-
         try:
             cfg_url, cfg_pass = get_duplicati_credentials()
             resolved_url = duplicati_url or cfg_url
@@ -346,21 +345,49 @@ class DuplicatiOrchestratorService:
             if resp.status_code == 200:
                 data = resp.json()
                 if not data:
-                    return {"status": "completed", "phase": "Completed", "progress": 100.0}
+                    return {"status": "idle", "phase": "Idle", "progress": 0.0}
 
                 phase = data.get("Phase", "Idle")
                 progress = float(data.get("OverallProgress", 0.0)) * 100
 
-                if phase in ["Completed", "Backup_Complete"] or phase == "Idle":
-                    return {"status": "completed", "phase": "Completed", "progress": 100.0}
+                if phase in ["Completed", "Backup_Complete"]:
+                    return {"status": "completed", "phase": phase, "progress": 100.0}
+
+                if phase == "Idle":
+                    return {"status": "idle", "phase": "Idle", "progress": 0.0}
 
                 return {
                     "status": "running",
                     "phase": phase,
-                    "progress": round(progress, 2)
+                    "progress": round(progress, 2),
+                    "current_file": data.get("CurrentFilename", "")
                 }
-            return {"status": "completed", "phase": "Completed", "progress": 100.0}
+
+            return {"status": "idle", "phase": f"HTTP {resp.status_code}", "progress": 0.0}
         except Exception:
-            return {"status": "completed", "phase": "Completed", "progress": 100.0}
+            return {"status": "idle", "phase": "Error", "progress": 0.0}
+
+    def cancel_task(
+        self,
+        task_id: Any = 1,
+        duplicati_url: Optional[str] = None,
+        duplicati_password: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Envía la orden de cancelación directa al servidor de Duplicati."""
+        try:
+            cfg_url, cfg_pass = get_duplicati_credentials()
+            resolved_url = duplicati_url or cfg_url
+            resolved_pass = duplicati_password or cfg_pass
+            session = requests.Session()
+            self._do_request(
+                session, "POST", f"{resolved_url.rstrip('/')}/api/v1/server/state/control/stop",
+                password=resolved_pass, timeout=10
+            )
+            return {"success": True, "message": "Orden de cancelación enviada a Duplicati"}
+        except Exception as e:
+            logger.warning(f"⚠️ Error al cancelar tarea en Duplicati: {e}")
+            return {"success": False, "error": str(e)}
+
 
 duplicati_orchestrator = DuplicatiOrchestratorService()
+duplicati_service = duplicati_orchestrator
