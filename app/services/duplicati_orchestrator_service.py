@@ -143,29 +143,28 @@ class DuplicatiOrchestratorService:
 
         logger.info(f"🔨 Creando tarea '{managed_job_name}' en Duplicati -> {target_url_encoded}")
         
-        # Corrección del HTTP 400: Estructura JSON exacta compatible con el parser de la API de Duplicati v1
+        # Corrección del HTTP 400: Fuentes, filtros y parámetros de configuración dentro del objeto Backup
         payload_full = {
-            "Schedule": {
-                "Time": "2020-01-01T00:00:00",
-                "Repeat": "1D",
-                "AllowedDays": []
-            },
             "Backup": {
                 "Name": managed_job_name,
                 "Description": "Copia de Seguridad Completa del Sistema generada por CasaOS Backup Manager",
                 "Tags": ["CasaOS", "CBM-Auto"],
                 "TargetURL": target_url_encoded,
                 "DBPath": "",
-                "VolumeSize": "50MB",
-                "CompressionModule": "zip",
-                "EncryptionModule": "",
+                "Sources": [source_path],
+                "Settings": [
+                    {"Name": "--no-encryption", "Value": "true"},
+                    {"Name": "--compression-module", "Value": "zip"},
+                    {"Name": "--dblock-size", "Value": "50MB"}
+                ],
+                "Filters": [],
                 "Metadata": {}
             },
-            "Filters": [],
-            "Settings": [
-                {"Name": "--no-encryption", "Value": "true"}
-            ],
-            "Sources": [source_path]
+            "Schedule": {
+                "Time": "2020-01-01T00:00:00",
+                "Repeat": "1D",
+                "AllowedDays": []
+            }
         }
 
         try:
