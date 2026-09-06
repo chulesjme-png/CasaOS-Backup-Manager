@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("casaos-backup")
 
-# Inicialización de la aplicación FastAPI
+# Inicialización de FastAPI
 app = FastAPI(title="CasaOS Backup Manager", version="1.0.0")
 
 app.add_middleware(
@@ -27,27 +27,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Servir archivos estáticos del Frontend (comprueba ubicaciones comunes)
+# Búsqueda dinámica del archivo index.html dentro del contenedor (/app)
+APP_ROOT = Path("/app")
+INDEX_FILE = None
 STATIC_DIR = None
-for cand in [Path("/app/ui"), Path("/app/static"), Path("/app/app/static"), Path("/app/web")]:
-    if cand.exists() and cand.is_dir():
-        STATIC_DIR = cand
-        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+for path in APP_ROOT.rglob("index.html"):
+    if "site-packages" not in str(path):
+        INDEX_FILE = path
+        STATIC_DIR = path.parent
         break
+
+if STATIC_DIR and STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    for sub in ["assets", "css", "js", "static"]:
+        sub_path = STATIC_DIR / sub
+        if sub_path.exists() and sub_path.is_dir():
+            app.mount(f"/{sub}", StaticFiles(directory=str(sub_path)), name=f"static_{sub}")
 
 @app.get("/")
 def read_root():
-    # Buscar el archivo index.html para cargarlo en la raíz
-    for cand_file in [
-        Path("/app/ui/index.html"),
-        Path("/app/static/index.html"),
-        Path("/app/index.html"),
-        Path("/app/app/index.html"),
-        Path("/app/web/index.html")
-    ]:
-        if cand_file.exists():
-            return FileResponse(cand_file)
-    
+    if INDEX_FILE and INDEX_FILE.exists():
+        return FileResponse(INDEX_FILE)
     return {"status": "ok", "message": "API de CasaOS Backup Manager en ejecución."}
 
 # Estado global
