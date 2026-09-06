@@ -7,6 +7,7 @@ import subprocess
 import shutil
 import socket
 import json
+import re
 import platform
 import requests
 import psutil
@@ -118,10 +119,15 @@ def send_telegram_notification(message: str):
     token = cfg['telegram_token'].strip()
     chat_id = cfg['telegram_chat_id'].strip()
     url = f"https://api.telegram.org/bot{token}/sendMessage"
+    
+    html_message = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    html_message = re.sub(r'`([^`]+)`', r'<code>\1</code>', html_message)
+    html_message = re.sub(r'\*([^*]+)\*', r'<b>\1</b>', html_message)
+
     payload = {
         "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
+        "text": html_message,
+        "parse_mode": "HTML"
     }
     try:
         res = requests.post(url, json=payload, timeout=8)
@@ -252,8 +258,8 @@ def test_telegram(data: TelegramTestModel):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": "🧪 *CasaOS Backup Manager*: Mensaje de prueba exitoso.",
-        "parse_mode": "Markdown"
+        "text": "<b>CasaOS Backup Manager</b>: Mensaje de prueba exitoso.",
+        "parse_mode": "HTML"
     }
     try:
         res = requests.post(url, json=payload, timeout=8)
@@ -378,7 +384,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     normalized_app = app_name.replace("_", " ").strip().lower()
 
     if normalized_app in ["sistema completo", "casaos completo", "disaster recovery"]:
-        active_jobs[job_id]["message"] = "Conectando con motor Duplicati..."
+        active_jobs[job_id]["message"] = "Ejecutando copia incremental del sistema..."
         active_jobs[job_id]["progress"] = 10
 
         dup_url = cfg.get("duplicati_url", "http://172.17.0.1:8200")
@@ -399,7 +405,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             if "401" in raw_err or "Failed to log in" in raw_err:
                 err_msg = "Error de autenticación (401): Revisa la contraseña de Duplicati en ⚙️ Configuración."
             else:
-                err_msg = f"Error al iniciar en Duplicati: {raw_err}"
+                err_msg = f"Error en respaldo del sistema: {raw_err}"
 
             active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
             
@@ -409,7 +415,22 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                     ("Backup", app_name, "failed", round(time.time() - start, 2), err_msg, int(time.time() * 1000))
                 )
                 conn.commit()
-            send_telegram_notification(f"❌ *Copia fallida en Duplicati*: {app_name}\n{err_msg}")
+            send_telegram_notification(f"❌ *Copia fallida*: {app_name}\n{err_msg}")
+            return
+
+        mode = orchestration_res.get("metadata", {}).get("mode", "")
+        if mode in ["native_incremental_rsync", "native_copytree"] or orchestration_res.get("job_id") == 999:
+            elapsed = round(time.time() - start, 2)
+            active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Copia de seguridad incremental completada con rsync"}
+
+            with get_db() as conn:
+                conn.cursor().execute(
+                    "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                    ("Backup (rsync)", app_name, "success", elapsed, "Rsync Incremental OK", int(time.time() * 1000))
+                )
+                conn.commit()
+
+            send_telegram_notification(f"✅ *Copia de Sistema Completo finalizada*: {app_name}\nMotor: `rsync`\nDuración: {elapsed}s")
             return
 
         active_jobs[job_id]["message"] = "Esperando inicio de proceso en Duplicati..."
@@ -423,12 +444,14 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                 kill_rsync_processes()
 
                 inc_dir = base_backups_dir / "DisasterRecovery" / f"incremental_{app_name}"
-                if inc_dir.exists():
-                    try:
-                        shutil.rmtree(inc_dir, ignore_errors=True)
-                        logger.info(f"[ROLLBACK] Eliminada copia cancelada: {inc_dir}")
-                    except Exception as rm_err:
-                        logger.error(f"[ROLLBACK ERROR] No se pudo borrar {inc_dir}: {rm_err}")
+                tmp_inc_dir = base_backups_dir / "DisasterRecovery" / f".tmp_incremental_{app_name}"
+                for d in [inc_dir, tmp_inc_dir]:
+                    if d.exists():
+                        try:
+                            shutil.rmtree(d, ignore_errors=True)
+                            logger.info(f"[ROLLBACK] Eliminada copia cancelada: {d}")
+                        except Exception as rm_err:
+                            logger.error(f"[ROLLBACK ERROR] No se pudo borrar {d}: {rm_err}")
 
                 elapsed = round(time.time() - start, 2)
                 active_jobs[job_id] = {"status": "cancelled", "progress": 0, "message": "Proceso cancelado por el usuario"}

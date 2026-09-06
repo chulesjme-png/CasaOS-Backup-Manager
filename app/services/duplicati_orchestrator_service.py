@@ -162,7 +162,6 @@ class DuplicatiOrchestratorService:
                 )
 
                 if create_resp.status_code in (200, 201):
-                    # Volver a listar para obtener el ID recién asignado
                     check_resp = self._do_request(session, "GET", f"{base_url}/api/v1/backups", password=duplicati_password, timeout=15)
                     if check_resp.status_code == 200:
                         for job in check_resp.json():
@@ -209,13 +208,20 @@ class DuplicatiOrchestratorService:
 
     def _run_incremental_rsync_fallback(self, app_name: str, app_path: str, target_disk_path: str) -> Dict[str, Any]:
         out_dir = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery", f"incremental_{app_name}")
-        os.makedirs(out_dir, exist_ok=True)
+        tmp_dir = os.path.join(target_disk_path.rstrip('/'), "DisasterRecovery", f".tmp_incremental_{app_name}")
+        os.makedirs(os.path.dirname(out_dir), exist_ok=True)
 
         if shutil.which("rsync"):
             try:
-                logger.info(f"🔄 Ejecutando rsync incremental hacia: {out_dir}")
-                cmd = ["rsync", "-av", "--delete", f"{app_path.rstrip('/')}/", f"{out_dir}/"]
+                logger.info(f"🔄 Ejecutando rsync incremental hacia carpeta temporal: {tmp_dir}")
+                os.makedirs(tmp_dir, exist_ok=True)
+                cmd = ["rsync", "-av", "--delete", f"{app_path.rstrip('/')}/", f"{tmp_dir}/"]
                 subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+                if os.path.exists(out_dir):
+                    shutil.rmtree(out_dir, ignore_errors=True)
+                os.rename(tmp_dir, out_dir)
+
                 return {
                     "success": True,
                     "job_id": 999,
@@ -224,11 +230,18 @@ class DuplicatiOrchestratorService:
                 }
             except Exception as e:
                 logger.error(f"❌ Error durante rsync: {e}")
+                if os.path.exists(tmp_dir):
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
                 return {"success": False, "error": f"Error en rsync: {e}"}
         else:
             try:
-                logger.info(f"🔄 rsync no encontrado. Usando copia directa de archivos hacia: {out_dir}")
-                shutil.copytree(app_path, out_dir, dirs_exist_ok=True)
+                logger.info(f"🔄 rsync no encontrado. Usando copia directa hacia carpeta temporal: {tmp_dir}")
+                shutil.copytree(app_path, tmp_dir, dirs_exist_ok=True)
+
+                if os.path.exists(out_dir):
+                    shutil.rmtree(out_dir, ignore_errors=True)
+                os.rename(tmp_dir, out_dir)
+
                 return {
                     "success": True,
                     "job_id": 999,
@@ -237,6 +250,8 @@ class DuplicatiOrchestratorService:
                 }
             except Exception as e:
                 logger.error(f"❌ Error durante copia de archivos: {e}")
+                if os.path.exists(tmp_dir):
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
                 return {"success": False, "error": f"Error en copia local: {e}"}
 
     def run_app_backup(
