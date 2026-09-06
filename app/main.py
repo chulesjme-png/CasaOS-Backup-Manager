@@ -3,11 +3,72 @@ import time
 import shutil
 import logging
 import subprocess
+import sqlite3
 from pathlib import Path
 from datetime import datetime
+from contextlib import contextmanager
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
+# Logging Config
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("casaos-backup")
 
+# Inicialización de la aplicación FastAPI
+app = FastAPI(title="CasaOS Backup Manager", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Estado global
+active_jobs = {}
+DB_PATH = "/app/data/backup.db"
+
+# Funciones auxiliares del sistema
+@contextmanager
+def get_db():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS execution_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_type TEXT,
+                target_name TEXT,
+                status TEXT,
+                duration_seconds REAL,
+                message TEXT,
+                timestamp INTEGER
+            )
+        """)
+        conn.commit()
+        yield conn
+    finally:
+        conn.close()
+
+def load_config() -> dict:
+    return {"target_disk": "/DATA"}
+
+def send_telegram_notification(message: str):
+    logger.info(f"[TELEGRAM] {message}")
+
+def get_all_mounts() -> list:
+    mounts = []
+    if os.path.exists("/proc/mounts"):
+        with open("/proc/mounts", "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    mounts.append(parts[1])
+    return mounts
+
+# Lógica del motor de backups con rsync e incrementales
 def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
     active_jobs[job_id] = {
@@ -86,7 +147,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     # 4. Construcción del comando rsync incremental con enlaces duros
     rsync_cmd = ["rsync", "-aHAX", "--delete"]
 
-    # Si existe una copia previa ('latest'), usamos enlaces duros para lograr incremento ultrarrápido
     if latest_link.exists():
         resolved_latest = latest_link.resolve()
         rsync_cmd.append(f"--link-dest={resolved_latest}")
@@ -97,7 +157,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     try:
         process = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-        # Monitor de cancelación y progreso simulado
         while process.poll() is None:
             if active_jobs[job_id].get("cancelled"):
                 process.terminate()
@@ -106,7 +165,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                 except subprocess.TimeoutExpired:
                     process.kill()
 
-                # ROLLBACK: Eliminación de archivos temporales incompletos
                 if tmp_dir.exists():
                     shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -121,19 +179,17 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         if process.returncode != 0:
             raise RuntimeError(f"rsync falló con código {process.returncode}: {stderr.strip()}")
 
-        # 5. Finalización atómica: Renombrado y actualización del enlace 'latest'
+        # 5. Finalización atómica
         active_jobs[job_id]["message"] = "Verificando y consolidando copia..."
         active_jobs[job_id]["progress"] = 90
 
-        # Renombrar carpeta temporal a nombre final
         os.rename(tmp_dir, final_dir)
 
-        # Actualizar enlace simbólico 'latest' al último backup completado
         if latest_link.is_symlink() or latest_link.exists():
             latest_link.unlink()
         latest_link.symlink_to(final_dir.name, target_is_directory=True)
 
-        # 6. Política de retención: Mantener solo las últimas 3 copias por app
+        # 6. Política de retención (máximo 3 copias)
         all_backups = sorted(
             [d for d in base_dest_dir.iterdir() if d.is_dir() and d.name.startswith("backup_")],
             key=lambda x: x.name,
@@ -166,7 +222,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         )
 
     except Exception as e:
-        # ROLLBACK GARANTIZADO: Borrado completo si hay cualquier fallo
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir, ignore_errors=True)
             logger.info(f"[ROLLBACK] Carpeta temporal eliminada por error: {tmp_dir}")
@@ -184,7 +239,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
 
         send_telegram_notification(f"❌ *Error en copia incremental*: {clean_app_name}\nDetalle: `{err_msg}`")
 
-
+# Endpoints API
 @app.get("/api/v1/backups/list")
 @app.get("/api/v1/backups")
 def list_backups(max_keep_per_app: int = 3):
@@ -226,7 +281,6 @@ def list_backups(max_keep_per_app: int = 3):
                     stats = backup_folder.stat()
                     dt = datetime.fromtimestamp(stats.st_mtime)
 
-                    # Calcular tamaño real del directorio
                     total_size = sum(
                         f.stat().st_size for f in backup_folder.glob("**/*") if f.is_file() and not f.is_symlink()
                     )
@@ -245,3 +299,16 @@ def list_backups(max_keep_per_app: int = 3):
 
     retained_backups.sort(key=lambda x: (x["app_name"].lower(), -x["timestamp"]))
     return {"backups": retained_backups}
+
+@app.post("/api/v1/backups/start")
+def start_backup(app_name: str, target_disk: str = "", background_tasks: BackgroundTasks = None):
+    job_id = f"job_{int(time.time())}"
+    if background_tasks:
+        background_tasks.add_task(perform_real_backup, app_name, target_disk, job_id)
+    return {"status": "started", "job_id": job_id}
+
+@app.get("/api/v1/jobs/{job_id}")
+def get_job_status(job_id: str):
+    if job_id not in active_jobs:
+        raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+    return active_jobs[job_id]
