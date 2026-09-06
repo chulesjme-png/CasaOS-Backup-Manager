@@ -334,13 +334,36 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
     active_jobs[job_id] = {"status": "running", "progress": 5, "message": "Iniciando comprobaciones...", "cancelled": False}
 
+    cfg = load_config()
+    if not target_disk:
+        target_disk = cfg.get("target_disk", "")
+
+    real_target = None
+    if target_disk:
+        clean_target = target_disk[5:] if target_disk.startswith("/host/") else target_disk
+        for cand in [clean_target, f"/host{clean_target}"]:
+            if os.path.exists(cand):
+                real_target = cand
+                break
+
+    if not real_target:
+        cfg_disk = cfg.get("target_disk")
+        if cfg_disk and os.path.exists(cfg_disk):
+            real_target = cfg_disk
+        else:
+            real_target = "/DATA/Backups" if os.path.exists("/DATA/Backups") else "/host/DATA/Backups"
+
+    if real_target.endswith("Backups"):
+        base_backups_dir = Path(real_target)
+    else:
+        base_backups_dir = Path(real_target) / "Backups"
+
     normalized_app = app_name.replace("_", " ").strip().lower()
 
     if normalized_app in ["sistema completo", "casaos completo", "disaster recovery"]:
         active_jobs[job_id]["message"] = "Conectando con motor Duplicati..."
         active_jobs[job_id]["progress"] = 10
 
-        cfg = load_config()
         dup_url = cfg.get("duplicati_url", "http://172.17.0.1:8200")
         dup_password = cfg.get("duplicati_password", "")
 
@@ -348,7 +371,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
 
         orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
             app_name=app_name,
-            target_disk_path=target_disk,
+            target_disk_path=str(base_backups_dir),
             duplicati_job_id=dup_job_id,
             duplicati_url=dup_url,
             duplicati_password=dup_password
@@ -373,13 +396,36 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             return
 
         active_jobs[job_id]["message"] = "Esperando inicio de proceso en Duplicati..."
-        time.sleep(3)
+        time.sleep(2)
 
         was_running = False
         idle_counter = 0
 
         while True:
             if active_jobs[job_id].get("cancelled"):
+                try:
+                    subprocess.run(["killall", "-9", "rsync"], capture_output=True)
+                except Exception:
+                    pass
+
+                inc_dir = base_backups_dir / "DisasterRecovery" / f"incremental_{app_name}"
+                if inc_dir.exists():
+                    try:
+                        shutil.rmtree(inc_dir, ignore_errors=True)
+                        logger.info(f"[ROLLBACK] Eliminada copia cancelada: {inc_dir}")
+                    except Exception as rm_err:
+                        logger.error(f"[ROLLBACK ERROR] No se pudo borrar {inc_dir}: {rm_err}")
+
+                elapsed = round(time.time() - start, 2)
+                active_jobs[job_id] = {"status": "cancelled", "progress": 0, "message": "Proceso cancelado por el usuario"}
+
+                with get_db() as conn:
+                    conn.cursor().execute(
+                        "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                        ("Backup", app_name, "cancelled", elapsed, "Cancelado por el usuario", int(time.time() * 1000))
+                    )
+                    conn.commit()
+
                 send_telegram_notification(f"⚠️ *Copia cancelada por el usuario*: {app_name}")
                 return
 
@@ -447,25 +493,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         send_telegram_notification(f"✅ *Copia de Sistema Completo finalizada*: {app_name}\nMotor: `Duplicati`\nDuración: {elapsed}s")
         return
 
-    real_target = None
-    if target_disk:
-        clean_target = target_disk[5:] if target_disk.startswith("/host/") else target_disk
-        for cand in [clean_target, f"/host{clean_target}"]:
-            if os.path.exists(cand):
-                real_target = cand
-                break
-
-    if real_target:
-        base_dest = Path(real_target)
-    else:
-        cfg = load_config()
-        cfg_disk = cfg.get("target_disk")
-        if cfg_disk and os.path.exists(cfg_disk):
-            base_dest = Path(cfg_disk)
-        else:
-            base_dest = Path("/DATA/Backups" if os.path.exists("/DATA/Backups") else "/host/DATA/Backups")
-        
-    dest_dir = base_dest / "Backups" / "Apps" / app_name
+    dest_dir = base_backups_dir / "Apps" / app_name
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -534,7 +562,17 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                     os.remove(dest_file)
                 except Exception as rm_err:
                     logger.error(f"[CANCELATION ERROR] No se pudo borrar {dest_file}: {rm_err}")
+            
+            elapsed = round(time.time() - start, 2)
             active_jobs[job_id] = {"status": "cancelled", "progress": 0, "message": "Proceso cancelado por el usuario"}
+            
+            with get_db() as conn:
+                conn.cursor().execute(
+                    "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                    ("Backup", app_name, "cancelled", elapsed, "Cancelado por el usuario", int(time.time() * 1000))
+                )
+                conn.commit()
+
             send_telegram_notification(f"⚠️ *Copia cancelada*: {app_name}")
             return
 
@@ -676,6 +714,10 @@ def get_job_status(job_id: str):
 def cancel_job(job_id: str):
     if job_id in active_jobs:
         active_jobs[job_id]["cancelled"] = True
+        try:
+            subprocess.run(["killall", "-9", "rsync"], capture_output=True)
+        except Exception:
+            pass
         return {"status": "cancelled"}
     return {"status": "not_found"}
 
