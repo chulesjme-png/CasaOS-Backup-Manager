@@ -1,10 +1,13 @@
 import os
 import glob
 import json
+import shutil
 import asyncio
 import tarfile
 import zipfile
 import logging
+import subprocess
+import html
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -17,6 +20,7 @@ from app.services.notification_service import notification_service
 from app.core.ws_manager import ws_manager
 
 logger = logging.getLogger("casaos-backup")
+
 
 class BackupEngineService:
     def __init__(
@@ -80,6 +84,102 @@ class BackupEngineService:
 
     def prepare(self, backup_job: BackupJob) -> BackupManifest:
         return self.manifest_builder.build(backup_job)
+
+    async def execute_system_rsync_backup(
+        self,
+        source_dir: str,
+        target_dir: str,
+        job_name: str,
+        process_tracker: Optional[Dict[str, Any]] = None,
+        job_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Ejecuta rsync hacia una carpeta temporal oculta (.tmp_incremental_...).
+        Si finaliza con éxito, renombras a la ruta definitiva.
+        Si se cancela o falla, borra automáticamente los datos parciales.
+        """
+        source_path = source_dir.rstrip("/")
+        final_target_dir = os.path.join(target_dir, f"incremental_{job_name}")
+        temp_target_dir = os.path.join(target_dir, f".tmp_incremental_{job_name}")
+
+        logger.info(f"🔄 Iniciando rsync incremental en directorio temporal: {temp_target_dir}")
+        os.makedirs(temp_target_dir, exist_ok=True)
+
+        cmd = [
+            "rsync",
+            "-av",
+            "--delete",
+            f"{source_path}/",
+            f"{temp_target_dir.rstrip('/')}/"
+        ]
+
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+
+            if process_tracker and job_id:
+                process_tracker[job_id] = process
+
+            loop = asyncio.get_running_loop()
+            stdout, stderr = await loop.run_in_executor(None, process.communicate)
+
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(
+                    process.returncode, cmd, output=stdout, stderr=stderr
+                )
+
+            # Reemplazo atómico al finalizar la transferencia con éxito
+            logger.info(f"✅ rsync completado. Moviendo datos a: {final_target_dir}")
+            if os.path.exists(final_target_dir):
+                shutil.rmtree(final_target_dir)
+            os.rename(temp_target_dir, final_target_dir)
+
+            msg = f"Copia de seguridad completada para {job_name}"
+            if hasattr(notification_service, "send_telegram"):
+                try:
+                    res = notification_service.send_telegram(
+                        f"✅ <b>Backup Completado</b>\n<b>Tarea:</b> {html.escape(job_name)}\n<b>Destino:</b> {html.escape(final_target_dir)}"
+                    )
+                    if asyncio.iscoroutine(res):
+                        await res
+                except Exception as te:
+                    logger.warning(f"[Telegram] Error enviando notificación: {te}")
+
+            return {
+                "status": "SUCCESS",
+                "target_path": final_target_dir,
+                "message": msg
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Error durante rsync ({job_name}): {e}")
+
+            # Limpieza inmediata de la carpeta temporal si la copia fue cancelada o falló
+            if os.path.exists(temp_target_dir):
+                logger.info(f"🧹 [Limpieza] Eliminando directorio temporal por fallo o cancelación: {temp_target_dir}")
+                try:
+                    shutil.rmtree(temp_target_dir, ignore_errors=True)
+                except Exception as clean_err:
+                    logger.error(f"❌ [Limpieza Error] No se pudo borrar {temp_target_dir}: {clean_err}")
+
+            if hasattr(notification_service, "send_telegram"):
+                try:
+                    res = notification_service.send_telegram(
+                        f"❌ <b>Backup Cancelado o Fallido</b>\n<b>Tarea:</b> {html.escape(job_name)}\n<b>Detalle:</b> {html.escape(str(e))}"
+                    )
+                    if asyncio.iscoroutine(res):
+                        await res
+                except Exception as te:
+                    logger.warning(f"[Telegram] Error enviando notificación de error: {te}")
+
+            raise e
+        finally:
+            if process_tracker and job_id:
+                process_tracker.pop(job_id, None)
 
     async def execute_restore_1click(self, app_name: str, file_path: str, target_path: Optional[str] = None) -> Dict[str, Any]:
         if not target_path:
@@ -164,7 +264,7 @@ class BackupEngineService:
         if hasattr(notification_service, "send_telegram"):
             try:
                 res = notification_service.send_telegram(
-                    f"✅ *Restauración Exitosa*\n*App:* `{app_name}`\n*Origen:* `{archive_path.name}`"
+                    f"✅ <b>Restauración Exitosa</b>\n<b>App:</b> {html.escape(app_name)}\n<b>Origen:</b> {html.escape(archive_path.name)}"
                 )
                 if asyncio.iscoroutine(res):
                     await res
@@ -177,5 +277,6 @@ class BackupEngineService:
             "target_path": str(dest_dir),
             "snapshot_id": archive_path.name
         }
+
 
 backup_engine_service = BackupEngineService()
