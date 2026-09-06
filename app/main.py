@@ -9,6 +9,7 @@ import socket
 import json
 import platform
 import requests
+import psutil
 from datetime import datetime
 from pathlib import Path
 
@@ -98,18 +99,34 @@ def save_config_file(data: dict):
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
+def kill_rsync_processes():
+    """Elimina todos los procesos rsync activos usando psutil nativo."""
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            if proc.info['name'] and 'rsync' in proc.info['name'].lower():
+                proc.kill()
+                logger.info(f"[KILL] Proceso rsync {proc.info['pid']} finalizado.")
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
 def send_telegram_notification(message: str):
     cfg = load_config()
     if not cfg.get("telegram_enabled") or not cfg.get("telegram_token") or not cfg.get("telegram_chat_id"):
+        logger.warning("Telegram no enviado: Configuración incompleta o deshabilitada.")
         return
-    url = f"https://api.telegram.org/bot{cfg['telegram_token'].strip()}/sendMessage"
+    
+    token = cfg['telegram_token'].strip()
+    chat_id = cfg['telegram_chat_id'].strip()
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
-        "chat_id": cfg["telegram_chat_id"].strip(),
+        "chat_id": chat_id,
         "text": message,
         "parse_mode": "Markdown"
     }
     try:
-        requests.post(url, json=payload, timeout=5)
+        res = requests.post(url, json=payload, timeout=8)
+        if res.status_code != 200:
+            logger.error(f"Error Telegram API HTTP {res.status_code}: {res.text}")
     except Exception as e:
         logger.error(f"Error enviando notificación a Telegram: {e}")
 
@@ -403,10 +420,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
 
         while True:
             if active_jobs[job_id].get("cancelled"):
-                try:
-                    subprocess.run(["killall", "-9", "rsync"], capture_output=True)
-                except Exception:
-                    pass
+                kill_rsync_processes()
 
                 inc_dir = base_backups_dir / "DisasterRecovery" / f"incremental_{app_name}"
                 if inc_dir.exists():
@@ -714,10 +728,7 @@ def get_job_status(job_id: str):
 def cancel_job(job_id: str):
     if job_id in active_jobs:
         active_jobs[job_id]["cancelled"] = True
-        try:
-            subprocess.run(["killall", "-9", "rsync"], capture_output=True)
-        except Exception:
-            pass
+        kill_rsync_processes()
         return {"status": "cancelled"}
     return {"status": "not_found"}
 
