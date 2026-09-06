@@ -100,6 +100,8 @@ class BackupEngineService:
         """
         source_path = source_dir.rstrip("/")
         final_target_dir = os.path.join(target_dir, f"incremental_{job_name}")
+        
+        # Carpeta temporal visible sin punto inicial para ser accesible desde el explorador de CasaOS
         temp_target_dir = os.path.join(target_dir, f"tmp_incremental_{job_name}")
 
         logger.info(f"🔄 Iniciando rsync incremental en directorio temporal: {temp_target_dir}")
