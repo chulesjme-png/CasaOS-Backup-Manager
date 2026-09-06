@@ -94,13 +94,13 @@ class BackupEngineService:
         job_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Ejecuta rsync hacia una carpeta temporal oculta (.tmp_incremental_...).
-        Si finaliza con éxito, renombras a la ruta definitiva.
+        Ejecuta rsync hacia una carpeta temporal visible (tmp_incremental_...).
+        Si finaliza con éxito, renombra a la ruta definitiva.
         Si se cancela o falla, borra automáticamente los datos parciales.
         """
         source_path = source_dir.rstrip("/")
         final_target_dir = os.path.join(target_dir, f"incremental_{job_name}")
-        temp_target_dir = os.path.join(target_dir, f".tmp_incremental_{job_name}")
+        temp_target_dir = os.path.join(target_dir, f"tmp_incremental_{job_name}")
 
         logger.info(f"🔄 Iniciando rsync incremental en directorio temporal: {temp_target_dir}")
         os.makedirs(temp_target_dir, exist_ok=True)
@@ -155,8 +155,8 @@ class BackupEngineService:
                 "message": msg
             }
 
-        except Exception as e:
-            logger.error(f"❌ Error durante rsync ({job_name}): {e}")
+        except BaseException as e:
+            logger.error(f"❌ Error o cancelación durante rsync ({job_name}): {e}")
 
             # Limpieza inmediata de la carpeta temporal si la copia fue cancelada o falló
             if os.path.exists(temp_target_dir):
