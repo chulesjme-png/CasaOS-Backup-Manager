@@ -9,6 +9,8 @@ from datetime import datetime
 from contextlib import contextmanager
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 # Logging Config
 logging.basicConfig(level=logging.INFO)
@@ -25,11 +27,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Servir archivos estáticos del Frontend (comprueba ubicaciones comunes)
+STATIC_DIR = None
+for cand in [Path("/app/ui"), Path("/app/static"), Path("/app/app/static"), Path("/app/web")]:
+    if cand.exists() and cand.is_dir():
+        STATIC_DIR = cand
+        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+        break
+
+@app.get("/")
+def read_root():
+    # Buscar el archivo index.html para cargarlo en la raíz
+    for cand_file in [
+        Path("/app/ui/index.html"),
+        Path("/app/static/index.html"),
+        Path("/app/index.html"),
+        Path("/app/app/index.html"),
+        Path("/app/web/index.html")
+    ]:
+        if cand_file.exists():
+            return FileResponse(cand_file)
+    
+    return {"status": "ok", "message": "API de CasaOS Backup Manager en ejecución."}
+
 # Estado global
 active_jobs = {}
 DB_PATH = "/app/data/backup.db"
 
-# Funciones auxiliares del sistema
 @contextmanager
 def get_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -68,7 +92,6 @@ def get_all_mounts() -> list:
                     mounts.append(parts[1])
     return mounts
 
-# Lógica del motor de backups con rsync e incrementales
 def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
     active_jobs[job_id] = {
@@ -81,7 +104,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     normalized_app = app_name.replace("_", " ").strip().lower()
     is_system_backup = normalized_app in ["sistema completo", "casaos completo", "disaster recovery"]
 
-    # 1. Definir origen
     if is_system_backup:
         src_dir = Path("/DATA")
         category = "System"
@@ -97,7 +119,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         send_telegram_notification(f"❌ *Copia fallida*: {clean_app_name}\nOrigen `{src_dir}` no existe.")
         return
 
-    # 2. Definir destino obligatoriamente dentro de /BackUps/
     real_target = None
     if target_disk:
         clean_target = target_disk[5:] if target_disk.startswith("/host/") else target_disk
@@ -117,23 +138,20 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     base_dest_dir = Path(real_target) / "BackUps" / category / clean_app_name
     base_dest_dir.mkdir(parents=True, exist_ok=True)
 
-    # Definir rutas temporales, de enlace previo y final
     tmp_dir = base_dest_dir / ".tmp_backup"
     latest_link = base_dest_dir / "latest"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     final_dir = base_dest_dir / f"backup_{timestamp}"
 
-    # Limpieza preventiva de temporales colgados
     if tmp_dir.exists():
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     active_jobs[job_id]["message"] = "Verificando espacio en disco..."
     active_jobs[job_id]["progress"] = 10
 
-    # 3. Comprobar espacio libre
     try:
         dest_usage = shutil.disk_usage(base_dest_dir)
-        if dest_usage.free < (500 * 1024 * 1024):  # Margen mínimo de 500 MB
+        if dest_usage.free < (500 * 1024 * 1024):
             err_msg = "Espacio insuficiente en el disco de destino."
             active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
             send_telegram_notification(f"⚠️ *Copia abortada*: {clean_app_name}\n{err_msg}")
@@ -144,7 +162,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     active_jobs[job_id]["message"] = "Ejecutando rsync incremental..."
     active_jobs[job_id]["progress"] = 25
 
-    # 4. Construcción del comando rsync incremental con enlaces duros
     rsync_cmd = ["rsync", "-aHAX", "--delete"]
 
     if latest_link.exists():
@@ -179,7 +196,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         if process.returncode != 0:
             raise RuntimeError(f"rsync falló con código {process.returncode}: {stderr.strip()}")
 
-        # 5. Finalización atómica
         active_jobs[job_id]["message"] = "Verificando y consolidando copia..."
         active_jobs[job_id]["progress"] = 90
 
@@ -189,7 +205,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             latest_link.unlink()
         latest_link.symlink_to(final_dir.name, target_is_directory=True)
 
-        # 6. Política de retención (máximo 3 copias)
         all_backups = sorted(
             [d for d in base_dest_dir.iterdir() if d.is_dir() and d.name.startswith("backup_")],
             key=lambda x: x.name,
@@ -197,7 +212,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         )
         for old_backup in all_backups[3:]:
             shutil.rmtree(old_backup, ignore_errors=True)
-            logger.info(f"[RETENCIÓN] Eliminada copia antigua: {old_backup}")
 
         elapsed = round(time.time() - start, 2)
         active_jobs[job_id] = {
@@ -224,7 +238,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     except Exception as e:
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir, ignore_errors=True)
-            logger.info(f"[ROLLBACK] Carpeta temporal eliminada por error: {tmp_dir}")
 
         elapsed = round(time.time() - start, 2)
         err_msg = str(e)
@@ -239,7 +252,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
 
         send_telegram_notification(f"❌ *Error en copia incremental*: {clean_app_name}\nDetalle: `{err_msg}`")
 
-# Endpoints API
 @app.get("/api/v1/backups/list")
 @app.get("/api/v1/backups")
 def list_backups(max_keep_per_app: int = 3):
