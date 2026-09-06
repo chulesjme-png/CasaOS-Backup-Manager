@@ -24,3 +24,6 @@ services:
     environment:
       - TZ=Europe/Madrid
       - PYTHONUNBUFFERED=1
+      - DATA_PATH=${DATA_PATH:-/DATA}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
