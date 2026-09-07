@@ -54,10 +54,11 @@ except ImportError:
     duplicati_orchestrator = DummyDuplicatiOrchestrator()
 
 try:
-    from app.services.borg_service import borg_service
+    from app.services.borg_service import BorgService
+    borg_service = BorgService()
 except ImportError:
     class DummyBorgService:
-        def run_backup(self, target_disk: str, source_dir: str = "/DATA", progress_callback=None, **kwargs):
+        def run_backup(self, target_disk: str, source_dir: str = "/DATA", **kwargs):
             return {"success": False, "error": "Módulo BorgService no disponible."}
     borg_service = DummyBorgService()
 
@@ -418,15 +419,19 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         active_jobs[job_id]["message"] = "Iniciando respaldo comprimido con BorgBackup..."
         active_jobs[job_id]["progress"] = 10
 
-        def update_progress(pct: int, msg: str):
-            active_jobs[job_id]["progress"] = pct
-            active_jobs[job_id]["message"] = msg
-
-        borg_res = borg_service.run_backup(
-            target_disk=str(base_backups_dir),
-            source_dir="/DATA",
-            progress_callback=update_progress
-        )
+        try:
+            res = borg_service.run_backup(
+                target_disk=str(base_backups_dir),
+                source_dir="/DATA"
+            )
+            if isinstance(res, bool):
+                borg_res = {"success": res, "error": "" if res else "Error desconocido durante el respaldo Borg."}
+            elif isinstance(res, dict):
+                borg_res = res
+            else:
+                borg_res = {"success": False, "error": "Respuesta no válida del servicio Borg."}
+        except Exception as b_err:
+            borg_res = {"success": False, "error": str(b_err)}
 
         elapsed = round(time.time() - start, 2)
 
