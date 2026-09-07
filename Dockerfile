@@ -1,5 +1,6 @@
 FROM python:3.11-slim
 
+# Instalacion de herramientas de sistema y motor BorgBackup
 RUN apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     curl \
