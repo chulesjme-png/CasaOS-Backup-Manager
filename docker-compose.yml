@@ -27,3 +27,7 @@ services:
       - DATA_PATH=${DATA_PATH:-/DATA}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      # Automatización no interactiva de BorgBackup
+      - BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes
+      - BORG_RELOCATED_REPO_ACCESS_IS_OK=yes
+      - BORG_UNKNOWN_CLI_OPTION_IS_OK=yes

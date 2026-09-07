@@ -13,6 +13,14 @@ class BorgService:
     def __init__(self):
         self.current_process: Optional[subprocess.Popen] = None
 
+    def _get_borg_env(self) -> dict:
+        """Inyecta variables de entorno para prevenir bloqueos por solicitudes interactivas en Borg."""
+        env = os.environ.copy()
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_UNKNOWN_CLI_OPTION_IS_OK"] = "yes"
+        return env
+
     def get_repo_path(self, target_disk: Optional[str]) -> str:
         """Construye la ruta del repositorio evitando duplicar el directorio 'Backups'."""
         if not target_disk:
@@ -30,10 +38,12 @@ class BorgService:
         """Inicializa el repositorio Borg si aún no existe."""
         os.makedirs(repo_path, exist_ok=True)
         config_path = os.path.join(repo_path, "config")
+        env = self._get_borg_env()
+
         if not os.path.exists(config_path):
             logger.info(f"Inicializando repositorio Borg sin cifrado en: {repo_path}")
             cmd = ["borg", "init", "--encryption=none", repo_path]
-            res = subprocess.run(cmd, capture_output=True, text=True)
+            res = subprocess.run(cmd, capture_output=True, text=True, env=env)
             if res.returncode != 0:
                 raise RuntimeError(f"Error al inicializar el repositorio Borg: {res.stderr}")
 
@@ -81,6 +91,7 @@ class BorgService:
         ]
 
         logger.info(f"Iniciando respaldo Borg: {' '.join(cmd)}")
+        env = self._get_borg_env()
 
         self.current_process = subprocess.Popen(
             cmd,
@@ -88,6 +99,7 @@ class BorgService:
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
+            env=env,
             preexec_fn=os.setsid if hasattr(os, "setsid") else None
         )
 

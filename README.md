@@ -4,11 +4,11 @@ Gestor profesional de backups para CasaOS basado en arquitectura modular y Clean
 
 ---
 
-# Descripción
+## Descripción
 
 CasaOS Backup Manager es una plataforma de gestión de copias de seguridad diseñada para entornos CasaOS.
 
-Su objetivo es proporcionar una capa inteligente entre las aplicaciones desplegadas en CasaOS, el sistema de archivos del host y diferentes motores de backup.
+Su objetivo es proporcionar una capa inteligente entre las aplicaciones desplegadas en CasaOS, el sistema de archivos del host y diferentes motores de backup (TAR.GZ, BorgBackup).
 
 No es un simple script de copias; el sistema:
 
@@ -23,12 +23,13 @@ No es un simple script de copias; el sistema:
 
 ---
 
-# Arquitectura
+## Arquitectura
 
 El proyecto utiliza Clean Architecture dividiendo responsabilidades de forma desacoplada.
 
 Flujo principal:
 
+```text
 Docker Engine / Host System
       |
       v
@@ -47,81 +48,85 @@ BackupPlannerService
 BackupJobBuilderService
       |
       v
-BackupBackend / TarGz Engine
+BackupBackend / BorgBackup / TarGz Engine
       |
       +---> AuditLogService (SQLite history.db)
       +---> WebSocketNotifier (/ws/progress)
       |
       v
 UI Dashboard (FastAPI / Jinja2 / WebSockets / Bootstrap 5)
+```
 
 ---
 
-# Estado actual
+## Requisitos e Instalación
+
+### 1. Configuración de Permisos en el Host
+En Debian / Raspberry Pi OS, el directorio `/media/$USER` suele crearse con permisos restringidos (`700` o `750`), lo que impide que los contenedores de Docker accedan a las unidades externas. Ejecuta el siguiente comando en el terminal de la máquina host antes de desplegar:
+
+```bash
+sudo chmod 755 /media/$USER
+```
+
+### 2. Despliegue con Docker Compose
+Clona el repositorio y levanta la pila de contenedores:
+
+```bash
+git clone [https://github.com/tu-usuario/CasaOS-Backup-Manager.git](https://github.com/tu-usuario/CasaOS-Backup-Manager.git)
+cd CasaOS-Backup-Manager
+docker compose up -d --build
+```
+
+El servicio quedará disponible en el puerto `8088` (`http://IP-DE-TU-RASPBERRY:8088`).
+
+---
+
+## Estado Actual
 
 **Versión:** `v0.5.0-beta1`
 
-**Estado:** 
-Motor principal, auditoría SQLite, transmisión WebSocket en tiempo real, DB Hooks de consistencia, gestión de volúmenes externos y registro de backends completamente funcionales. 
+**Estado:**
+Motor principal, auditoría SQLite, transmisión WebSocket en tiempo real, DB Hooks de consistencia, gestión de volúmenes externos y registro de backends completamente funcionales.
 Cobertura de pruebas sólida con **57 tests unitarios y de integración pasando al 100%**.
 
 Actualmente el sistema permite la monitorización visual completa, la ejecución de respaldos individuales o completos, el seguimiento del porcentaje de avance en directo y la consulta histórica de operaciones.
 
 Capacidades verificadas y testeadas:
 
-* Detección automática de contenedores y volúmenes de CasaOS (`/DATA/AppData`).
+* **Detección automática** de contenedores y volúmenes de CasaOS (`/DATA/AppData`).
 * **Database Hooks:** Volcados SQLite en caliente antes del empaquetado para evitar corrupción de datos.
 * **Escritura directa en almacenamiento USB/Externo:** Soporte de montajes dinámicos mediante propagación `:rshared` y modo privilegiado.
+* **Automatización no interactiva de BorgBackup:** Inicialización automática de repositorios sin cifrado y gestión transparente de variables de entorno para evitar bloqueos por confirmaciones en CLI (`BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK`).
 * **Progreso en Tiempo Real:** Actualizaciones instantáneas vía WebSockets en el panel web.
 * **Módulo de Auditoría e Historial:** Registro persistente de ejecuciones en SQLite.
-* Visualización en panel Web con métricas en tiempo real.
-* **Ejecución y gestión de respaldos por aplicación y Disaster Recovery.**
+* **Visualización en panel Web** con métricas de hardware en tiempo real.
+* **Ejecución y gestión de respaldos** por aplicación y Disaster Recovery completo.
 
 ---
 
-# Características implementadas
+## Características Implementadas
 
-## Interfaz de Usuario e Identidad Visual
-
-Estado: Completado e integrado.
-
-Funciones:
-
+### Interfaz de Usuario e Identidad Visual
 * **Branding e Identidad:** Incorporación del logo oficial horizontal en el panel de control.
 * **Header de Estado General:** Resumen rápido de SO, motores activos, apps detectadas y almacenamiento `/DATA` protegido.
 * **Historial de Ejecuciones (Modal):** Vista detallada del registro de auditoría (Fecha/Hora, Tipo, Aplicación, Estado, Duración) con opción de limpieza de logs.
 * **Feedback en Tiempo Real:** Barra de progreso y toasts flotantes alimentados mediante canal WebSocket.
 * **Selector Dinámico de Destino:** Menú desplegable para alternar destinos de resguardo (Discos externos en `/media`, `/mnt`, NAS, SSD).
-* **Control Disaster Recovery:** Módulo para lanzar copias completas del sistema de la Raspberry Pi.
+* **Control Disaster Recovery:** Módulo para lanzar copias completas del sistema mediante motor Borg.
 * **Perfiles de Aplicación:** Lista de perfiles detectados con accesos directos para ejecución individual.
 * **Pestañas de Telemetría Dinámicas:** Monitoreo del sistema host (Debian/Raspberry Pi 5), Docker Daemon y almacenamiento montado.
 
-## Telemetría de Hardware (Raspberry Pi 5)
-
-Estado: Completado y optimizado.
-
-Funciones:
-
+### Telemetría de Hardware (Raspberry Pi 5)
 * Extracción directa de métricas de CPU, arquitectura (`aarch64`), versión de kernel y almacenamiento.
 * Métrica de Memoria RAM en formato estructurado `Usado / Total (%)`.
 * Resiliencia en Plantillas (Jinja2) mediante filtros `default(..., true)` para garantizar disponibilidad de datos en pantalla.
 
-## Descubrimiento Docker & DB Hooks Intelligence
-
-Estado: Completado.
-
-Funciones:
-
+### Descubrimiento Docker & DB Hooks Intelligence
 * Detección automática de contenedores activos e identificación de perfiles CasaOS.
 * Resolución de rutas físicas en el host y propagación de puntos de montaje.
 * **DB Hooks:** Detección automática de bases de datos SQLite y ejecución de comandos `sqlite3 .backup` o `.dump` en caliente.
 
-## Backup Engine, WebSockets & Audit System
-
-Estado: Completado.
-
-Implementado:
-
+### Backup Engine, WebSockets & Audit System
 * `BackupPlan` & `BackupJob`.
 * Registro de Auditoría persistente en SQLite (`app/database/history.db`).
 * Notificador WebSocket (`/api/v1/ws/progress`).
@@ -129,20 +134,21 @@ Implementado:
 
 ---
 
-# Backends y Motores
+## Backends y Motores
 
 La arquitectura permite integrar diferentes motores mediante conectores:
 
+* **BorgBackup Engine** (✅ Completamente integrado con inicialización automática, no interactiva y compresión ZSTD).
 * **TAR.GZ Local Engine & DB Hooks** (✅ Completamente funcional y optimizado para `/media`).
 * **Duplicati Engine** (✅ Completamente funcional).
 * **Restic Engine** (🔌 Preparado para integración).
-* **Borg / Rsync** (📋 Planificados).
+* **Rsync** (📋 Planificado).
 
 ---
 
-# Tecnologías
+## Tecnologías
 
-* **Backend:** Python 3.11 / FastAPI / Pydantic / Uvicorn / SQLite.
+* **Backend:** Python 3.11 / FastAPI / Pydantic / Uvicorn / SQLite / BorgBackup.
 * **Frontend:** HTML5 / Jinja2 / Bootstrap 5 / Vanilla JavaScript / WebSockets API.
 * **Infraestructura:** Docker / Docker Compose (`privileged`, `:rshared`) / Linux ARM64 (Debian GNU/Linux 12 - Raspberry Pi 5).
 * **Integraciones:** Docker SDK / Duplicati REST API / SQLite3 CLI.
@@ -150,7 +156,7 @@ La arquitectura permite integrar diferentes motores mediante conectores:
 
 ---
 
-# Estructura del proyecto
+## Estructura del Proyecto
 
 ```text
 CasaOS-Backup-Manager/
@@ -169,6 +175,7 @@ CasaOS-Backup-Manager/
 │   ├── services/
 │   │   ├── audit_service.py
 │   │   ├── backup_service.py
+│   │   ├── borg_service.py
 │   │   └── db_hooks_service.py
 │   ├── static/
 │   │   └── img/
@@ -185,3 +192,4 @@ CasaOS-Backup-Manager/
 ├── README.md
 ├── CHANGELOG.md
 └── ROADMAP.md
+```
