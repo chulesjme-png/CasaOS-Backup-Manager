@@ -12,6 +12,7 @@ from app.core.config import config_manager
 from app.core.ws_manager import ws_manager
 from app.services.backup_engine_service import backup_engine_service
 from app.services.duplicati_service import duplicati_orchestrator
+from app.services.borg_service import borg_service
 
 logger = logging.getLogger("casaos-backup")
 
@@ -34,17 +35,18 @@ def get_backup_status(task_id: int):
 
 @router.get("/job-status/{job_id}")
 def get_job_status(job_id: str):
-    """Consulta el estado de una tarea activa o recién finalizada actualizando con el estado real de Duplicati."""
-    duplicati_status = duplicati_orchestrator.get_task_status(task_id=1)
-    
+    """Consulta el estado de una tarea activa o recién finalizada."""
     if job_id in active_jobs:
         job_data = active_jobs[job_id]
-        if job_data.get("status") == "running":
+        # Si la tarea pertenece a Duplicati, sincronizamos con su API
+        if "duplicati" in job_id.lower() and job_data.get("status") == "running":
+            duplicati_status = duplicati_orchestrator.get_task_status(task_id=1)
             if duplicati_status.get("status") in ["running", "completed"]:
                 job_data["progress"] = duplicati_status.get("progress", job_data.get("progress", 0.0))
                 job_data["phase"] = duplicati_status.get("phase", job_data.get("phase", "Procesando..."))
         return job_data
 
+    duplicati_status = duplicati_orchestrator.get_task_status(task_id=1)
     return {
         "job_id": job_id,
         "status": duplicati_status.get("status", "idle"),
@@ -55,9 +57,11 @@ def get_job_status(job_id: str):
 
 @router.post("/job-cancel/{job_id}")
 async def cancel_job(job_id: str):
-    """Detiene la tarea inmediatamente y mata cualquier proceso tar/rsync colgado."""
+    """Detiene la tarea inmediatamente y mata cualquier proceso tar/rsync/borg colgado."""
     logger.info(f"🛑 Solicitud de cancelación recibida para la tarea: {job_id}")
     
+    borg_service.cancel_backup()
+
     job_info = active_jobs.get(job_id)
     if job_info and "process" in job_info:
         proc = job_info["process"]
@@ -68,6 +72,7 @@ async def cancel_job(job_id: str):
         except Exception as e:
             logger.warning(f"⚠️ Error al matar el proceso {proc.pid}: {e}")
 
+    os.system("pkill -9 -f borg > /dev/null 2>&1")
     os.system("pkill -9 -f tar > /dev/null 2>&1")
     os.system("pkill -9 -f rsync > /dev/null 2>&1")
 
@@ -75,6 +80,7 @@ async def cancel_job(job_id: str):
         "job_id": job_id,
         "status": "cancelled",
         "progress": 0.0,
+        "phase": "Tarea cancelada por el usuario",
         "message": "Tarea cancelada por el usuario"
     }
 
@@ -92,33 +98,36 @@ async def run_system_backup(
     target_disk: Optional[str] = None,
     background_tasks: BackgroundTasks = BackgroundTasks()
 ):
-    """Inicia la copia de seguridad orquestada con Duplicati."""
+    """Inicia la copia de seguridad del sistema completa mediante BorgBackup."""
     job_id = f"job_Sistema_Completo_{int(time.time())}"
     
     active_jobs[job_id] = {
         "job_id": job_id,
         "status": "running",
-        "progress": 5.0,
-        "phase": "Conectando con motor de respaldo..."
+        "progress": 0.0,
+        "phase": "Iniciando motor BorgBackup..."
     }
+
+    def _progress_callback(pct: float, phase: str):
+        if job_id in active_jobs:
+            active_jobs[job_id]["progress"] = pct
+            active_jobs[job_id]["phase"] = phase
 
     def _execute():
         try:
-            res = duplicati_orchestrator.run_full_disaster_recovery(
-                app_name="Sistema_Completo",
-                app_path="/DATA",
-                target_disk_path=target_disk
+            success = borg_service.run_backup(
+                target_disk=target_disk,
+                source_dir="/DATA",
+                progress_callback=_progress_callback
             )
-            success = res.get("success", False)
             active_jobs[job_id] = {
                 "job_id": job_id,
                 "status": "completed" if success else "failed",
-                "progress": 100.0 if success else 0.0,
-                "phase": "Completado" if success else f"Error: {res.get('error', 'Fallo en respaldo')}",
-                "result": res
+                "progress": 100.0 if success else active_jobs[job_id].get("progress", 0.0),
+                "phase": "Completado" if success else "Error durante la ejecución de Borg",
             }
         except Exception as e:
-            logger.error(f"❌ Error en respaldo de sistema: {e}")
+            logger.error(f"❌ Error en respaldo de sistema con Borg: {e}")
             active_jobs[job_id] = {
                 "job_id": job_id,
                 "status": "failed",
@@ -132,7 +141,7 @@ async def run_system_backup(
     return {
         "status": "STARTED",
         "job_id": job_id,
-        "message": "Copia de seguridad del sistema iniciada"
+        "message": "Copia de seguridad del sistema iniciada con Borg"
     }
 
 
