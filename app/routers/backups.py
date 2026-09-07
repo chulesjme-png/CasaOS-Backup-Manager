@@ -38,7 +38,6 @@ def get_job_status(job_id: str):
     """Consulta el estado de una tarea activa o recién finalizada."""
     if job_id in active_jobs:
         job_data = active_jobs[job_id]
-        # Si la tarea pertenece a Duplicati, sincronizamos con su API
         if "duplicati" in job_id.lower() and job_data.get("status") == "running":
             duplicati_status = duplicati_orchestrator.get_task_status(task_id=1)
             if duplicati_status.get("status") in ["running", "completed"]:

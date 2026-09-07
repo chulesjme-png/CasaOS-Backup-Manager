@@ -60,6 +60,8 @@ except ImportError:
     class DummyBorgService:
         def run_backup(self, target_disk: str, source_dir: str = "/DATA", **kwargs):
             return {"success": False, "error": "Módulo BorgService no disponible."}
+        def cancel_backup(self):
+            pass
     borg_service = DummyBorgService()
 
 logger = logging.getLogger("casaos-backup")
@@ -695,11 +697,40 @@ def get_job_status(job_id: str):
 @app.post("/api/v1/backups/cancel/{job_id}")
 @app.post("/api/v1/executions/cancel/{job_id}")
 def cancel_job(job_id: str):
+    logger.info(f"🛑 Solicitud de cancelación recibida para: {job_id}")
+
     if job_id in active_jobs:
         active_jobs[job_id]["cancelled"] = True
-        kill_rsync_processes()
-        return {"status": "cancelled"}
-    return {"status": "not_found"}
+        active_jobs[job_id]["status"] = "cancelled"
+        active_jobs[job_id]["message"] = "Tarea cancelada por el usuario"
+
+    try:
+        borg_service.cancel_backup()
+    except Exception as e:
+        logger.warning(f"Error cancelando servicio Borg: {e}")
+
+    kill_rsync_processes()
+    os.system("pkill -9 -f borg > /dev/null 2>&1")
+    os.system("pkill -9 -f tar > /dev/null 2>&1")
+    os.system("pkill -9 -f rsync > /dev/null 2>&1")
+
+    send_telegram_notification(
+        f"⚠️ *Copia de seguridad cancelada*\n"
+        f"Identificador: `{job_id}`\n"
+        f"Estado: Proceso detenido por el usuario."
+    )
+
+    try:
+        with get_db() as conn:
+            conn.cursor().execute(
+                "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                ("Backup", job_id, "cancelled", 0.0, "Cancelado por el usuario", int(time.time() * 1000))
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error guardando cancelación en BD: {e}")
+
+    return {"status": "cancelled", "job_id": job_id}
 
 @app.get("/api/v1/backups/list")
 @app.get("/api/v1/backups")
