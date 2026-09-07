@@ -77,6 +77,12 @@ class TelegramTestModel(BaseModel):
     token: str = ""
     chat_id: str = ""
 
+class ExecutionRunModel(BaseModel):
+    backend_name: str = "null"
+    operation: str = "backup"
+    app_name: str = "Sistema_Completo"
+    target_disk: str = ""
+
 # --- GESTIÓN DE CONFIGURACIÓN Y TELEGRAM ---
 def load_config():
     defaults = {
@@ -164,6 +170,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- ENDPOINTS DE SALUD Y BACKENDS ---
+@app.get("/health")
+@app.get("/api/v1/health")
+def health_check():
+    return {"status": "ok"}
+
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return Response(status_code=204)
@@ -191,6 +203,17 @@ def read_root():
         if path.exists():
             return path.read_text(encoding="utf-8")
     return "<h1>Error: No se encontró index.html</h1>"
+
+@app.get("/api/v1/backends")
+def list_backends():
+    return {"backends": ["duplicati", "null", "rsync"]}
+
+@app.get("/api/v1/backends/{backend_name}")
+def get_backend_info(backend_name: str):
+    valid_backends = ["duplicati", "null", "rsync"]
+    if backend_name not in valid_backends:
+        raise HTTPException(status_code=404, detail=f"Backend '{backend_name}' no encontrado")
+    return {"name": backend_name, "status": "active", "supported_operations": ["backup", "restore"]}
 
 # --- ENDPOINTS DE CONFIGURACIÓN Y SISTEMA ---
 @app.get("/api/v1/system/info")
@@ -735,6 +758,12 @@ def run_system_backup(background_tasks: BackgroundTasks, target_disk: str = Quer
     background_tasks.add_task(perform_real_backup, "Sistema_Completo", target_disk or "", job_id)
     return {"status": "started", "job_id": job_id}
 
+@app.post("/api/v1/executions/run")
+def run_execution(payload: ExecutionRunModel, background_tasks: BackgroundTasks):
+    job_id = f"job_{payload.app_name}_{int(time.time())}"
+    background_tasks.add_task(perform_real_backup, payload.app_name, payload.target_disk, job_id)
+    return {"status": "success", "job_id": job_id}
+
 @app.post("/api/v1/backups/restore/{filename}")
 @app.post("/api/v1/backups/restore")
 def restore_backup(filename: str, background_tasks: BackgroundTasks):
@@ -748,6 +777,7 @@ def get_job_status(job_id: str):
 
 @app.post("/api/v1/backups/job-cancel/{job_id}")
 @app.post("/api/v1/backups/cancel/{job_id}")
+@app.post("/api/v1/executions/cancel/{job_id}")
 def cancel_job(job_id: str):
     if job_id in active_jobs:
         active_jobs[job_id]["cancelled"] = True

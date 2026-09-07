@@ -1,57 +1,64 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, active_jobs
 
 client = TestClient(app)
 
 
 def test_health_endpoint():
-    """Valida el endpoint de salud (ajustado a /health o /api/v1/health según el router)."""
+    """Valida el endpoint de comprobación de estado."""
     response = client.get("/health")
-    if response.status_code == 404:
-        response = client.get("/api/v1/health")
     assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+    response_v1 = client.get("/api/v1/health")
+    assert response_v1.status_code == 200
+    assert response_v1.json() == {"status": "ok"}
 
 
-@patch("app.core.backends.backend_registry.backend_registry.list_backends")
-def test_list_backends_endpoint(mock_list):
-    """Valida que el endpoint devuelva la lista de backends."""
-    mock_list.return_value = ["duplicati", "null"]
+def test_list_backends_endpoint():
+    """Valida que el endpoint devuelva la lista de backends disponibles."""
     response = client.get("/api/v1/backends")
     assert response.status_code == 200
+    data = response.json()
+    assert "backends" in data
+    assert isinstance(data["backends"], list)
 
 
-@patch("app.core.backends.backend_registry.backend_registry.get")
-def test_get_backend_info_success(mock_get):
+def test_get_backend_info_success():
     """Valida la obtención de información de un backend existente."""
-    mock_backend = MagicMock()
-    mock_get.return_value = mock_backend
     response = client.get("/api/v1/backends/duplicati")
     assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "duplicati"
 
 
 def test_get_backend_info_not_found():
     """Valida que un backend inexistente devuelva 404."""
     response = client.get("/api/v1/backends/nonexistent")
-    assert response.status_code in (404, 500, 200)
+    assert response.status_code == 404
 
 
-@patch("app.services.backup_execution_service.backup_execution_service.execute")
-def test_run_backup_endpoint(mock_execute):
-    """Valida la ejecución de un backup vía API."""
-    mock_execute.return_value = {"status": "success", "job_id": "test-123"}
+@patch("app.main.perform_real_backup")
+def test_run_backup_endpoint(mock_backup):
+    """Valida el inicio de ejecución de un backup vía API."""
     payload = {
         "backend_name": "null",
-        "operation": "backup"
+        "operation": "backup",
+        "app_name": "Sistema_Completo"
     }
     response = client.post("/api/v1/executions/run", json=payload)
     assert response.status_code in (200, 202)
+    assert response.json()["status"] == "success"
+    assert "job_id" in response.json()
 
 
-@patch("app.services.backup_execution_service.backup_execution_service.cancel")
-def test_cancel_endpoint(mock_cancel):
-    """Valida la cancelación de una ejecución en curso."""
-    mock_cancel.return_value = True
+def test_cancel_endpoint():
+    """Valida la cancelación de un trabajo de ejecución."""
+    active_jobs["test-123"] = {"status": "running", "cancelled": False}
+
     response = client.post("/api/v1/executions/cancel/test-123")
     assert response.status_code == 200
+    assert response.json() == {"status": "cancelled"}
+    assert active_jobs["test-123"]["cancelled"] is True
