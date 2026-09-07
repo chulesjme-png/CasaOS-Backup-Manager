@@ -53,6 +53,14 @@ except ImportError:
             return 1
     duplicati_orchestrator = DummyDuplicatiOrchestrator()
 
+try:
+    from app.services.borg_service import borg_service
+except ImportError:
+    class DummyBorgService:
+        def run_backup(self, target_disk: str, source_dir: str = "/DATA", progress_callback=None, **kwargs):
+            return {"success": False, "error": "Módulo BorgService no disponible."}
+    borg_service = DummyBorgService()
+
 logger = logging.getLogger("casaos-backup")
 logging.basicConfig(level=logging.INFO)
 
@@ -206,11 +214,11 @@ def read_root():
 
 @app.get("/api/v1/backends")
 def list_backends():
-    return {"backends": ["duplicati", "null", "rsync"]}
+    return {"backends": ["borg", "duplicati", "null", "rsync"]}
 
 @app.get("/api/v1/backends/{backend_name}")
 def get_backend_info(backend_name: str):
-    valid_backends = ["duplicati", "null", "rsync"]
+    valid_backends = ["borg", "duplicati", "null", "rsync"]
     if backend_name not in valid_backends:
         raise HTTPException(status_code=404, detail=f"Backend '{backend_name}' no encontrado")
     return {"name": backend_name, "status": "active", "supported_operations": ["backup", "restore"]}
@@ -407,150 +415,53 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     normalized_app = app_name.replace("_", " ").strip().lower()
 
     if normalized_app in ["sistema completo", "casaos completo", "disaster recovery"]:
-        active_jobs[job_id]["message"] = "Ejecutando copia incremental del sistema..."
+        active_jobs[job_id]["message"] = "Iniciando respaldo comprimido con BorgBackup..."
         active_jobs[job_id]["progress"] = 10
 
-        dup_url = cfg.get("duplicati_url", "http://172.17.0.1:8200")
-        dup_password = cfg.get("duplicati_password", "")
+        def update_progress(pct: int, msg: str):
+            active_jobs[job_id]["progress"] = pct
+            active_jobs[job_id]["message"] = msg
 
-        dup_job_id = duplicati_orchestrator.find_job_id_by_name(app_name, dup_url, dup_password)
-
-        orchestration_res = duplicati_orchestrator.run_full_disaster_recovery(
-            app_name=app_name,
-            target_disk_path=str(base_backups_dir),
-            duplicati_job_id=dup_job_id,
-            duplicati_url=dup_url,
-            duplicati_password=dup_password
+        borg_res = borg_service.run_backup(
+            target_disk=str(base_backups_dir),
+            source_dir="/DATA",
+            progress_callback=update_progress
         )
 
-        if not orchestration_res.get("success"):
-            raw_err = str(orchestration_res.get('errors') or orchestration_res.get('error') or '')
-            if "401" in raw_err or "Failed to log in" in raw_err:
-                err_msg = "Error de autenticación (401): Revisa la contraseña de Duplicati en ⚙️ Configuración."
-            else:
-                err_msg = f"Error en respaldo del sistema: {raw_err}"
-
-            active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
-            
-            with get_db() as conn:
-                conn.cursor().execute(
-                    "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                    ("Backup", app_name, "failed", round(time.time() - start, 2), err_msg, int(time.time() * 1000))
-                )
-                conn.commit()
-            send_telegram_notification(f"❌ *Copia fallida*: {app_name}\n{err_msg}")
-            return
-
-        mode = orchestration_res.get("metadata", {}).get("mode", "")
-        if mode in ["native_incremental_rsync", "native_copytree"] or orchestration_res.get("job_id") == 999:
-            elapsed = round(time.time() - start, 2)
-            active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Copia de seguridad incremental completada con rsync"}
-
-            with get_db() as conn:
-                conn.cursor().execute(
-                    "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                    ("Backup (rsync)", app_name, "success", elapsed, "Rsync Incremental OK", int(time.time() * 1000))
-                )
-                conn.commit()
-
-            send_telegram_notification(f"✅ *Copia de Sistema Completo finalizada*: {app_name}\nMotor: `rsync`\nDuración: {elapsed}s")
-            return
-
-        active_jobs[job_id]["message"] = "Esperando inicio de proceso en Duplicati..."
-        time.sleep(2)
-
-        was_running = False
-        idle_counter = 0
-
-        while True:
-            if active_jobs[job_id].get("cancelled"):
-                kill_rsync_processes()
-
-                inc_dir = base_backups_dir / "DisasterRecovery" / f"incremental_{app_name}"
-                tmp_inc_dir = base_backups_dir / "DisasterRecovery" / f".tmp_incremental_{app_name}"
-                for d in [inc_dir, tmp_inc_dir]:
-                    if d.exists():
-                        try:
-                            shutil.rmtree(d, ignore_errors=True)
-                            logger.info(f"[ROLLBACK] Eliminada copia cancelada: {d}")
-                        except Exception as rm_err:
-                            logger.error(f"[ROLLBACK ERROR] No se pudo borrar {d}: {rm_err}")
-
-                elapsed = round(time.time() - start, 2)
-                active_jobs[job_id] = {"status": "cancelled", "progress": 0, "message": "Proceso cancelado por el usuario"}
-
-                with get_db() as conn:
-                    conn.cursor().execute(
-                        "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                        ("Backup", app_name, "cancelled", elapsed, "Cancelado por el usuario", int(time.time() * 1000))
-                    )
-                    conn.commit()
-
-                send_telegram_notification(f"⚠️ *Copia cancelada por el usuario*: {app_name}")
-                return
-
-            status_info = duplicati_orchestrator.get_task_status(
-                task_id=dup_job_id, 
-                duplicati_url=dup_url,
-                duplicati_password=dup_password
-            )
-            
-            phase = status_info.get("phase", "Idle")
-            status = status_info.get("status")
-            progress = status_info.get("progress", 0.0)
-
-            if status == "running":
-                was_running = True
-                idle_counter = 0
-                active_jobs[job_id]["progress"] = max(15, min(99, int(progress)))
-                active_jobs[job_id]["message"] = f"Duplicati: {phase} ({round(progress, 1)}%)"
-            
-            elif status == "completed":
-                break
-
-            elif status == "idle":
-                if was_running:
-                    break
-                else:
-                    idle_counter += 1
-                    if idle_counter > 5:
-                        err_msg = f"Duplicati no inició el trabajo '{app_name}' (ID: {dup_job_id}). Revisa la app nativa."
-                        active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
-                        with get_db() as conn:
-                            conn.cursor().execute(
-                                "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                                ("Backup", app_name, "failed", round(time.time() - start, 2), err_msg, int(time.time() * 1000))
-                            )
-                            conn.commit()
-                        send_telegram_notification(f"❌ *Copia fallida en Duplicati*: {app_name}\n{err_msg}")
-                        return
-                    active_jobs[job_id]["message"] = f"Iniciando tarea en Duplicati ({idle_counter}/5)..."
-
-            elif status in ["error", "unknown"]:
-                err_msg = f"Error reportado por Duplicati ({phase})"
-                active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
-                with get_db() as conn:
-                    conn.cursor().execute(
-                        "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                        ("Backup", app_name, "failed", round(time.time() - start, 2), err_msg, int(time.time() * 1000))
-                    )
-                    conn.commit()
-                send_telegram_notification(f"❌ *Copia fallida en Duplicati*: {app_name}\n{err_msg}")
-                return
-
-            time.sleep(3)
-
         elapsed = round(time.time() - start, 2)
-        active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Copia de seguridad incremental completada en Duplicati"}
 
-        with get_db() as conn:
-            conn.cursor().execute(
-                "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                ("Backup (Duplicati)", app_name, "success", elapsed, "Duplicati Backup OK", int(time.time() * 1000))
+        if borg_res.get("success"):
+            active_jobs[job_id] = {
+                "status": "success",
+                "progress": 100,
+                "message": "Copia de seguridad Borg completada con éxito"
+            }
+
+            with get_db() as conn:
+                conn.cursor().execute(
+                    "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                    ("Backup (Borg)", app_name, "success", elapsed, "Borg Backup OK", int(time.time() * 1000))
+                )
+                conn.commit()
+
+            send_telegram_notification(
+                f"✅ *Copia de Sistema Completo finalizada*: {app_name}\n"
+                f"Motor: `BorgBackup`\n"
+                f"Duración: {elapsed}s"
             )
-            conn.commit()
+        else:
+            err_msg = borg_res.get("error", "Error en la ejecución de Borg")
+            active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
 
-        send_telegram_notification(f"✅ *Copia de Sistema Completo finalizada*: {app_name}\nMotor: `Duplicati`\nDuración: {elapsed}s")
+            with get_db() as conn:
+                conn.cursor().execute(
+                    "INSERT INTO execution_logs (job_type, target_name, status, duration_seconds, message, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                    ("Backup (Borg)", app_name, "failed", elapsed, err_msg, int(time.time() * 1000))
+                )
+                conn.commit()
+
+            send_telegram_notification(f"❌ *Copia fallida en Borg*: {app_name}\n{err_msg}")
+
         return
 
     dest_dir = base_backups_dir / "Apps" / app_name
