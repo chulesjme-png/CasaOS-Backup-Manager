@@ -1,3 +1,4 @@
+import pty
 import subprocess
 import re
 import logging
@@ -18,19 +19,27 @@ class BorgService:
         env = os.environ.copy()
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
         env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+        env["PYTHONUNBUFFERED"] = "1"
         return env
 
     def _resolve_repo_path(self, path: Optional[str]) -> Optional[str]:
-        """Asegura la estructura jerárquica del repositorio dentro del disco destino."""
+        """Limpia la ruta recibida y evita la duplicación de carpetas '/Backups'."""
         target = path or self.repo_path
         if not target:
             return None
         
-        # Si la ruta no termina en la carpeta de repositorio Borg, se construye
-        if not target.endswith("BorgRepo"):
-            target = os.path.join(target, "Backups", "DisasterRecovery", "BorgRepo")
-            
-        return target
+        target = os.path.normpath(target)
+        while "/Backups/Backups" in target:
+            target = target.replace("/Backups/Backups", "/Backups")
+
+        if target.endswith("BorgRepo"):
+            return target
+        if target.endswith("DisasterRecovery"):
+            return os.path.join(target, "BorgRepo")
+        if target.endswith("Backups"):
+            return os.path.join(target, "DisasterRecovery", "BorgRepo")
+
+        return os.path.join(target, "Backups", "DisasterRecovery", "BorgRepo")
 
     def _ensure_repo_exists(self, repo_path: str) -> bool:
         """Crea la estructura de carpetas e inicializa el repositorio Borg si aún no existe."""
@@ -111,7 +120,7 @@ class BorgService:
         target_disk: Optional[str] = None,
         **kwargs
     ) -> bool:
-        """Ejecuta el respaldo Borg gestionando la inicialización previa y el progreso."""
+        """Ejecuta el respaldo Borg usando PTY para lectura de progreso fluida en tiempo real."""
         self._is_cancelled = False
         raw_path = repo_path or target_disk or kwargs.get("target_disk")
         target_repo = self._resolve_repo_path(raw_path)
@@ -120,11 +129,9 @@ class BorgService:
             logger.error("No se ha proporcionado la ruta del repositorio de Borg.")
             return False
 
-        # Garantizar que el repositorio exista e inicializarlo si es la primera vez
         if not self._ensure_repo_exists(target_repo):
             return False
 
-        # Limpieza preventiva de bloqueos previos
         self.break_lock(target_repo)
 
         if not archive_name:
@@ -145,41 +152,45 @@ class BorgService:
 
         logger.info(f"Iniciando respaldo Borg: {' '.join(cmd)}")
 
+        master_fd, slave_fd = pty.openpty()
+
         try:
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                bufsize=0,
+                stderr=slave_fd,
+                close_fds=True,
                 env=self._get_env()
             )
+            os.close(slave_fd)
 
-            # Lectura en tiempo real byte a byte procesando caracteres '\r'
             percent_regex = re.compile(r'(\d+)%')
             buffer = ""
+            current_percent = 10
 
             while True:
                 if self._is_cancelled:
                     break
 
-                char_bytes = self.process.stderr.read(1)
-                if not char_bytes:
-                    break
-
-                char = char_bytes.decode('utf-8', errors='ignore')
-
-                if char in ['\r', '\n']:
-                    line = buffer.strip()
-                    if line and progress_callback:
-                        match = percent_regex.search(line)
-                        if match:
-                            percentage = int(match.group(1))
-                            progress_callback(percentage, line)
+                try:
+                    chunk = os.read(master_fd, 128)
+                    if not chunk:
+                        break
+                    
+                    text = chunk.decode('utf-8', errors='ignore')
+                    for char in text:
+                        if char in ['\r', '\n']:
+                            line = buffer.strip()
+                            if line and progress_callback:
+                                match = percent_regex.search(line)
+                                if match:
+                                    current_percent = int(match.group(1))
+                                progress_callback(current_percent, line)
+                            buffer = ""
                         else:
-                            progress_callback(0, line)
-                    buffer = ""
-                else:
-                    buffer += char
+                            buffer += char
+                except OSError:
+                    break
 
             self.process.wait()
 
@@ -192,6 +203,9 @@ class BorgService:
                     self._cleanup_after_failure(target_repo)
                 return False
 
+            if progress_callback:
+                progress_callback(100, "Respaldo Borg completado exitosamente.")
+
             logger.info("Respaldo completado exitosamente.")
             return True
 
@@ -200,6 +214,10 @@ class BorgService:
             self._cleanup_after_failure(target_repo)
             return False
         finally:
+            try:
+                os.close(master_fd)
+            except Exception:
+                pass
             self.process = None
 
     def cancel_backup(self, repo_path: Optional[str] = None):
