@@ -66,35 +66,34 @@ class BorgService:
             return False
 
     def _get_dir_size(self, path: str) -> int:
-        """Calcula el tamaño total en bytes del directorio de origen."""
+        """Calcula el tamaño total en bytes del directorio de origen sin calcular la partición completa."""
         try:
-            # Timeout ampliado a 60s para procesamiento en Raspberry Pi
-            res = subprocess.run(["du", "-sb", path], capture_output=True, text=True, timeout=60)
+            # du -sbx evita cruzar puntos de montaje y mide solo la carpeta solicitada
+            res = subprocess.run(["du", "-sbx", path], capture_output=True, text=True, timeout=90)
             if res.returncode == 0 and res.stdout:
                 return int(res.stdout.split()[0])
         except Exception as e:
             logger.warning(f"No se pudo calcular el tamaño total con du: {e}")
-        
-        # Fallback rápido con df
-        try:
-            res = subprocess.run(["df", "-k", path], capture_output=True, text=True, timeout=5)
-            if res.returncode == 0:
-                lines = res.stdout.strip().split("\n")
-                if len(lines) > 1:
-                    used_kb = int(lines[1].split()[2])
-                    return used_kb * 1024
-        except Exception as e:
-            logger.warning(f"Fallback df también falló: {e}")
 
+        # Fallback mediante os.scandir para evitar medir la partición entera
         total = 0
         try:
-            for root, dirs, files in os.walk(path):
-                for f in files:
-                    fp = os.path.join(root, f)
-                    if not os.path.islink(fp):
-                        total += os.path.getsize(fp)
-        except Exception:
-            pass
+            def scan_dir(dir_path):
+                size = 0
+                with os.scandir(dir_path) as it:
+                    for entry in it:
+                        try:
+                            if entry.is_file(follow_symlinks=False):
+                                size += entry.stat(follow_symlinks=False).st_size
+                            elif entry.is_dir(follow_symlinks=False):
+                                size += scan_dir(entry.path)
+                        except Exception:
+                            continue
+                return size
+            total = scan_dir(path)
+        except Exception as e:
+            logger.warning(f"Error en escaneo de directorio: {e}")
+
         return total or 1
 
     def _parse_borg_bytes(self, text: str) -> Optional[int]:
