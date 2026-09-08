@@ -68,12 +68,24 @@ class BorgService:
     def _get_dir_size(self, path: str) -> int:
         """Calcula el tamaño total en bytes del directorio de origen."""
         try:
-            res = subprocess.run(["du", "-sb", path], capture_output=True, text=True, timeout=15)
+            # Timeout ampliado a 60s para procesamiento en Raspberry Pi
+            res = subprocess.run(["du", "-sb", path], capture_output=True, text=True, timeout=60)
             if res.returncode == 0 and res.stdout:
                 return int(res.stdout.split()[0])
         except Exception as e:
             logger.warning(f"No se pudo calcular el tamaño total con du: {e}")
         
+        # Fallback rápido con df
+        try:
+            res = subprocess.run(["df", "-k", path], capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                lines = res.stdout.strip().split("\n")
+                if len(lines) > 1:
+                    used_kb = int(lines[1].split()[2])
+                    return used_kb * 1024
+        except Exception as e:
+            logger.warning(f"Fallback df también falló: {e}")
+
         total = 0
         try:
             for root, dirs, files in os.walk(path):
