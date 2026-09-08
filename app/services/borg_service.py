@@ -1,30 +1,70 @@
 import asyncio
 import re
-import sys
 import logging
+import os
+from typing import Callable, Optional
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
 
-class BorgBackupManager:
+class BorgService:
     def __init__(self, repo_path: str):
         self.repo_path = repo_path
-        self.process = None
+        self.process: Optional[asyncio.subprocess.Process] = None
 
-    async def run_backup(self, archive_name: str, source_path: str, progress_callback=None):
+    async def _run_command(self, cmd: list[str]) -> tuple[int, str, str]:
+        """Ejecuta un comando del sistema de forma asíncrona y captura su salida."""
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        return proc.returncode, stdout.decode(errors='ignore'), stderr.decode(errors='ignore')
+
+    async def break_lock(self) -> bool:
+        """Fuerza la liberación de cualquier candado huérfano en el repositorio."""
+        logger.info(f"Liberando bloqueo del repositorio: {self.repo_path}")
+        code, out, err = await self._run_command(["borg", "break-lock", self.repo_path])
+        if code == 0:
+            logger.info("Bloqueo del repositorio liberado correctamente.")
+            return True
+        logger.warning(f"Resultado al intentar liberar bloqueo: {err.strip()}")
+        return False
+
+    async def compact_repo(self) -> bool:
+        """Elimina bloques huérfanos y libera espacio en disco tras errores o cancelaciones."""
+        logger.info(f"Compactando repositorio para eliminar residuos: {self.repo_path}")
+        code, out, err = await self._run_command(["borg", "compact", self.repo_path])
+        if code == 0:
+            logger.info("Repositorio compactado y liberado exitosamente.")
+            return True
+        logger.error(f"Error al compactar el repositorio: {err.strip()}")
+        return False
+
+    async def run_backup(
+        self,
+        archive_name: str,
+        source_path: str,
+        progress_callback: Optional[Callable[[int, str], None]] = None
+    ) -> bool:
         """
-        Ejecuta el respaldo de Borg, procesando la salida en tiempo real.
+        Ejecuta el respaldo Borg, libera bloqueos previos automáticamente y parsea
+        el progreso en tiempo real manejando los caracteres de retorno de carro (\r).
         """
+        # Limpieza preventiva de bloqueos huérfanos de ejecuciones previas
+        await self.break_lock()
+
         target_archive = f"{self.repo_path}::{archive_name}"
         cmd = [
             "borg", "create",
             "--progress",
-            "--filter", "AME",
+            "--compression", "zstd,3",
             "--stats",
             target_archive,
             source_path
         ]
 
-        logging.info(f"Iniciando respaldo: {' '.join(cmd)}")
+        logger.info(f"Iniciando respaldo Borg: {' '.join(cmd)}")
 
         try:
             self.process = await asyncio.create_subprocess_exec(
@@ -33,36 +73,41 @@ class BorgBackupManager:
                 stderr=asyncio.subprocess.PIPE
             )
 
-            # Escuchar la salida stderr para extraer el progreso (\r)
+            # Monitoreo en tiempo real procesando los retornos de carro '\r'
             await self._read_stderr_progress(self.process.stderr, progress_callback)
             
             await self.process.wait()
 
             if self.process.returncode == 0:
-                logging.info("Copia de seguridad completada con éxito.")
+                logger.info("Respaldo completado exitosamente.")
                 return True
             else:
-                logging.error(f"Borg finalizó con código de error: {self.process.returncode}")
+                logger.error(f"Error durante el respaldo Borg (código {self.process.returncode})")
+                await self._cleanup_after_failure()
                 return False
 
         except asyncio.CancelledError:
-            logging.warning("Se ha recibido una solicitud de cancelación de la tarea.")
-            await self._handle_cancellation()
+            logger.warning("Solicitud de cancelación recibida durante el respaldo.")
+            await self._cleanup_after_cancellation()
             raise
 
         except Exception as e:
-            logging.error(f"Error inesperado durante la ejecución: {e}")
-            await self._handle_cancellation()
+            logger.error(f"Excepción inesperada durante el respaldo: {e}")
+            await self._cleanup_after_failure()
             return False
+        finally:
+            self.process = None
 
-    async def _read_stderr_progress(self, stderr_stream, progress_callback):
+    async def _read_stderr_progress(
+        self,
+        stderr_stream: asyncio.StreamReader,
+        progress_callback: Optional[Callable[[int, str], None]]
+    ):
         """
-        Lee el flujo stderr carácter por carácter para detectar '\r' y capturar
-        las actualizaciones de progreso de Borg correctamente.
+        Lee el flujo stderr byte a byte para capturar '\r' y actualizar la barra
+        de progreso en el frontend de forma fluida.
         """
         buffer = ""
-        # Expresión regular para capturar patrones de porcentaje en la salida de Borg
-        # Ejemplo de salida de Borg: "2.54 GB O 1.20 GB C 15.40 MB A 12300 N ... 45%"
         percent_regex = re.compile(r'(\d+)%')
 
         while True:
@@ -80,79 +125,26 @@ class BorgBackupManager:
                         percentage = int(match.group(1))
                         progress_callback(percentage, line)
                     else:
-                        progress_callback(None, line)
+                        progress_callback(0, line)
                 buffer = ""
             else:
                 buffer += char
 
-    async def _handle_cancellation(self):
-        """
-        Maneja el cierre del proceso y la limpieza del repositorio si el usuario cancela.
-        """
-        logging.info("Iniciando secuencia de limpieza por cancelación...")
-
-        # 1. Matar el proceso principal si sigue activo
+    async def _cleanup_after_cancellation(self):
+        """Detiene el proceso y ejecuta la rutina de limpieza completa tras cancelar."""
         if self.process and self.process.returncode is None:
             try:
                 self.process.terminate()
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
                 if self.process.returncode is None:
                     self.process.kill()
-                logging.info("Proceso Borg detenido.")
+                logger.info("Proceso Borg finalizado por cancelación.")
             except Exception as e:
-                logging.error(f"Error deteniendo el proceso Borg: {e}")
+                logger.error(f"Error al detener el proceso Borg: {e}")
 
-        # 2. Romper el archivo de bloqueo quedado huérfano (lock.exclusive)
-        await self._run_command(["borg", "break-lock", self.repo_path], "Liberando bloqueo del repositorio")
+        await self.break_lock()
+        await self.compact_repo()
 
-        # 3. Eliminar chunks huérfanos dejados por el intento cancelado
-        await self._run_command(["borg", "compact", self.repo_path], "Compactando y eliminando datos no enlazados")
-
-        logging.info("Limpieza completada. El repositorio está listo y limpio para la siguiente copia.")
-
-    async def _run_command(self, cmd: list, description: str):
-        """Ejecuta comandos auxiliares de mantenimiento."""
-        logging.info(f"{description}...")
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode == 0:
-            logging.info(f"Éxito: {description}")
-        else:
-            logging.error(f"Fallo en {description}: {stderr.decode()}")
-
-
-# --- EJEMPLO DE USO / PRUEBA DE CANCELACIÓN ---
-
-def update_ui_progress(percent, raw_text):
-    if percent is not None:
-        print(f"\r[PROGRESO UI] -> {percent}% completo", end="", flush=True)
-
-async def main():
-    repo = "/media/pichules/08604ab9-10b8-46bc-a6f2-a19f3adfc6fa/Backups/DisasterRecovery/BorgRepo"
-    source = "/home/pichules/Documentos"
-    archive_name = "Copia_Prueba"
-
-    manager = BorgBackupManager(repo_path=repo)
-
-    # Crear una tarea asíncrona para simular la ejecución
-    task = asyncio.create_task(manager.run_backup(archive_name, source, update_ui_progress))
-
-    # Simular una cancelación por parte del usuario tras 5 segundos
-    await asyncio.sleep(5)
-    print("\n\n[USUARIO] Cancelando el proceso de copia...")
-    task.cancel()
-
-    try:
-        await task
-    except asyncio.CancelledError:
-        print("\nLa tarea fue cancelada correctamente y el repositorio quedó limpio.")
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    async def _cleanup_after_failure(self):
+        """Limpia bloqueos si Borg termina con un código de error."""
+        await self.break_lock()
