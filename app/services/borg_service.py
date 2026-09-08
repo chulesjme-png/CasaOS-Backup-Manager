@@ -13,28 +13,63 @@ class BorgService:
         self.process: Optional[subprocess.Popen] = None
         self._is_cancelled = False
 
+    def _get_env(self) -> dict:
+        """Entorno con flags para evitar confirmaciones interactivas de Borg."""
+        env = os.environ.copy()
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+        return env
+
     def _resolve_repo_path(self, path: Optional[str]) -> Optional[str]:
-        """Resuelve la ruta exacta del repositorio de Borg permitiendo rutas de disco o directas."""
+        """Asegura la estructura jerárquica del repositorio dentro del disco destino."""
         target = path or self.repo_path
         if not target:
             return None
         
-        subpath = os.path.join(target, "Backups", "DisasterRecovery", "BorgRepo")
-        if os.path.exists(subpath):
-            return subpath
+        # Si la ruta no termina en la carpeta de repositorio Borg, se construye
+        if not target.endswith("BorgRepo"):
+            target = os.path.join(target, "Backups", "DisasterRecovery", "BorgRepo")
             
         return target
+
+    def _ensure_repo_exists(self, repo_path: str) -> bool:
+        """Crea la estructura de carpetas e inicializa el repositorio Borg si aún no existe."""
+        try:
+            os.makedirs(repo_path, exist_ok=True)
+            config_file = os.path.join(repo_path, "config")
+            
+            if not os.path.exists(config_file):
+                logger.info(f"Inicializando nuevo repositorio Borg en: {repo_path}")
+                cmd = ["borg", "init", "--encryption=none", repo_path]
+                res = subprocess.run(
+                    cmd, 
+                    capture_output=True, 
+                    text=True, 
+                    env=self._get_env()
+                )
+                if res.returncode != 0:
+                    logger.error(f"Error al inicializar repositorio Borg: {res.stderr.strip()}")
+                    return False
+                logger.info("Repositorio Borg inicializado exitosamente.")
+            return True
+        except Exception as e:
+            logger.error(f"Error al verificar/crear el directorio del repositorio: {e}")
+            return False
 
     def break_lock(self, repo_path: Optional[str] = None) -> bool:
         """Fuerza la liberación de cualquier candado huérfano en el repositorio."""
         target_repo = self._resolve_repo_path(repo_path)
-        if not target_repo:
-            logger.error("No se especificó la ruta del repositorio para liberar el bloqueo.")
+        if not target_repo or not os.path.exists(os.path.join(target_repo, "config")):
             return False
 
         logger.info(f"Liberando bloqueo del repositorio: {target_repo}")
         try:
-            res = subprocess.run(["borg", "break-lock", target_repo], capture_output=True, text=True)
+            res = subprocess.run(
+                ["borg", "break-lock", target_repo],
+                capture_output=True,
+                text=True,
+                env=self._get_env()
+            )
             if res.returncode == 0:
                 logger.info("Bloqueo del repositorio liberado correctamente.")
                 return True
@@ -47,13 +82,17 @@ class BorgService:
     def compact_repo(self, repo_path: Optional[str] = None) -> bool:
         """Elimina bloques huérfanos y libera espacio en disco tras errores o cancelaciones."""
         target_repo = self._resolve_repo_path(repo_path)
-        if not target_repo:
-            logger.error("No se especificó la ruta del repositorio para compactar.")
+        if not target_repo or not os.path.exists(os.path.join(target_repo, "config")):
             return False
 
         logger.info(f"Compactando repositorio para eliminar residuos: {target_repo}")
         try:
-            res = subprocess.run(["borg", "compact", target_repo], capture_output=True, text=True)
+            res = subprocess.run(
+                ["borg", "compact", target_repo],
+                capture_output=True,
+                text=True,
+                env=self._get_env()
+            )
             if res.returncode == 0:
                 logger.info("Repositorio compactado y liberado exitosamente.")
                 return True
@@ -72,15 +111,17 @@ class BorgService:
         target_disk: Optional[str] = None,
         **kwargs
     ) -> bool:
-        """
-        Ejecuta el respaldo Borg de forma sincrónica, compatible con trabajadores de fondo.
-        """
+        """Ejecuta el respaldo Borg gestionando la inicialización previa y el progreso."""
         self._is_cancelled = False
         raw_path = repo_path or target_disk or kwargs.get("target_disk")
         target_repo = self._resolve_repo_path(raw_path)
         
         if not target_repo:
             logger.error("No se ha proporcionado la ruta del repositorio de Borg.")
+            return False
+
+        # Garantizar que el repositorio exista e inicializarlo si es la primera vez
+        if not self._ensure_repo_exists(target_repo):
             return False
 
         # Limpieza preventiva de bloqueos previos
@@ -109,7 +150,8 @@ class BorgService:
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                bufsize=0
+                bufsize=0,
+                env=self._get_env()
             )
 
             # Lectura en tiempo real byte a byte procesando caracteres '\r'
