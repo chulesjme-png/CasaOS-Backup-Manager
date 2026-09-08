@@ -1,4 +1,5 @@
 import asyncio
+import os
 import re
 import logging
 from typing import Callable, Optional
@@ -9,6 +10,19 @@ class BorgService:
     def __init__(self, repo_path: Optional[str] = None):
         self.repo_path = repo_path
         self.process: Optional[asyncio.subprocess.Process] = None
+
+    def _resolve_repo_path(self, path: Optional[str]) -> Optional[str]:
+        """Resuelve la ruta exacta del repositorio de Borg permitiendo rutas de disco o directas."""
+        target = path or self.repo_path
+        if not target:
+            return None
+        
+        # Si la ruta recibida es la raíz del disco, adjunta la subcarpeta del repositorio
+        subpath = os.path.join(target, "Backups", "DisasterRecovery", "BorgRepo")
+        if os.path.exists(subpath):
+            return subpath
+            
+        return target
 
     async def _run_command(self, cmd: list[str]) -> tuple[int, str, str]:
         """Ejecuta un comando del sistema de forma asíncrona y captura su salida."""
@@ -22,7 +36,7 @@ class BorgService:
 
     async def break_lock(self, repo_path: Optional[str] = None) -> bool:
         """Fuerza la liberación de cualquier candado huérfano en el repositorio."""
-        target_repo = repo_path or self.repo_path
+        target_repo = self._resolve_repo_path(repo_path)
         if not target_repo:
             logger.error("No se especificó la ruta del repositorio para liberar el bloqueo.")
             return False
@@ -37,7 +51,7 @@ class BorgService:
 
     async def compact_repo(self, repo_path: Optional[str] = None) -> bool:
         """Elimina bloques huérfanos y libera espacio en disco tras errores o cancelaciones."""
-        target_repo = repo_path or self.repo_path
+        target_repo = self._resolve_repo_path(repo_path)
         if not target_repo:
             logger.error("No se especificó la ruta del repositorio para compactar.")
             return False
@@ -52,22 +66,32 @@ class BorgService:
 
     async def run_backup(
         self,
-        repo_path: str,
+        repo_path: Optional[str] = None,
         archive_name: str = "",
         source_path: str = "",
-        progress_callback: Optional[Callable[[int, str], None]] = None
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+        target_disk: Optional[str] = None,
+        **kwargs
     ) -> bool:
         """
-        Ejecuta el respaldo Borg, libera bloqueos previos automáticamente y parsea
-        el progreso en tiempo real manejando los caracteres de retorno de carro (\r).
+        Ejecuta el respaldo Borg aceptando repo_path o target_disk y **kwargs para
+        compatibilidad total con la API.
         """
-        target_repo = repo_path or self.repo_path
+        raw_path = repo_path or target_disk or kwargs.get("target_disk")
+        target_repo = self._resolve_repo_path(raw_path)
+        
         if not target_repo:
             logger.error("No se ha proporcionado la ruta del repositorio de Borg.")
             return False
 
         # Limpieza preventiva de bloqueos huérfanos de ejecuciones previas
         await self.break_lock(target_repo)
+
+        if not archive_name:
+            archive_name = "Sistema_Completo"
+
+        if not source_path:
+            source_path = "/DATA/AppData"
 
         target_archive = f"{target_repo}::{archive_name}"
         cmd = [
