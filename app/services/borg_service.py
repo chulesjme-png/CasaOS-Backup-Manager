@@ -67,6 +67,12 @@ class BorgService:
 
     def _get_dir_size(self, path: str) -> int:
         """Calcula el tamaño total en bytes del directorio de origen sin calcular la partición completa."""
+        if not os.path.exists(path):
+            return 1
+
+        if os.path.isfile(path):
+            return os.path.getsize(path)
+
         try:
             # du -sbx evita cruzar puntos de montaje y mide solo la carpeta solicitada
             res = subprocess.run(["du", "-sbx", path], capture_output=True, text=True, timeout=90)
@@ -98,11 +104,16 @@ class BorgService:
 
     def _parse_borg_bytes(self, text: str) -> Optional[int]:
         """Extrae los bytes procesados (Originales) de las líneas de progreso de Borg."""
-        match = re.search(r'([\d\.]+)\s*(B|kB|MB|GB|TB|PB)\s+O', text, re.IGNORECASE)
+        match = re.search(r'([\d\.,]+)\s*(B|kB|MB|GB|TB|PB)\s+O', text, re.IGNORECASE)
         if not match:
             return None
         
-        val = float(match.group(1))
+        val_str = match.group(1).replace(',', '.')
+        try:
+            val = float(val_str)
+        except ValueError:
+            return None
+
         unit = match.group(2).upper()
         
         units = {
@@ -253,6 +264,8 @@ class BorgService:
 
             while True:
                 if self._is_cancelled:
+                    if self.process and self.process.poll() is None:
+                        self.process.terminate()
                     break
 
                 try:
@@ -274,16 +287,19 @@ class BorgService:
                         else:
                             buffer += char
                 except OSError:
+                    # Ocurre cuando el proceso hijo se cierra y destruye la PTY
                     break
 
-            self.process.wait()
+            if self.process:
+                self.process.wait()
 
-            if self._is_cancelled or self.process.returncode != 0:
+            if self._is_cancelled or (self.process and self.process.returncode != 0):
                 if self._is_cancelled:
                     logger.warning("Respaldo cancelado por el usuario.")
                     self._cleanup_after_cancellation(target_repo, archive_name=archive_name)
                 else:
-                    logger.error(f"Error durante el respaldo Borg (código {self.process.returncode})")
+                    ret_code = self.process.returncode if self.process else -1
+                    logger.error(f"Error durante el respaldo Borg (código {ret_code})")
                     self._cleanup_after_failure(target_repo, archive_name=archive_name)
                 return False
 
