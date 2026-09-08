@@ -1,13 +1,12 @@
 import asyncio
 import re
 import logging
-import os
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
 class BorgService:
-    def __init__(self, repo_path: str):
+    def __init__(self, repo_path: Optional[str] = None):
         self.repo_path = repo_path
         self.process: Optional[asyncio.subprocess.Process] = None
 
@@ -21,20 +20,30 @@ class BorgService:
         stdout, stderr = await proc.communicate()
         return proc.returncode, stdout.decode(errors='ignore'), stderr.decode(errors='ignore')
 
-    async def break_lock(self) -> bool:
+    async def break_lock(self, repo_path: Optional[str] = None) -> bool:
         """Fuerza la liberación de cualquier candado huérfano en el repositorio."""
-        logger.info(f"Liberando bloqueo del repositorio: {self.repo_path}")
-        code, out, err = await self._run_command(["borg", "break-lock", self.repo_path])
+        target_repo = repo_path or self.repo_path
+        if not target_repo:
+            logger.error("No se especificó la ruta del repositorio para liberar el bloqueo.")
+            return False
+
+        logger.info(f"Liberando bloqueo del repositorio: {target_repo}")
+        code, out, err = await self._run_command(["borg", "break-lock", target_repo])
         if code == 0:
             logger.info("Bloqueo del repositorio liberado correctamente.")
             return True
         logger.warning(f"Resultado al intentar liberar bloqueo: {err.strip()}")
         return False
 
-    async def compact_repo(self) -> bool:
+    async def compact_repo(self, repo_path: Optional[str] = None) -> bool:
         """Elimina bloques huérfanos y libera espacio en disco tras errores o cancelaciones."""
-        logger.info(f"Compactando repositorio para eliminar residuos: {self.repo_path}")
-        code, out, err = await self._run_command(["borg", "compact", self.repo_path])
+        target_repo = repo_path or self.repo_path
+        if not target_repo:
+            logger.error("No se especificó la ruta del repositorio para compactar.")
+            return False
+
+        logger.info(f"Compactando repositorio para eliminar residuos: {target_repo}")
+        code, out, err = await self._run_command(["borg", "compact", target_repo])
         if code == 0:
             logger.info("Repositorio compactado y liberado exitosamente.")
             return True
@@ -43,18 +52,24 @@ class BorgService:
 
     async def run_backup(
         self,
-        archive_name: str,
-        source_path: str,
+        repo_path: str,
+        archive_name: str = "",
+        source_path: str = "",
         progress_callback: Optional[Callable[[int, str], None]] = None
     ) -> bool:
         """
         Ejecuta el respaldo Borg, libera bloqueos previos automáticamente y parsea
         el progreso en tiempo real manejando los caracteres de retorno de carro (\r).
         """
-        # Limpieza preventiva de bloqueos huérfanos de ejecuciones previas
-        await self.break_lock()
+        target_repo = repo_path or self.repo_path
+        if not target_repo:
+            logger.error("No se ha proporcionado la ruta del repositorio de Borg.")
+            return False
 
-        target_archive = f"{self.repo_path}::{archive_name}"
+        # Limpieza preventiva de bloqueos huérfanos de ejecuciones previas
+        await self.break_lock(target_repo)
+
+        target_archive = f"{target_repo}::{archive_name}"
         cmd = [
             "borg", "create",
             "--progress",
@@ -83,17 +98,17 @@ class BorgService:
                 return True
             else:
                 logger.error(f"Error durante el respaldo Borg (código {self.process.returncode})")
-                await self._cleanup_after_failure()
+                await self._cleanup_after_failure(target_repo)
                 return False
 
         except asyncio.CancelledError:
             logger.warning("Solicitud de cancelación recibida durante el respaldo.")
-            await self._cleanup_after_cancellation()
+            await self._cleanup_after_cancellation(target_repo)
             raise
 
         except Exception as e:
             logger.error(f"Excepción inesperada durante el respaldo: {e}")
-            await self._cleanup_after_failure()
+            await self._cleanup_after_failure(target_repo)
             return False
         finally:
             self.process = None
@@ -130,7 +145,7 @@ class BorgService:
             else:
                 buffer += char
 
-    async def _cleanup_after_cancellation(self):
+    async def _cleanup_after_cancellation(self, repo_path: str):
         """Detiene el proceso y ejecuta la rutina de limpieza completa tras cancelar."""
         if self.process and self.process.returncode is None:
             try:
@@ -142,9 +157,9 @@ class BorgService:
             except Exception as e:
                 logger.error(f"Error al detener el proceso Borg: {e}")
 
-        await self.break_lock()
-        await self.compact_repo()
+        await self.break_lock(repo_path)
+        await self.compact_repo(repo_path)
 
-    async def _cleanup_after_failure(self):
+    async def _cleanup_after_failure(self, repo_path: str):
         """Limpia bloqueos si Borg termina con un código de error."""
-        await self.break_lock()
+        await self.break_lock(repo_path)
