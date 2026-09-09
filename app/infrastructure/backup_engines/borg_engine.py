@@ -6,12 +6,13 @@ from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 class BorgEngineError(Exception):
     """Excepción para errores generados por el motor de BorgBackup."""
+
     pass
 
 
 class BorgEngine:
-    """
-    Motor de respaldo basado en BorgBackup CLI.
+    """Motor de respaldo basado en BorgBackup CLI.
+
     Proporciona deduplicación a nivel de bloques, compresión zstd y emite
     progreso estructurado en formato JSON para el consumo en tiempo real.
     """
@@ -20,13 +21,9 @@ class BorgEngine:
         self.borg_binary = borg_binary
 
     async def init_repository(
-        self, 
-        repo_path: str, 
-        encryption: str = "none"
+        self, repo_path: str, encryption: str = "none"
     ) -> Dict[str, Any]:
-        """
-        Inicializa un repositorio de BorgBackup en la ruta especificada.
-        """
+        """Inicializa un repositorio de BorgBackup en la ruta especificada."""
         cmd = [
             self.borg_binary,
             "init",
@@ -37,7 +34,7 @@ class BorgEngine:
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await process.communicate()
 
@@ -55,21 +52,25 @@ class BorgEngine:
         sources: List[str],
         compression: str = "zstd,3",
         passphrase: Optional[str] = None,
-        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+        progress_callback: Optional[
+            Callable[[Dict[str, Any]], None]
+        ] = None,
     ) -> Dict[str, Any]:
-        """
-        Crea un nuevo archivo de respaldo dentro del repositorio Borg.
+        """Crea un nuevo archivo de respaldo dentro del repositorio Borg.
+
         Transmite eventos de progreso en JSON si se provee un callback.
         """
         archive_target = f"{repo_path}::{archive_name}"
         cmd = [
             self.borg_binary,
             "create",
-            "--json",
+            "--log-json",
             "--progress",
             f"--compression={compression}",
-            "--exclude", "*/data/*.log",
-            "--exclude", "*/cache/*",
+            "--exclude",
+            "*/data/*.log",
+            "--exclude",
+            "*/cache/*",
             archive_target,
         ] + sources
 
@@ -81,7 +82,7 @@ class BorgEngine:
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=env
+            env=env,
         )
 
         if process.stderr:
@@ -95,8 +96,6 @@ class BorgEngine:
 
         stdout, stderr = await process.communicate()
 
-        # Borg retorna 1 para advertencias menores (archivos modificados en caliente).
-        # Solo se lanza excepción si el código de retorno es mayor a 1 (error fatal).
         if process.returncode > 1:
             raise BorgEngineError(
                 f"Error durante la creación del backup Borg: {stderr.decode().strip()}"
@@ -106,12 +105,11 @@ class BorgEngine:
         return {
             "status": "completed",
             "archive": archive_name,
-            "summary": summary
+            "summary": summary,
         }
 
     async def _read_stream(
-        self, 
-        stream: asyncio.StreamReader
+        self, stream: asyncio.StreamReader
     ) -> AsyncGenerator[str, None]:
         while True:
             line = await stream.readline()
