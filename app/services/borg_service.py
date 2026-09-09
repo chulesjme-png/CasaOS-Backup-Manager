@@ -210,6 +210,8 @@ class BorgService:
             "borg", "create",
             "--progress",
             "--compression", "zstd,3",
+            "--exclude", "*/data/*.log",
+            "--exclude", "*/cache/*",
             "--stats",
             target_archive,
             source_path
@@ -262,7 +264,9 @@ class BorgService:
             if self.process:
                 self.process.wait()
 
-            if self._is_cancelled or (self.process and self.process.returncode != 0):
+            # Borg utiliza returncode == 1 para advertencias no críticas (e.g. archivos cambiados).
+            # Se considera fallo únicamente si fue cancelado o si returncode es mayor a 1.
+            if self._is_cancelled or (self.process and self.process.returncode > 1):
                 ret_code = self.process.returncode if self.process else -1
                 logger.error(f"Error o cancelación durante el respaldo Borg (código {ret_code})")
                 self._cleanup_after_cancellation(target_repo, full_archive_name)

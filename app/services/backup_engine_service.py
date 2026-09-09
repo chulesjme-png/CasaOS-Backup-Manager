@@ -129,7 +129,8 @@ class BackupEngineService:
             loop = asyncio.get_running_loop()
             stdout, stderr = await loop.run_in_executor(None, process.communicate)
 
-            if process.returncode != 0:
+            # Aceptar únicamente código <= 1 (para tolerar advertencias menores de transferencia)
+            if process.returncode > 1:
                 raise subprocess.CalledProcessError(
                     process.returncode, cmd, output=stdout, stderr=stderr
                 )

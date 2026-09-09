@@ -68,6 +68,8 @@ class BorgEngine:
             "--json",
             "--progress",
             f"--compression={compression}",
+            "--exclude", "*/data/*.log",
+            "--exclude", "*/cache/*",
             archive_target,
         ] + sources
 
@@ -93,7 +95,9 @@ class BorgEngine:
 
         stdout, stderr = await process.communicate()
 
-        if process.returncode != 0:
+        # Borg retorna 1 para advertencias menores (archivos modificados en caliente).
+        # Solo se lanza excepción si el código de retorno es mayor a 1 (error fatal).
+        if process.returncode > 1:
             raise BorgEngineError(
                 f"Error durante la creación del backup Borg: {stderr.decode().strip()}"
             )
