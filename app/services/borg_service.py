@@ -66,7 +66,7 @@ class BorgService:
             return False
 
     def _get_dir_size(self, path: str) -> int:
-        """Calcula el tamaño total en bytes del directorio de origen sin calcular la partición completa."""
+        """Calcula el tamaño total en bytes del directorio de origen."""
         if not os.path.exists(path):
             return 1
 
@@ -74,14 +74,12 @@ class BorgService:
             return os.path.getsize(path)
 
         try:
-            # du -sbx evita cruzar puntos de montaje y mide solo la carpeta solicitada
             res = subprocess.run(["du", "-sbx", path], capture_output=True, text=True, timeout=90)
             if res.returncode == 0 and res.stdout:
                 return int(res.stdout.split()[0])
         except Exception as e:
             logger.warning(f"No se pudo calcular el tamaño total con du: {e}")
 
-        # Fallback mediante os.scandir para evitar medir la partición entera
         total = 0
         try:
             def scan_dir(dir_path):
@@ -115,15 +113,7 @@ class BorgService:
             return None
 
         unit = match.group(2).upper()
-        
-        units = {
-            'B': 1,
-            'KB': 1024,
-            'MB': 1024**2,
-            'GB': 1024**3,
-            'TB': 1024**4,
-            'PB': 1024**5
-        }
+        units = {'B': 1, 'KB': 1024, 'MB': 1024**2, 'GB': 1024**3, 'TB': 1024**4, 'PB': 1024**5}
         return int(val * units.get(unit, 1))
 
     def break_lock(self, repo_path: Optional[str] = None) -> bool:
@@ -140,17 +130,13 @@ class BorgService:
                 text=True,
                 env=self._get_env()
             )
-            if res.returncode == 0:
-                logger.info("Bloqueo del repositorio liberado correctamente.")
-                return True
-            logger.warning(f"Resultado al intentar liberar bloqueo: {res.stderr.strip()}")
-            return False
+            return res.returncode == 0
         except Exception as e:
             logger.error(f"Error al ejecutar break-lock: {e}")
             return False
 
     def compact_repo(self, repo_path: Optional[str] = None) -> bool:
-        """Elimina bloques huérfanos y libera espacio físico en disco tras errores o cancelaciones."""
+        """Elimina bloques huérfanos y libera espacio físico en disco."""
         target_repo = self._resolve_repo_path(repo_path)
         if not target_repo or not os.path.exists(os.path.join(target_repo, "config")):
             return False
@@ -164,44 +150,30 @@ class BorgService:
                 text=True,
                 env=self._get_env()
             )
-            if res.returncode == 0:
-                logger.info("Repositorio compactado y espacio liberado exitosamente.")
-                return True
-            logger.error(f"Error al compactar el repositorio: {res.stderr.strip()}")
-            return False
+            return res.returncode == 0
         except Exception as e:
             logger.error(f"Error al ejecutar compact: {e}")
             return False
 
-    def _cleanup_after_cancellation(self, repo_path: str, archive_name: str = "Sistema_Completo"):
-        """Elimina cualquier copia parcial (checkpoint) y libera físicamente el espacio ocupado en disco."""
-        logger.info(f"Iniciando limpieza profunda de restos en: {repo_path}")
-        
-        # 1. Liberar candados
+    def _cleanup_after_cancellation(self, repo_path: str, archive_name: str):
+        """Elimina ÚNICAMENTE checkpoints parciales incalculados sin afectar backups completados."""
+        logger.info(f"Iniciando limpieza de checkpoints temporales en: {repo_path}")
         self.break_lock(repo_path)
         
-        # 2. Borrar respaldos parciales y checkpoints
         try:
-            logger.info(f"Eliminando respaldos parciales/checkpoints para '{archive_name}'...")
-            res = subprocess.run(
-                ["borg", "delete", "--glob", f"{archive_name}*", repo_path],
+            # Se busca únicamente el patrón .checkpoint para proteger el backup real
+            checkpoint_pattern = f"{archive_name}*.checkpoint*"
+            logger.info(f"Eliminando solo checkpoints incompletos matching: '{checkpoint_pattern}'...")
+            subprocess.run(
+                ["borg", "delete", "--glob", checkpoint_pattern, repo_path],
                 capture_output=True,
                 text=True,
                 env=self._get_env()
             )
-            if res.returncode == 0:
-                logger.info("Respaldos parciales y checkpoints eliminados.")
-            else:
-                logger.debug(f"Detalle al eliminar checkpoints: {res.stderr.strip()}")
         except Exception as e:
             logger.warning(f"No se pudieron eliminar los checkpoints parciales: {e}")
 
-        # 3. Compactar para purgar bloques huérfanos y recuperar espacio
         self.compact_repo(repo_path)
-
-    def _cleanup_after_failure(self, repo_path: str, archive_name: str = "Sistema_Completo"):
-        """Limpia bloqueos y elimina datos corruptos/incompletos tras un fallo."""
-        self._cleanup_after_cancellation(repo_path, archive_name)
 
     def run_backup(
         self,
@@ -212,22 +184,20 @@ class BorgService:
         target_disk: Optional[str] = None,
         **kwargs
     ) -> bool:
-        """Ejecuta el respaldo Borg con seguimiento dinámico del progreso y limpieza garantizada al cancelar."""
+        """Ejecuta el respaldo Borg garantizando nombres únicos con marca de tiempo."""
         self._is_cancelled = False
         raw_path = repo_path or target_disk or kwargs.get("target_disk")
         target_repo = self._resolve_repo_path(raw_path)
         
-        if not target_repo:
-            logger.error("No se ha proporcionado la ruta del repositorio de Borg.")
-            return False
-
-        if not self._ensure_repo_exists(target_repo):
+        if not target_repo or not self._ensure_repo_exists(target_repo):
             return False
 
         self.break_lock(target_repo)
 
-        if not archive_name:
-            archive_name = "Sistema_Completo"
+        base_name = archive_name or "Sistema_Completo"
+        # Se genera un timestamp para garantizar que no colisionen nombres existentes
+        timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+        full_archive_name = f"{base_name}_{timestamp}"
 
         if not source_path:
             source_path = "/DATA/AppData"
@@ -235,7 +205,7 @@ class BorgService:
         total_bytes = self._get_dir_size(source_path)
         logger.info(f"Tamaño total de {source_path}: {total_bytes / (1024**2):.2f} MB")
 
-        target_archive = f"{target_repo}::{archive_name}"
+        target_archive = f"{target_repo}::{full_archive_name}"
         cmd = [
             "borg", "create",
             "--progress",
@@ -287,20 +257,15 @@ class BorgService:
                         else:
                             buffer += char
                 except OSError:
-                    # Ocurre cuando el proceso hijo se cierra y destruye la PTY
                     break
 
             if self.process:
                 self.process.wait()
 
             if self._is_cancelled or (self.process and self.process.returncode != 0):
-                if self._is_cancelled:
-                    logger.warning("Respaldo cancelado por el usuario.")
-                    self._cleanup_after_cancellation(target_repo, archive_name=archive_name)
-                else:
-                    ret_code = self.process.returncode if self.process else -1
-                    logger.error(f"Error durante el respaldo Borg (código {ret_code})")
-                    self._cleanup_after_failure(target_repo, archive_name=archive_name)
+                ret_code = self.process.returncode if self.process else -1
+                logger.error(f"Error o cancelación durante el respaldo Borg (código {ret_code})")
+                self._cleanup_after_cancellation(target_repo, full_archive_name)
                 return False
 
             if progress_callback:
@@ -311,7 +276,8 @@ class BorgService:
 
         except Exception as e:
             logger.error(f"Excepción inesperada durante el respaldo: {e}")
-            self._cleanup_after_failure(target_repo, archive_name=archive_name)
+            if target_repo:
+                self._cleanup_after_cancellation(target_repo, full_archive_name)
             return False
         finally:
             try:
@@ -321,7 +287,7 @@ class BorgService:
             self.process = None
 
     def cancel_backup(self, repo_path: Optional[str] = None, archive_name: str = "Sistema_Completo"):
-        """Detiene el proceso en curso y elimina cualquier resto del disco."""
+        """Detiene el proceso en curso sin borrar copias previas completadas."""
         self._is_cancelled = True
         if self.process and self.process.poll() is None:
             try:
@@ -329,10 +295,9 @@ class BorgService:
                 time.sleep(1)
                 if self.process.poll() is None:
                     self.process.kill()
-                logger.info("Proceso Borg finalizado por el usuario.")
             except Exception as e:
                 logger.error(f"Error al detener el proceso Borg: {e}")
 
         target_repo = self._resolve_repo_path(repo_path)
         if target_repo:
-            self._cleanup_after_cancellation(target_repo, archive_name=archive_name)
+            self._cleanup_after_cancellation(target_repo, archive_name)
