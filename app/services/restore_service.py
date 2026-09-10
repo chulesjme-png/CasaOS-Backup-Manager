@@ -21,7 +21,7 @@ class RestoreService:
         if backup_file.exists() and backup_file.is_file():
             file_size = backup_file.stat().st_size
             if not staging_mgr.verify_disk_space(file_size):
-                raise RuntimeError("Espacio insuficiente en disco para realizar una restauración segura.")
+                raise RuntimeError("Espacio de almacenamiento insuficiente para realizar la descompresión.")
 
         staging_path = staging_mgr.create_staging_area(task_id)
 
@@ -37,14 +37,14 @@ class RestoreService:
                 if dry_run:
                     cmd.append("--dry-run")
 
-            logger.info(f"🚀 Ejecutando extracción segura en zona aislada: {' '.join(cmd)}")
+            logger.info(f"Descomprimiendo en zona aislada: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode != 0:
-                raise RuntimeError(f"Error durante extracción en staging: {result.stderr.strip()}")
+                raise RuntimeError(f"Fallo al descomprimir respaldo: {result.stderr.strip()}")
 
             if dry_run:
-                logger.info("🧪 Modo Dry-Run finalizado sin errores. Limpiando zona de staging.")
+                logger.info("Verificación dry-run finalizada con éxito.")
                 staging_mgr.cleanup_staging(task_id)
                 return True
 
@@ -53,6 +53,6 @@ class RestoreService:
             return True
 
         except Exception as e:
-            logger.error(f"❌ Abortando restauración y limpiando aislamiento por error: {e}")
+            logger.error(f"Error procesando la restauración segura: {e}")
             staging_mgr.cleanup_staging(task_id)
             raise e

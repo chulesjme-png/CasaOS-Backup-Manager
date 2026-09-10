@@ -24,7 +24,6 @@ active_jobs: Dict[str, Dict[str, Any]] = {}
 
 @router.get("/status/{task_id}")
 def get_backup_status(task_id: int):
-    """Endpoint de Polling para obtener el estado real de ejecución desde Duplicati."""
     status_data = duplicati_orchestrator.get_task_status(task_id=task_id)
     if "error" in status_data:
         raise HTTPException(
@@ -36,7 +35,6 @@ def get_backup_status(task_id: int):
 
 @router.get("/job-status/{job_id}")
 def get_job_status(job_id: str):
-    """Consulta el estado de una tarea activa o recién finalizada."""
     if job_id in active_jobs:
         job_data = active_jobs[job_id]
         if "duplicati" in job_id.lower() and job_data.get("status") == "running":
@@ -57,7 +55,6 @@ def get_job_status(job_id: str):
 
 @router.post("/job-cancel/{job_id}")
 async def cancel_job(job_id: str):
-    """Detiene la tarea inmediatamente y mata cualquier proceso tar/rsync/borg colgado."""
     logger.info(f"🛑 Solicitud de cancelación recibida para la tarea: {job_id}")
     
     borg_service.cancel_backup()
@@ -98,7 +95,6 @@ async def run_system_backup(
     target_disk: Optional[str] = None,
     background_tasks: BackgroundTasks = BackgroundTasks()
 ):
-    """Inicia la copia de seguridad del sistema completa mediante BorgBackup."""
     job_id = f"job_Sistema_Completo_{int(time.time())}"
     
     active_jobs[job_id] = {
@@ -147,12 +143,10 @@ async def run_system_backup(
 
 @router.get("/list")
 def list_backups():
-    """Retorna la lista de respaldos disponibles."""
     return {"backups": []}
 
 
 def locate_backup_file(filename: str) -> Optional[str]:
-    """Busca el archivo de backup en las rutas configuradas o en /media y /DATA."""
     if os.path.isabs(filename) and os.path.exists(filename):
         return filename
 
@@ -238,23 +232,17 @@ def get_backup_profiles():
     return profiles
 
 
-async def task_execute_safe_restore_with_ws(
-    app_name: str,
-    file_path: str,
-    task_id: str,
-    target_path: Optional[str],
-    engine: str,
-    dry_run: bool
-):
+async def task_execute_safe_restore_with_ws(app_name: str, file_path: str, task_id: str, target_path: Optional[str], engine: str, dry_run: bool):
     try:
         await ws_manager.broadcast({
             "type": "restore_progress",
             "status": "IN_PROGRESS",
-            "percentage": 20,
-            "message": f"Verificando espacio y descomprimiendo {app_name} en zona de cuarentena aislada..."
+            "percentage": 25,
+            "message": f"Extrayendo {app_name} en directorio aislado (Staging)..."
         })
 
         base_dest = target_path or "/DATA/AppData"
+
         await asyncio.to_thread(
             RestoreService.execute_safe_restore,
             file_path=file_path,
@@ -265,20 +253,20 @@ async def task_execute_safe_restore_with_ws(
             dry_run=dry_run
         )
 
-        logger.info(f"✨ [Restore] Restauración y verificación completada con éxito para {app_name}")
+        logger.info(f"✨ [Restore] Notificando éxito de restauración aislada para {app_name}")
         await ws_manager.broadcast({
             "type": "restore_complete",
             "status": "COMPLETED",
             "percentage": 100,
-            "message": f"Restauración de {app_name} completada con éxito de forma segura."
+            "message": f"Restauración segura de {app_name} completada con éxito."
         })
     except Exception as e:
-        logger.error(f"❌ [Restore Error] Error en proceso de restauración de {app_name}: {e}")
+        logger.error(f"❌ [Restore Error] Error en restauración aislada: {e}")
         await ws_manager.broadcast({
             "type": "restore_error",
             "status": "FAILED",
             "percentage": 0,
-            "message": f"Error en la restauración de {app_name}: {str(e)}"
+            "message": f"Error restaurando {app_name}: {str(e)}"
         })
 
 
@@ -346,7 +334,7 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
         else:
             app_name = file_identifier.split("_")[0]
 
-    task_id = f"restore_{str(uuid.uuid4())[:8]}"
+    task_id = f"restore_{uuid.uuid4().hex[:8]}"
 
     background_tasks.add_task(
         task_execute_safe_restore_with_ws,
@@ -360,9 +348,8 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
 
     return {
         "status": "ACCEPTED",
-        "message": f"Proceso seguro de restauración iniciado para {app_name}",
         "task_id": task_id,
+        "message": f"Restauración iniciada en zona de aislamiento para {app_name}",
         "snapshot_id": file_identifier,
-        "resolved_path": file_path,
-        "staging_path": f"{payload.target_path or '/DATA/AppData'}/.restore_staging/{task_id}"
+        "resolved_path": file_path
     }

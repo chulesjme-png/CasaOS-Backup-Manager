@@ -17,11 +17,11 @@ class StagingManager:
             total, used, free = shutil.disk_usage(target_dir)
             needed_bytes = int(required_bytes * safety_margin)
             if free < needed_bytes:
-                logger.error(f"❌ Espacio en disco insuficiente. Libre: {free} B, Requerido con margen: {needed_bytes} B")
+                logger.error(f"Espacio libre insuficiente. Libre: {free} B, Requerido: {needed_bytes} B")
                 return False
             return True
         except Exception as e:
-            logger.warning(f"⚠️ No se pudo verificar el espacio en disco: {e}")
+            logger.warning(f"Error al calcular espacio libre en disco: {e}")
             return True
 
     def create_staging_area(self, task_id: str) -> Path:
@@ -36,16 +36,16 @@ class StagingManager:
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_dir = self.base_path / f"{app_name}.bak_{timestamp}"
-        logger.info(f"🛡️ Creando respaldo preventivo pre-restauración en: {backup_dir}")
+        logger.info(f"Guardando copia preventiva en: {backup_dir}")
         shutil.copytree(app_dir, backup_dir)
         return backup_dir
 
     def atomic_swap(self, task_id: str, app_name: str) -> bool:
         staging_app_dir = self.staging_root / task_id
         target_app_dir = self.base_path / app_name
-        
+
         if not staging_app_dir.exists():
-            raise FileNotFoundError(f"Directorio de staging no existe: {staging_app_dir}")
+            raise FileNotFoundError(f"No existe el directorio de cuarentena: {staging_app_dir}")
 
         backup_dir = None
         if target_app_dir.exists():
@@ -54,18 +54,18 @@ class StagingManager:
 
         try:
             shutil.move(str(staging_app_dir), str(target_app_dir))
-            logger.info(f"✅ Intercambio atómico completado exitosamente para {app_name}")
+            logger.info(f"Sustitución atómica completada para: {app_name}")
             if backup_dir and backup_dir.exists():
                 shutil.rmtree(backup_dir)
             return True
         except Exception as e:
-            logger.error(f"💥 Error en el intercambio atómico: {e}. Iniciando rollback inmediato...")
+            logger.error(f"Fallo durante la sustitución: {e}. Iniciando rollback...")
             if backup_dir and backup_dir.exists():
                 if target_app_dir.exists():
                     shutil.rmtree(target_app_dir)
                 shutil.move(str(backup_dir), str(target_app_dir))
-                logger.info(f"🔄 Rollback completado: {app_name} restaurado a su estado previo.")
-            raise RuntimeError(f"Fallo en la sustitución de archivos. Rollback completado con éxito: {e}")
+                logger.info(f"Rollback finalizado. Estado original de {app_name} restaurado.")
+            raise RuntimeError(f"Fallo en la sustitución de archivos. Rollback ejecutado: {e}")
 
     def cleanup_staging(self, task_id: str):
         task_staging = self.staging_root / task_id
