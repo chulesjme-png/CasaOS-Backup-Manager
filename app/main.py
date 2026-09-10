@@ -42,18 +42,6 @@ except ImportError:
     disk_service = DummyDiskService()
 
 try:
-    from app.services.duplicati_orchestrator_service import duplicati_orchestrator
-except ImportError:
-    class DummyDuplicatiOrchestrator:
-        def run_full_disaster_recovery(self, *args, **kwargs):
-            return {"success": False, "error": "Modulo orquestador de Duplicati no disponible."}
-        def get_task_status(self, *args, **kwargs):
-            return {"status": "error", "phase": "Failed", "progress": 0.0}
-        def find_job_id_by_name(self, *args, **kwargs):
-            return 1
-    duplicati_orchestrator = DummyDuplicatiOrchestrator()
-
-try:
     from app.services.borg_service import BorgService
     borg_service = BorgService()
 except ImportError:
@@ -79,8 +67,6 @@ class ConfigModel(BaseModel):
     telegram_enabled: bool = False
     telegram_token: str = ""
     telegram_chat_id: str = ""
-    duplicati_url: str = "http://172.17.0.1:8200"
-    duplicati_password: str = ""
 
 class TelegramTestModel(BaseModel):
     telegram_token: str = ""
@@ -89,7 +75,7 @@ class TelegramTestModel(BaseModel):
     chat_id: str = ""
 
 class ExecutionRunModel(BaseModel):
-    backend_name: str = "null"
+    backend_name: str = "tar"
     operation: str = "backup"
     app_name: str = "Sistema_Completo"
     target_disk: str = ""
@@ -100,13 +86,13 @@ def load_config():
         "target_disk": "",
         "telegram_enabled": False,
         "telegram_token": "",
-        "telegram_chat_id": "",
-        "duplicati_url": "http://172.17.0.1:8200",
-        "duplicati_password": ""
+        "telegram_chat_id": ""
     }
     if CONFIG_PATH.exists():
         try:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            data.pop("duplicati_url", None)
+            data.pop("duplicati_password", None)
             defaults.update(data)
             return defaults
         except Exception as e:
@@ -217,11 +203,11 @@ def read_root():
 
 @app.get("/api/v1/backends")
 def list_backends():
-    return {"backends": ["borg", "duplicati", "null", "rsync"]}
+    return {"backends": ["borg", "null", "rsync", "tar"]}
 
 @app.get("/api/v1/backends/{backend_name}")
 def get_backend_info(backend_name: str):
-    valid_backends = ["borg", "duplicati", "null", "rsync"]
+    valid_backends = ["borg", "null", "rsync", "tar"]
     if backend_name not in valid_backends:
         raise HTTPException(status_code=404, detail=f"Backend '{backend_name}' no encontrado")
     return {"name": backend_name, "status": "active", "supported_operations": ["backup", "restore"]}
@@ -762,8 +748,6 @@ def list_backups(max_keep_per_app: int = 3):
                     continue
                 
                 fn_lower = file.lower()
-                if fn_lower.startswith("duplicati-") or "dblock" in fn_lower or "dindex" in fn_lower or "dlist" in fn_lower:
-                    continue
                 
                 if fn_lower.endswith((".tar.gz", ".tgz", ".zip")):
                     fp = os.path.join(root, file)

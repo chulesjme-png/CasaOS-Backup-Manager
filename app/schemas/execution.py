@@ -15,7 +15,7 @@ class ExecutionStatus(str, Enum):
 class ExecutionCreate(BaseModel):
     app_name: str
     job_id: Optional[str] = None
-    backend_type: str = "duplicati"
+    backend_type: str = "tar"
     destination_path: Optional[str] = None
 
 
