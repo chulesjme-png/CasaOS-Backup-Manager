@@ -187,7 +187,7 @@ class BorgService:
             return False
 
     def _cleanup_after_cancellation(self, repo_path: str, archive_name: str):
-        """Elimina ÚNICAMENTE checkpoints parciales incalculados sin afectar backups completados."""
+        """Elimina ÚNICAMENTE checkpoints parciales incompletos sin afectar backups completados."""
         logger.info(
             f"Iniciando limpieza de checkpoints temporales en: {repo_path}"
         )
@@ -312,12 +312,21 @@ class BorgService:
             if self.process:
                 self.process.wait()
 
-            if self._is_cancelled or (
-                self.process and self.process.returncode > 1
-            ):
-                ret_code = self.process.returncode if self.process else -1
+            ret_code = self.process.returncode if self.process else -1
+
+            # Manejo explícito de señales de cancelación (código -15 = SIGTERM, -9 = SIGKILL)
+            if self._is_cancelled or ret_code in (-15, -9, 143):
+                logger.info(
+                    f"Respaldo Borg cancelado por el usuario (código {ret_code})"
+                )
+                self._cleanup_after_cancellation(
+                    target_repo, full_archive_name
+                )
+                return False
+            elif ret_code > 1:
+                # Código 0 es éxito total; Código 1 son advertencias (Borg considera 1 como OK con warnings)
                 logger.error(
-                    f"Error o cancelación durante el respaldo Borg (código {ret_code})"
+                    f"Error no controlado durante el respaldo Borg (código {ret_code})"
                 )
                 self._cleanup_after_cancellation(
                     target_repo, full_archive_name
@@ -359,7 +368,3 @@ class BorgService:
                     self.process.kill()
             except Exception as e:
                 logger.error(f"Error al detener el proceso Borg: {e}")
-
-        target_repo = self._resolve_repo_path(repo_path)
-        if target_repo:
-            self._cleanup_after_cancellation(target_repo, archive_name)
