@@ -21,6 +21,8 @@ services:
       - /media:/media:rshared
       - /mnt:/mnt:rshared
       - /run/media:/run/media:rshared
+      # Persistencia de la caché e índices de BorgBackup
+      - borg_cache:/root/.cache/borg
     environment:
       - TZ=Europe/Madrid
       - PYTHONUNBUFFERED=1
@@ -31,3 +33,6 @@ services:
       - BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes
       - BORG_RELOCATED_REPO_ACCESS_IS_OK=yes
       - BORG_UNKNOWN_CLI_OPTION_IS_OK=yes
+
+volumes:
+  borg_cache:
