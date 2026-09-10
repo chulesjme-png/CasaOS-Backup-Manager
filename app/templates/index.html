@@ -40,7 +40,7 @@
             <div class="col-md-3">
                 <div class="card p-3 shadow-sm border-0">
                     <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Motores de Backup</span>
-                    <div class="fw-bold text-dark mt-2">Tar.gz / Duplicati (OK)</div>
+                    <div class="fw-bold text-dark mt-2">Tar.gz / Borg / Rsync (OK)</div>
                 </div>
             </div>
             <div class="col-md-3">
@@ -276,17 +276,17 @@
 
                         <hr class="my-3">
 
-                        <h6 class="fw-bold text-dark mb-3">🔄 Motor Duplicati</h6>
+                        <h6 class="fw-bold text-dark mb-3">🛡️ Motor Borg Backup</h6>
                         <div class="mb-3">
-                            <label class="form-label small text-muted">URL del Servicio Duplicati</label>
-                            <input type="text" class="form-control form-control-sm" id="cfgDuplicatiUrl" placeholder="http://172.17.0.1:8200">
+                            <label class="form-label small text-muted">Frase de paso (Passphrase) / Clave de Cifrado</label>
+                            <div class="input-group input-group-sm">
+                                <input type="password" class="form-control" id="cfgBorgPassphrase" placeholder="••••••••">
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfgBorgPassphrase')">👁️</button>
+                            </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small text-muted">Contraseña (si aplica)</label>
-                            <div class="input-group input-group-sm">
-                                <input type="password" class="form-control" id="cfgDuplicatiPassword" placeholder="••••••••">
-                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfgDuplicatiPassword')">👁️</button>
-                            </div>
+                            <label class="form-label small text-muted">Política de Retención (Días a conservar)</label>
+                            <input type="number" class="form-control form-control-sm" id="cfgRetentionDays" placeholder="7" min="1" max="365">
                         </div>
 
                         <hr class="my-3">
@@ -656,8 +656,8 @@
                     document.getElementById('cfgTelegramEnabled').checked = !!cfg.telegram_enabled;
                     document.getElementById('cfgTelegramToken').value = cfg.telegram_token || '';
                     document.getElementById('cfgTelegramChatId').value = cfg.telegram_chat_id || '';
-                    document.getElementById('cfgDuplicatiUrl').value = cfg.duplicati_url || 'http://172.17.0.1:8200';
-                    document.getElementById('cfgDuplicatiPassword').value = cfg.duplicati_password || '';
+                    document.getElementById('cfgBorgPassphrase').value = cfg.borg_passphrase || cfg.duplicati_password || '';
+                    document.getElementById('cfgRetentionDays').value = cfg.retention_days || 7;
                 }
             } catch (e) {}
         });
@@ -668,8 +668,8 @@
                 telegram_enabled: document.getElementById('cfgTelegramEnabled').checked,
                 telegram_token: document.getElementById('cfgTelegramToken').value,
                 telegram_chat_id: document.getElementById('cfgTelegramChatId').value,
-                duplicati_url: document.getElementById('cfgDuplicatiUrl').value,
-                duplicati_password: document.getElementById('cfgDuplicatiPassword').value
+                borg_passphrase: document.getElementById('cfgBorgPassphrase').value,
+                retention_days: parseInt(document.getElementById('cfgRetentionDays').value) || 7
             };
 
             try {
