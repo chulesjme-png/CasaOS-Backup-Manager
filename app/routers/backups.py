@@ -3,6 +3,7 @@ import signal
 import logging
 import asyncio
 import time
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, status
@@ -10,9 +11,9 @@ from pydantic import BaseModel
 
 from app.core.config import config_manager
 from app.core.ws_manager import ws_manager
-from app.services.backup_engine_service import backup_engine_service
 from app.services.duplicati_service import duplicati_orchestrator
 from app.services.borg_service import borg_service
+from app.services.restore_service import RestoreService
 
 logger = logging.getLogger("casaos-backup")
 
@@ -201,6 +202,8 @@ class RestorePayload(BaseModel):
     app_name: Optional[str] = None
     app: Optional[str] = None
     target_path: Optional[str] = None
+    engine: Optional[str] = "auto"
+    dry_run: Optional[bool] = False
 
 
 @router.get("/profiles")
@@ -235,39 +238,47 @@ def get_backup_profiles():
     return profiles
 
 
-async def task_execute_restore_with_ws(app_name: str, file_path: str, target_path: Optional[str]):
+async def task_execute_safe_restore_with_ws(
+    app_name: str,
+    file_path: str,
+    task_id: str,
+    target_path: Optional[str],
+    engine: str,
+    dry_run: bool
+):
     try:
         await ws_manager.broadcast({
             "type": "restore_progress",
             "status": "IN_PROGRESS",
-            "percentage": 30,
-            "message": f"Restaurando {app_name}..."
+            "percentage": 20,
+            "message": f"Verificando espacio y descomprimiendo {app_name} en zona de cuarentena aislada..."
         })
 
-        if asyncio.iscoroutinefunction(backup_engine_service.execute_restore_1click):
-            await backup_engine_service.execute_restore_1click(app_name=app_name, file_path=file_path, target_path=target_path)
-        else:
-            await asyncio.to_thread(
-                backup_engine_service.execute_restore_1click,
-                app_name=app_name,
-                file_path=file_path,
-                target_path=target_path
-            )
+        base_dest = target_path or "/DATA/AppData"
+        await asyncio.to_thread(
+            RestoreService.execute_safe_restore,
+            file_path=file_path,
+            app_name=app_name,
+            task_id=task_id,
+            target_base_path=base_dest,
+            engine=engine,
+            dry_run=dry_run
+        )
 
-        logger.info(f"✨ [Restore] Notificando éxito de restauración vía WebSocket para {app_name}")
+        logger.info(f"✨ [Restore] Restauración y verificación completada con éxito para {app_name}")
         await ws_manager.broadcast({
             "type": "restore_complete",
             "status": "COMPLETED",
             "percentage": 100,
-            "message": f"Restauración de {app_name} completada con éxito."
+            "message": f"Restauración de {app_name} completada con éxito de forma segura."
         })
     except Exception as e:
-        logger.error(f"❌ [Restore Error] Error en tarea de restauración: {e}")
+        logger.error(f"❌ [Restore Error] Error en proceso de restauración de {app_name}: {e}")
         await ws_manager.broadcast({
             "type": "restore_error",
             "status": "FAILED",
             "percentage": 0,
-            "message": f"Error restaurando {app_name}: {str(e)}"
+            "message": f"Error en la restauración de {app_name}: {str(e)}"
         })
 
 
@@ -315,7 +326,7 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
 
     logger.info(f"✅ Archivo localizado exitosamente en: {file_path}")
 
-    app_name = payload.app_name or payload.app
+    app_name = payload.app_name or payload.app or payload.target_app
     if not app_name or app_name in ["system", "all"]:
         file_lower = file_identifier.lower()
         if "sonarr" in file_lower:
@@ -335,16 +346,23 @@ async def restore_backup_endpoint(payload: RestorePayload, request: Request, bac
         else:
             app_name = file_identifier.split("_")[0]
 
+    task_id = f"restore_{str(uuid.uuid4())[:8]}"
+
     background_tasks.add_task(
-        task_execute_restore_with_ws,
+        task_execute_safe_restore_with_ws,
         app_name=app_name,
         file_path=file_path,
-        target_path=payload.target_path
+        task_id=task_id,
+        target_path=payload.target_path,
+        engine=payload.engine or "auto",
+        dry_run=payload.dry_run or False
     )
 
     return {
         "status": "ACCEPTED",
-        "message": f"Restauración iniciada con éxito para {app_name}",
+        "message": f"Proceso seguro de restauración iniciado para {app_name}",
+        "task_id": task_id,
         "snapshot_id": file_identifier,
-        "resolved_path": file_path
+        "resolved_path": file_path,
+        "staging_path": f"{payload.target_path or '/DATA/AppData'}/.restore_staging/{task_id}"
     }
