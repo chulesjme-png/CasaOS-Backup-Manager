@@ -6,11 +6,35 @@
     <title>CasaOS Backup Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .card { border-radius: 12px; }
-        .nav-tabs .nav-link { border: none; background: transparent; padding: 0.5rem 0.8rem; cursor: pointer; color: #6c757d; }
-        .nav-tabs .nav-link.active { border-bottom: 2px solid #0d6efd; background: transparent; color: #0d6efd; font-weight: bold; }
-        .app-list-scroll { max-height: 720px; overflow-y: auto; padding-right: 6px; }
+        body { 
+            background-color: #f4f6f9; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+        }
+        .card { 
+            border-radius: 12px; 
+        }
+        .nav-tabs .nav-link { 
+            border: none; 
+            background: transparent; 
+            padding: 0.5rem 0.8rem; 
+            cursor: pointer; 
+            color: #6c757d; 
+            transition: color 0.2s ease-in-out;
+        }
+        .nav-tabs .nav-link.active { 
+            border-bottom: 2px solid #0d6efd; 
+            background: transparent; 
+            color: #0d6efd; 
+            font-weight: bold; 
+        }
+        .app-list-scroll { 
+            max-height: 720px; 
+            overflow-y: auto; 
+            padding-right: 6px; 
+        }
+        .progress-bar {
+            transition: width 0.3s ease-in-out;
+        }
     </style>
 </head>
 <body>
@@ -20,6 +44,7 @@
         <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">
                 <img src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" height="47" onerror="this.style.display='none'">
+                <span class="fw-bold text-dark fs-5">CasaOS Backup Manager</span>
                 <span class="badge bg-light text-secondary border rounded-pill px-2 py-1 ms-2" style="font-size: 0.75rem;">v0.6.0-beta1</span>
             </div>
         </div>
@@ -29,7 +54,7 @@
         <!-- Métricas del Sistema -->
         <div class="row g-3 mb-3">
             <div class="col-md-3">
-                <div class="card p-3 shadow-sm border-0">
+                <div class="card p-3 shadow-sm border-0 h-100">
                     <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Estado General</span>
                     <div class="d-flex align-items-center mt-2">
                         <span class="badge rounded-circle bg-success p-1 me-2"></span>
@@ -38,19 +63,19 @@
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card p-3 shadow-sm border-0">
+                <div class="card p-3 shadow-sm border-0 h-100">
                     <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Motores de Backup</span>
                     <div class="fw-bold text-dark mt-2">Tar.gz / Borg / Rsync (OK)</div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card p-3 shadow-sm border-0">
+                <div class="card p-3 shadow-sm border-0 h-100">
                     <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Aplicaciones CasaOS</span>
                     <div class="fw-bold text-dark mt-2" id="appsCountHeader">Cargando...</div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card p-3 shadow-sm border-0">
+                <div class="card p-3 shadow-sm border-0 h-100">
                     <span class="text-uppercase text-muted fw-semibold" style="font-size: 0.7rem;">Almacenamiento Host</span>
                     <div class="fw-bold text-dark mt-2">/DATA Protegido</div>
                 </div>
@@ -76,7 +101,7 @@
         <!-- Selector de Destino -->
         <div class="card p-3 shadow-sm border-0 mb-4">
             <div class="row align-items-center">
-                <div class="col-md-4 d-flex align-items-center gap-2">
+                <div class="col-md-4 d-flex align-items-center gap-2 mb-2 mb-md-0">
                     <span class="fs-4">💾</span>
                     <span class="fw-bold text-dark">Destino Activo de Copias:</span>
                 </div>
@@ -91,7 +116,7 @@
             <div class="col-lg-8">
                 <!-- Backup Completo -->
                 <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                         <div class="d-flex gap-3 align-items-center">
                             <div class="fs-1 text-primary">🛡️</div>
                             <div>
@@ -224,7 +249,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="d-flex justify-content-between mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="text-muted small">Últimos registros de copias y restauraciones.</span>
                         <button class="btn btn-outline-danger btn-sm" onclick="clearLogs()">🗑️ Limpiar Historial</button>
                     </div>
@@ -267,7 +292,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="configForm">
+                    <form id="configForm" onsubmit="event.preventDefault(); saveConfiguration();">
                         <h6 class="fw-bold text-dark mb-3">💾 Destino de Copias por Defecto</h6>
                         <div class="mb-3">
                             <label class="form-label small text-muted">Ruta o Punto de Montaje</label>
@@ -321,10 +346,19 @@
         </div>
     </div>
 
+    <!-- Scripts JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let currentJobId = null;
         let jobInterval = null;
+
+        // Helpers seguros para LocalStorage
+        function getStorage(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
+        function setStorage(key, value) {
+            try { localStorage.setItem(key, value); } catch (e) {}
+        }
 
         function togglePasswordVisibility(inputId) {
             const input = document.getElementById(inputId);
@@ -334,10 +368,11 @@
         }
 
         function switchTab(evt, tabName) {
-            document.querySelectorAll('#sideTabs .nav-link').forEach(btn => btn.classList.remove('active'));
+            const btn = evt.currentTarget || evt.target;
+            document.querySelectorAll('#sideTabs .nav-link').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-pane-content').forEach(pane => pane.classList.add('d-none'));
 
-            evt.target.classList.add('active');
+            btn.classList.add('active');
             if (tabName === 'rpi') { document.getElementById('tabContentRpi').classList.remove('d-none'); loadRpiInfo(); }
             if (tabName === 'docker') { document.getElementById('tabContentDocker').classList.remove('d-none'); loadDockerInfo(); }
             if (tabName === 'disks') { document.getElementById('tabContentDisks').classList.remove('d-none'); loadDisksInfo(); }
@@ -359,14 +394,15 @@
         }
 
         async function loadApps() {
+            const container = document.getElementById('appsContainer');
             try {
                 const res = await fetch('/api/v1/apps');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 const apps = data.apps || [];
                 document.getElementById('appsCountHeader').innerText = `${apps.length} Detectadas`;
                 document.getElementById('appsCountBadge').innerText = `${apps.length} Apps`;
                 
-                const container = document.getElementById('appsContainer');
                 if (!apps.length) {
                     container.innerHTML = '<div class="text-center text-muted py-4">No se detectaron aplicaciones en /DATA/AppData</div>';
                     return;
@@ -374,7 +410,7 @@
 
                 container.innerHTML = apps.map(app => `
                     <div class="list-group-item px-0 py-3 border-bottom">
-                        <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div>
                                 <div class="fw-bold text-dark text-capitalize fs-6">${app.name}</div>
                                 <div class="text-muted small mt-1">Ruta: <code>${app.path}</code></div>
@@ -385,6 +421,7 @@
                 `).join('');
             } catch (err) {
                 console.error("Error cargando aplicaciones:", err);
+                container.innerHTML = '<div class="text-center text-danger py-4">Error al cargar las aplicaciones</div>';
             }
         }
 
@@ -393,6 +430,7 @@
             container.innerHTML = '<div class="text-muted py-2 text-center">Cargando contenedores...</div>';
             try {
                 const res = await fetch('/api/v1/system/docker');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 const list = data.containers || [];
                 
@@ -417,10 +455,11 @@
             
             try {
                 const res = await fetch('/api/v1/system/disks');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 const list = data.disks || [];
 
-                const savedTargetDisk = localStorage.getItem('selected_target_disk');
+                const savedTargetDisk = getStorage('selected_target_disk');
 
                 if (list.length > 0) {
                     select.innerHTML = list.map(d => {
@@ -431,7 +470,7 @@
                     if (savedTargetDisk && list.some(d => (d.mountpoint || d.mount) === savedTargetDisk)) {
                         select.value = savedTargetDisk;
                     } else if (select.options.length > 0) {
-                        localStorage.setItem('selected_target_disk', select.value);
+                        setStorage('selected_target_disk', select.value);
                     }
                 } else {
                     select.innerHTML = '<option value="">Almacenamiento por defecto (/DATA/Backups)</option>';
@@ -458,11 +497,11 @@
         }
 
         function saveSelectedDisk(value) {
-            localStorage.setItem('selected_target_disk', value);
+            setStorage('selected_target_disk', value);
         }
 
         async function triggerAppBackup(appName) {
-            const targetDisk = document.getElementById('targetDiskSelect').value || localStorage.getItem('selected_target_disk') || '';
+            const targetDisk = document.getElementById('targetDiskSelect').value || getStorage('selected_target_disk') || '';
             
             const modalProgressEl = document.getElementById('modalProgress');
             const modalProgress = bootstrap.Modal.getOrCreateInstance(modalProgressEl);
@@ -610,6 +649,7 @@
             document.getElementById('progressStatusText').innerText = 'Iniciando restauración...';
             document.getElementById('progressBar').style.width = '0%';
             document.getElementById('progressBar').innerText = '0%';
+            document.getElementById('progressBar').className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
             modalProgress.show();
 
             try {
@@ -645,7 +685,7 @@
         }
 
         document.getElementById('modalConfig').addEventListener('show.bs.modal', async () => {
-            const currentSelectedDisk = document.getElementById('targetDiskSelect').value || localStorage.getItem('selected_target_disk') || '';
+            const currentSelectedDisk = document.getElementById('targetDiskSelect').value || getStorage('selected_target_disk') || '';
             document.getElementById('cfgTargetDisk').value = currentSelectedDisk;
 
             try {
@@ -681,7 +721,7 @@
 
                 if (res.ok) {
                     if (payload.target_disk) {
-                        localStorage.setItem('selected_target_disk', payload.target_disk);
+                        setStorage('selected_target_disk', payload.target_disk);
                         document.getElementById('targetDiskSelect').value = payload.target_disk;
                     }
                     const modalEl = document.getElementById('modalConfig');
@@ -732,6 +772,7 @@
             tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3">Cargando...</td></tr>';
             try {
                 const res = await fetch('/api/v1/executions?limit=50');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const logs = await res.json();
                 tbody.innerHTML = logs.length ? logs.map(l => `
                     <tr>
@@ -752,11 +793,12 @@
             list.innerHTML = '<div class="p-3 text-center text-muted">Buscando copias reales...</div>';
             try {
                 const res = await fetch('/api/v1/backups/list');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 const backups = data.backups || [];
                 
                 list.innerHTML = backups.length ? backups.map(b => `
-                    <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-3 flex-wrap gap-2">
                         <div>
                             <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
                             <div class="small text-muted mt-1">App: <strong class="text-primary">${b.app_name}</strong> &nbsp;|&nbsp; Peso: <strong>${b.size_str}</strong> &nbsp;|&nbsp; Fecha: ${b.fecha}</div>
