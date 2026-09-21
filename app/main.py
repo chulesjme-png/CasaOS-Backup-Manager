@@ -46,7 +46,7 @@ try:
     borg_service = BorgService()
 except ImportError:
     class DummyBorgService:
-        def run_backup(self, target_disk: str, source_dir: str = "/DATA", **kwargs):
+        def run_backup(self, target_disk: str, source_paths: list = None, **kwargs):
             return {"success": False, "error": "Módulo BorgService no disponible."}
         def cancel_backup(self):
             pass
@@ -61,7 +61,6 @@ BASE_DIR = Path(__file__).resolve().parent
 
 active_jobs = {}
 
-# --- MODELOS DE DATOS ---
 class ConfigModel(BaseModel):
     target_disk: str = ""
     telegram_enabled: bool = False
@@ -80,7 +79,6 @@ class ExecutionRunModel(BaseModel):
     app_name: str = "Sistema_Completo"
     target_disk: str = ""
 
-# --- GESTIÓN DE CONFIGURACIÓN Y TELEGRAM ---
 def load_config():
     defaults = {
         "target_disk": "",
@@ -104,7 +102,6 @@ def save_config_file(data: dict):
     CONFIG_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 def kill_rsync_processes():
-    """Elimina todos los procesos rsync activos usando psutil nativo."""
     for proc in psutil.process_iter(['pid', 'name']):
         try:
             if proc.info['name'] and 'rsync' in proc.info['name'].lower():
@@ -127,11 +124,7 @@ def send_telegram_notification(message: str):
     html_message = re.sub(r'`([^`]+)`', r'<code>\1</code>', html_message)
     html_message = re.sub(r'\*([^*]+)\*', r'<b>\1</b>', html_message)
 
-    payload = {
-        "chat_id": chat_id,
-        "text": html_message,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": chat_id, "text": html_message, "parse_mode": "HTML"}
     try:
         res = requests.post(url, json=payload, timeout=8)
         if res.status_code != 200:
@@ -139,7 +132,6 @@ def send_telegram_notification(message: str):
     except Exception as e:
         logger.error(f"Error enviando notificación a Telegram: {e}")
 
-# --- BASE DE DATOS ---
 def get_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     return sqlite3.connect(DB_PATH)
@@ -167,7 +159,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- ENDPOINTS DE SALUD Y BACKENDS ---
 @app.get("/health")
 @app.get("/api/v1/health")
 def health_check():
@@ -212,7 +203,6 @@ def get_backend_info(backend_name: str):
         raise HTTPException(status_code=404, detail=f"Backend '{backend_name}' no encontrado")
     return {"name": backend_name, "status": "active", "supported_operations": ["backup", "restore"]}
 
-# --- ENDPOINTS DE CONFIGURACIÓN Y SISTEMA ---
 @app.get("/api/v1/system/info")
 def get_system_info():
     model = "Raspberry Pi / Linux Host"
@@ -284,20 +274,15 @@ def test_telegram(data: TelegramTestModel):
     try:
         res = requests.post(url, json=payload, timeout=8)
         res_data = res.json()
-        
         if res.status_code == 200 and res_data.get("ok"):
             return {"status": "ok", "message": "Mensaje enviado con éxito"}
-            
         error_desc = res_data.get("description", "Error desconocido de Telegram")
-        logger.error(f"Error Telegram API ({res.status_code}): {error_desc}")
         raise HTTPException(status_code=400, detail=f"Telegram API: {error_desc}")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error de conexión con Telegram: {e}")
         raise HTTPException(status_code=500, detail=f"Error de conexión: {str(e)}")
 
-# --- ENDPOINTS DE APPS Y DOCKER ---
 @app.get("/api/v1/apps")
 def get_apps():
     appdata_dir = Path("/DATA/AppData")
@@ -305,10 +290,7 @@ def get_apps():
     if appdata_dir.exists():
         for item in sorted(appdata_dir.iterdir()):
             if item.is_dir() and not item.name.startswith("."):
-                apps.append({
-                    "name": item.name,
-                    "path": str(item)
-                })
+                apps.append({"name": item.name, "path": str(item)})
     return {"apps": apps}
 
 @app.get("/api/v1/system/docker")
@@ -372,7 +354,6 @@ def get_all_mounts():
 def get_disks():
     return {"disks": disk_service.get_disks()}
 
-# --- PROCESOS DE RESPALDO Y RESTAURACIÓN ---
 def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     start = time.time()
     active_jobs[job_id] = {"status": "running", "progress": 5, "message": "Iniciando comprobaciones...", "cancelled": False}
@@ -410,10 +391,10 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         try:
             res = borg_service.run_backup(
                 target_disk=str(base_backups_dir),
-                source_dir="/DATA"
+                source_paths=["/DATA", "/var/lib/casaos"]
             )
             if isinstance(res, bool):
-                borg_res = {"success": res, "error": "" if res else "Error desconocido durante el respaldo Borg."}
+                borg_res = {"success": res, "error": "" if res else "Error durante el respaldo Borg."}
             elif isinstance(res, dict):
                 borg_res = res
             else:
@@ -463,26 +444,30 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{app_name.lower()}_backup_{timestamp}.tar.gz"
     dest_file = dest_dir / filename
-    src_dir = Path(f"/DATA/AppData/{app_name}")
+
+    app_data_dir = Path(f"/DATA/AppData/{app_name}")
+    casaos_app_dir = Path(f"/var/lib/casaos/apps/{app_name}")
 
     try:
-        if not src_dir.exists():
-            active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Origen {src_dir} no existe"}
-            send_telegram_notification(f"❌ *Copia fallida*: {app_name}\nOrigen `{src_dir}` no existe.")
+        if not app_data_dir.exists():
+            active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Origen {app_data_dir} no existe"}
+            send_telegram_notification(f"❌ *Copia fallida*: {app_name}\nOrigen `{app_data_dir}` no existe.")
             return
 
         active_jobs[job_id]["message"] = "Verificando espacio libre en disco..."
         active_jobs[job_id]["progress"] = 15
 
         required_bytes = 0
-        for root, _, files in os.walk(src_dir):
-            for f in files:
-                fp = os.path.join(root, f)
-                if os.path.exists(fp):
-                    try:
-                        required_bytes += os.path.getsize(fp)
-                    except OSError:
-                        pass
+        for scan_target in [app_data_dir, casaos_app_dir]:
+            if scan_target.exists():
+                for root, _, files in os.walk(scan_target):
+                    for f in files:
+                        fp = os.path.join(root, f)
+                        if os.path.exists(fp):
+                            try:
+                                required_bytes += os.path.getsize(fp)
+                            except OSError:
+                                pass
 
         dest_usage = shutil.disk_usage(dest_dir)
         free_bytes = dest_usage.free
@@ -506,19 +491,29 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             return
 
         active_jobs[job_id]["progress"] = 35
-        active_jobs[job_id]["message"] = f"Comprimiendo {src_dir.name}..."
+        active_jobs[job_id]["message"] = f"Comprimiendo datos y receta de {app_name}..."
 
         was_cancelled = False
         with tarfile.open(dest_file, "w:gz") as tar:
-            for root, _, files in os.walk(src_dir):
-                for f in files:
-                    if active_jobs[job_id].get("cancelled"):
-                        was_cancelled = True
-                        break
-                    fp = os.path.join(root, f)
-                    tar.add(fp, arcname=os.path.relpath(fp, src_dir))
-                if was_cancelled:
-                    break
+            # 1. Empaquetar Datos
+            if app_data_dir.exists():
+                for root, _, files in os.walk(app_data_dir):
+                    for f in files:
+                        if active_jobs[job_id].get("cancelled"):
+                            was_cancelled = True; break
+                        fp = os.path.join(root, f)
+                        rel = os.path.relpath(fp, app_data_dir)
+                        tar.add(fp, arcname=os.path.join("DATA/AppData", app_name, rel))
+
+            # 2. Empaquetar Receta CasaOS (si existe)
+            if casaos_app_dir.exists() and not was_cancelled:
+                for root, _, files in os.walk(casaos_app_dir):
+                    for f in files:
+                        if active_jobs[job_id].get("cancelled"):
+                            was_cancelled = True; break
+                        fp = os.path.join(root, f)
+                        rel = os.path.relpath(fp, casaos_app_dir)
+                        tar.add(fp, arcname=os.path.join("var/lib/casaos/apps", app_name, rel))
 
         if was_cancelled:
             if dest_file.exists():
@@ -558,7 +553,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         if dest_file.exists():
             try:
                 os.remove(dest_file)
-                logger.info(f"[ROLLBACK] Archivo incompleto eliminado: {dest_file}")
             except Exception as rm_err:
                 logger.error(f"[ROLLBACK ERROR] No se pudo eliminar {dest_file}: {rm_err}")
 
@@ -613,17 +607,30 @@ def perform_real_restore(filename: str, job_id: str):
         else:
             app_key = fn_lower.split(".")[0]
 
-        dest_dir = Path("/DATA/AppData") if app_key in ["sistema_completo", "disaster_recovery"] else Path(f"/DATA/AppData/{app_key}")
-        dest_dir.mkdir(parents=True, exist_ok=True)
-
         active_jobs[job_id]["progress"] = 40
-        active_jobs[job_id]["message"] = f"Descomprimiendo en {dest_dir}..."
+        active_jobs[job_id]["message"] = "Descomprimiendo archivos en el sistema..."
 
         with tarfile.open(target_file, "r:gz") as tar:
+            members = tar.getmembers()
+            has_root_paths = any(m.name.startswith("DATA/") or m.name.startswith("var/") for m in members)
+            
+            # Compatibilidad con copias legadas vs estructura nueva
+            extract_dest = Path("/") if has_root_paths else Path(f"/DATA/AppData/{app_key}")
+            extract_dest.mkdir(parents=True, exist_ok=True)
+
             if hasattr(tarfile, 'data_filter'):
-                tar.extractall(path=dest_dir, filter='data')
+                tar.extractall(path=extract_dest, filter='data')
             else:
-                tar.extractall(path=dest_dir)
+                tar.extractall(path=extract_dest)
+
+        # --- AUTO-DESPLIEGUE POST RESTAURACIÓN ---
+        active_jobs[job_id]["progress"] = 80
+        active_jobs[job_id]["message"] = f"Re-activando contenedor Docker para {app_key}..."
+
+        compose_file = Path(f"/var/lib/casaos/apps/{app_key}/docker-compose.yml")
+        if compose_file.exists():
+            subprocess.run(["docker", "compose", "-f", str(compose_file), "up", "-d"], capture_output=True, text=True)
+            subprocess.run(["systemctl", "restart", "casaos"], capture_output=True, text=True)
 
         elapsed = round(time.time() - start, 2)
         active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Restauración completada con éxito", "file": filename}
@@ -649,7 +656,6 @@ def perform_real_restore(filename: str, job_id: str):
 
         send_telegram_notification(f"❌ *Error al restaurar*: {filename}\nDetalle: {str(e)}")
 
-# --- RUTAS DE EJECUCIÓN Y TAREAS ---
 @app.post("/api/v1/backups/run-app/{app_name}")
 def run_backup(app_name: str, background_tasks: BackgroundTasks, target_disk: str = Query(None)):
     job_id = f"job_{app_name}_{int(time.time())}"
@@ -795,7 +801,6 @@ def list_backups(max_keep_per_app: int = 3):
             try:
                 if os.path.exists(old["filepath"]):
                     os.remove(old["filepath"])
-                    logger.info(f"[RETENCION] Eliminado del disco: {old['filepath']}")
             except Exception as e:
                 logger.error(f"[ERROR] No se pudo borrar {old['filepath']}: {e}")
 

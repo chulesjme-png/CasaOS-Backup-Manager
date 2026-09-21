@@ -4,7 +4,7 @@ import pty
 import re
 import subprocess
 import time
-from typing import Callable, Optional
+from typing import Callable, Optional, Union, List
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +50,7 @@ class BorgService:
             config_file = os.path.join(repo_path, "config")
 
             if not os.path.exists(config_file):
-                logger.info(
-                    f"Inicializando nuevo repositorio Borg en: {repo_path}"
-                )
+                logger.info(f"Inicializando nuevo repositorio Borg en: {repo_path}")
                 cmd = ["borg", "init", "--encryption=none", repo_path]
                 res = subprocess.run(
                     cmd, capture_output=True, text=True, env=self._get_env()
@@ -92,16 +90,13 @@ class BorgService:
 
         total = 0
         try:
-
             def scan_dir(dir_path):
                 size = 0
                 with os.scandir(dir_path) as it:
                     for entry in it:
                         try:
                             if entry.is_file(follow_symlinks=False):
-                                size += entry.stat(
-                                    follow_symlinks=False
-                                ).st_size
+                                size += entry.stat(follow_symlinks=False).st_size
                             elif entry.is_dir(follow_symlinks=False):
                                 size += scan_dir(entry.path)
                         except Exception:
@@ -115,16 +110,12 @@ class BorgService:
         return total or 1
 
     def _parse_borg_bytes(self, text: str) -> Optional[int]:
-        """Extrae los bytes procesados eliminando secuencias de escape ANSI y tolerando variaciones de formato."""
-        # Limpieza exhaustiva de códigos ANSI de escape de terminal
+        """Extrae los bytes procesados eliminando secuencias de escape ANSI."""
         clean_text = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", text)
-
-        # Captura formatos Borg como: "123.45 MB O", "1.2 GiB O", "450 kB Original"
         match = re.search(
             r"([\d\.,]+)\s*([kKMGT]?i?B)\s+(?:O|Original)", clean_text, re.IGNORECASE
         )
         if not match:
-            # Patrón alternativo en caso de formato variante sin la letra 'O' directa
             match = re.search(r"([\d\.,]+)\s*([kKMGT]?i?B)", clean_text, re.IGNORECASE)
 
         if not match:
@@ -150,9 +141,7 @@ class BorgService:
     def break_lock(self, repo_path: Optional[str] = None) -> bool:
         """Fuerza la liberación de cualquier candado huérfano en el repositorio."""
         target_repo = self._resolve_repo_path(repo_path)
-        if not target_repo or not os.path.exists(
-            os.path.join(target_repo, "config")
-        ):
+        if not target_repo or not os.path.exists(os.path.join(target_repo, "config")):
             return False
 
         logger.info(f"Liberando bloqueo del repositorio: {target_repo}")
@@ -171,15 +160,11 @@ class BorgService:
     def compact_repo(self, repo_path: Optional[str] = None) -> bool:
         """Elimina bloques huérfanos y libera espacio físico en disco."""
         target_repo = self._resolve_repo_path(repo_path)
-        if not target_repo or not os.path.exists(
-            os.path.join(target_repo, "config")
-        ):
+        if not target_repo or not os.path.exists(os.path.join(target_repo, "config")):
             return False
 
         time.sleep(1)
-        logger.info(
-            f"Compactando repositorio para liberar espacio físico: {target_repo}"
-        )
+        logger.info(f"Compactando repositorio: {target_repo}")
         try:
             res = subprocess.run(
                 ["borg", "compact", target_repo],
@@ -193,17 +178,11 @@ class BorgService:
             return False
 
     def _cleanup_after_cancellation(self, repo_path: str, archive_name: str):
-        """Elimina ÚNICAMENTE checkpoints parciales incompletos sin afectar backups completados."""
-        logger.info(
-            f"Iniciando limpieza de checkpoints temporales en: {repo_path}"
-        )
+        """Elimina únicamente checkpoints parciales incompletos."""
+        logger.info(f"Iniciando limpieza de checkpoints temporales en: {repo_path}")
         self.break_lock(repo_path)
-
         try:
             checkpoint_pattern = f"{archive_name}*.checkpoint*"
-            logger.info(
-                f"Eliminando solo checkpoints incompletos matching: '{checkpoint_pattern}'..."
-            )
             subprocess.run(
                 ["borg", "delete", "--glob", checkpoint_pattern, repo_path],
                 capture_output=True,
@@ -211,22 +190,19 @@ class BorgService:
                 env=self._get_env(),
             )
         except Exception as e:
-            logger.warning(
-                f"No se pudieron eliminar los checkpoints parciales: {e}"
-            )
-
+            logger.warning(f"No se pudieron eliminar checkpoints: {e}")
         self.compact_repo(repo_path)
 
     def run_backup(
         self,
         repo_path: Optional[str] = None,
         archive_name: str = "Sistema_Completo",
-        source_path: str = "/DATA/AppData",
+        source_paths: Optional[Union[str, List[str]]] = None,
         progress_callback: Optional[Callable[[int, str], None]] = None,
         target_disk: Optional[str] = None,
         **kwargs,
     ) -> bool:
-        """Ejecuta el respaldo Borg garantizando nombres únicos con marca de tiempo."""
+        """Ejecuta el respaldo Borg respaldando múltiples rutas (Datos + Configuración de CasaOS)."""
         self._is_cancelled = False
         raw_path = repo_path or target_disk or kwargs.get("target_disk")
         target_repo = self._resolve_repo_path(raw_path)
@@ -240,13 +216,19 @@ class BorgService:
         timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
         full_archive_name = f"{base_name}_{timestamp}"
 
-        if not source_path:
-            source_path = "/DATA/AppData"
+        # Configuración por defecto de orígenes si no se especifica
+        if not source_paths:
+            source_paths = ["/DATA", "/var/lib/casaos"]
+        elif isinstance(source_paths, str):
+            source_paths = [source_paths]
 
-        total_bytes = self._get_dir_size(source_path)
-        logger.info(
-            f"Tamaño total de {source_path}: {total_bytes / (1024**2):.2f} MB"
-        )
+        existing_sources = [p for p in source_paths if os.path.exists(p)]
+        if not existing_sources:
+            logger.error("Ninguna de las rutas de origen especificadas existe.")
+            return False
+
+        total_bytes = sum(self._get_dir_size(p) for p in existing_sources)
+        logger.info(f"Tamaño total a respaldar: {total_bytes / (1024**2):.2f} MB")
 
         target_archive = f"{target_repo}::{full_archive_name}"
         cmd = [
@@ -261,11 +243,9 @@ class BorgService:
             "*/cache/*",
             "--stats",
             target_archive,
-            source_path,
-        ]
+        ] + existing_sources
 
         logger.info(f"Iniciando respaldo Borg: {' '.join(cmd)}")
-
         master_fd, slave_fd = pty.openpty()
 
         try:
@@ -298,20 +278,12 @@ class BorgService:
                             line = buffer.strip()
                             if line and progress_callback:
                                 processed_bytes = self._parse_borg_bytes(line)
-                                if (
-                                    processed_bytes is not None
-                                    and total_bytes > 0
-                                ):
-                                    # Autocorrección si los bytes procesados superan la estimación previa
+                                if processed_bytes is not None and total_bytes > 0:
                                     if processed_bytes > total_bytes:
                                         total_bytes = int(processed_bytes * 1.1)
 
-                                    calc_pct = 10 + int(
-                                        (processed_bytes / total_bytes) * 85
-                                    )
-                                    current_percent = min(
-                                        95, max(current_percent, calc_pct)
-                                    )
+                                    calc_pct = 10 + int((processed_bytes / total_bytes) * 85)
+                                    current_percent = min(95, max(current_percent, calc_pct))
                                 progress_callback(current_percent, line)
                             buffer = ""
                         else:
@@ -324,23 +296,13 @@ class BorgService:
 
             ret_code = self.process.returncode if self.process else -1
 
-            # Manejo explícito de señales de cancelación (código -15 = SIGTERM, -9 = SIGKILL)
             if self._is_cancelled or ret_code in (-15, -9, 143):
-                logger.info(
-                    f"Respaldo Borg cancelado por el usuario (código {ret_code})"
-                )
-                self._cleanup_after_cancellation(
-                    target_repo, full_archive_name
-                )
+                logger.info(f"Respaldo Borg cancelado por el usuario (código {ret_code})")
+                self._cleanup_after_cancellation(target_repo, full_archive_name)
                 return False
             elif ret_code > 1:
-                # Código 0 es éxito total; Código 1 son advertencias (Borg considera 1 como OK con warnings)
-                logger.error(
-                    f"Error no controlado durante el respaldo Borg (código {ret_code})"
-                )
-                self._cleanup_after_cancellation(
-                    target_repo, full_archive_name
-                )
+                logger.error(f"Error no controlado durante el respaldo Borg (código {ret_code})")
+                self._cleanup_after_cancellation(target_repo, full_archive_name)
                 return False
 
             if progress_callback:
@@ -352,9 +314,7 @@ class BorgService:
         except Exception as e:
             logger.error(f"Excepción inesperada durante el respaldo: {e}")
             if target_repo:
-                self._cleanup_after_cancellation(
-                    target_repo, full_archive_name
-                )
+                self._cleanup_after_cancellation(target_repo, full_archive_name)
             return False
         finally:
             try:
@@ -363,12 +323,7 @@ class BorgService:
                 pass
             self.process = None
 
-    def cancel_backup(
-        self,
-        repo_path: Optional[str] = None,
-        archive_name: str = "Sistema_Completo",
-    ):
-        """Detiene el proceso en curso sin borrar copias previas completadas."""
+    def cancel_backup(self, repo_path: Optional[str] = None, archive_name: str = "Sistema_Completo"):
         self._is_cancelled = True
         if self.process and self.process.poll() is None:
             try:

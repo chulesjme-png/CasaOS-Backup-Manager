@@ -50,9 +50,36 @@ class RestoreService:
 
             staging_mgr.atomic_swap(task_id, app_name)
             staging_mgr.cleanup_staging(task_id)
+
+            # --- POST-RESTAURACIÓN AUTOMÁTICA ---
+            RestoreService._relaunch_application(app_name)
+
             return True
 
         except Exception as e:
             logger.error(f"Error procesando la restauración segura: {e}")
             staging_mgr.cleanup_staging(task_id)
             raise e
+
+    @staticmethod
+    def _relaunch_application(app_name: str):
+        """Despliega automáticamente el contenedor Docker y reinicia el panel de CasaOS."""
+        try:
+            compose_path = Path(f"/var/lib/casaos/apps/{app_name}/docker-compose.yml")
+            if compose_path.exists():
+                logger.info(f"🚀 Re-activando contenedor Docker con Compose: {compose_path}")
+                res_docker = subprocess.run(
+                    ["docker", "compose", "-f", str(compose_path), "up", "-d"],
+                    capture_output=True,
+                    text=True
+                )
+                if res_docker.returncode == 0:
+                    logger.info(f"✅ Contenedor {app_name} iniciado correctamente.")
+                else:
+                    logger.warning(f"⚠️ Aviso al iniciar contenedor {app_name}: {res_docker.stderr}")
+
+            logger.info("🔄 Sincronizando con el servicio principal de CasaOS...")
+            subprocess.run(["systemctl", "restart", "casaos"], capture_output=True, text=True)
+            
+        except Exception as err:
+            logger.error(f"⚠️ No se pudo completar la reactivación automática de {app_name}: {err}")
