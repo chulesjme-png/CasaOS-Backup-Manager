@@ -14,6 +14,10 @@ services:
       # Acceso al cliente y socket de Docker
       - /usr/bin/docker:/usr/bin/docker:ro
       - /var/run/docker.sock:/var/run/docker.sock
+      # Acceso a systemctl y D-Bus para gestionar servicios de CasaOS en el Host
+      - /bin/systemctl:/bin/systemctl:ro
+      - /usr/bin/systemctl:/usr/bin/systemctl:ro
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
       # Acceso a los datos y configuración de CasaOS
       - /DATA:/DATA
       - /etc/casaos:/etc/casaos
