@@ -15,8 +15,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Acceso a los datos y configuración de CasaOS
       - /DATA:/DATA
-      - /etc/casaos:/etc/casaos:ro
-      - /var/lib/casaos:/var/lib/casaos:ro
+      - /etc/casaos:/etc/casaos
+      - /var/lib/casaos:/var/lib/casaos
       # Unidades y discos externos de backup
       - /media:/media:rshared
       - /mnt:/mnt:rshared
