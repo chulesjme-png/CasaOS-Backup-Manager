@@ -11,7 +11,8 @@ services:
       - /:/host:ro
       - /dev:/dev:ro
       - /run/udev:/run/udev:ro
-      # Acceso al socket de Docker para ejecutar DB Hooks
+      # Acceso al cliente y socket de Docker
+      - /usr/bin/docker:/usr/bin/docker:ro
       - /var/run/docker.sock:/var/run/docker.sock
       # Acceso a los datos y configuración de CasaOS
       - /DATA:/DATA
