@@ -126,7 +126,7 @@
                                 <span class="badge bg-success-subtle text-success border border-success-subtle" id="system-status-badge">🟢 Listo para resguardo</span>
                             </div>
                         </div>
-                        <button class="btn btn-primary px-4 py-2 fw-semibold shadow-sm" onclick="triggerAppBackup('Sistema_Completo')">
+                        <button class="btn btn-primary px-4 py-2 fw-semibold shadow-sm" onclick="requestAppBackup('Sistema_Completo')">
                             📦 Copiar Sistema Completo
                         </button>
                     </div>
@@ -213,6 +213,33 @@
                             <div class="small" id="disksList"></div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmación Previa -->
+    <div class="modal fade" id="modalConfirmBackup" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-warning-subtle text-dark border-0">
+                    <h5 class="modal-title fw-bold">
+                        ⚠️ Confirmar Inicio de Resguardo
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <p class="mb-3">Vas a iniciar la copia de seguridad de: <strong id="confirmAppName" class="text-primary fs-6"></strong>.</p>
+                    <div class="alert alert-secondary d-flex align-items-start gap-2 mb-0" role="alert">
+                        <span class="fs-5">⏳</span>
+                        <div class="small">
+                            <strong>Atención:</strong> Este proceso analiza, comprime y deduplica los archivos en el repositorio Borg. <strong>Puede tardar varios minutos u horas</strong> dependiendo del volumen de datos.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning btn-sm fw-bold px-3 text-dark" onclick="confirmAndStartBackup()">🚀 Entendido, Iniciar Copia</button>
                 </div>
             </div>
         </div>
@@ -351,6 +378,7 @@
     <script>
         let currentJobId = null;
         let jobInterval = null;
+        let pendingBackupAppName = null;
 
         // Helpers seguros para LocalStorage
         function getStorage(key) {
@@ -415,7 +443,7 @@
                                 <div class="fw-bold text-dark text-capitalize fs-6">${app.name}</div>
                                 <div class="text-muted small mt-1">Ruta: <code>${app.path}</code></div>
                             </div>
-                            <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="triggerAppBackup('${app.name}')">⚡ Copiar Ahora</button>
+                            <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="requestAppBackup('${app.name}')">⚡ Copiar Ahora</button>
                         </div>
                     </div>
                 `).join('');
@@ -498,6 +526,29 @@
 
         function saveSelectedDisk(value) {
             setStorage('selected_target_disk', value);
+        }
+
+        // Abre el modal de confirmación antes de iniciar cualquier copia
+        function requestAppBackup(appName) {
+            pendingBackupAppName = appName;
+            const confirmAppLabel = document.getElementById('confirmAppName');
+            if (confirmAppLabel) {
+                confirmAppLabel.innerText = appName === 'Sistema_Completo' ? 'Sistema Completo (Disaster Recovery)' : appName;
+            }
+            const modalConfirmEl = document.getElementById('modalConfirmBackup');
+            const modalConfirm = bootstrap.Modal.getOrCreateInstance(modalConfirmEl);
+            modalConfirm.show();
+        }
+
+        // Se ejecuta al pulsar "Entendido, Iniciar Copia" en el modal de confirmación
+        function confirmAndStartBackup() {
+            const modalConfirmEl = document.getElementById('modalConfirmBackup');
+            const modalConfirm = bootstrap.Modal.getInstance(modalConfirmEl);
+            if (modalConfirm) modalConfirm.hide();
+
+            if (pendingBackupAppName) {
+                triggerAppBackup(pendingBackupAppName);
+            }
         }
 
         async function triggerAppBackup(appName) {

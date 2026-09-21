@@ -115,12 +115,18 @@ class BorgService:
         return total or 1
 
     def _parse_borg_bytes(self, text: str) -> Optional[int]:
-        """Extrae los bytes procesados eliminando secuencias de escape ANSI."""
-        clean_text = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", text)
+        """Extrae los bytes procesados eliminando secuencias de escape ANSI y tolerando variaciones de formato."""
+        # Limpieza exhaustiva de códigos ANSI de escape de terminal
+        clean_text = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", text)
 
+        # Captura formatos Borg como: "123.45 MB O", "1.2 GiB O", "450 kB Original"
         match = re.search(
-            r"([\d\.,]+)\s*(B|kB|MB|GB|TB|PB)\s+O", clean_text, re.IGNORECASE
+            r"([\d\.,]+)\s*([kKMGT]?i?B)\s+(?:O|Original)", clean_text, re.IGNORECASE
         )
+        if not match:
+            # Patrón alternativo en caso de formato variante sin la letra 'O' directa
+            match = re.search(r"([\d\.,]+)\s*([kKMGT]?i?B)", clean_text, re.IGNORECASE)
+
         if not match:
             return None
 
@@ -130,7 +136,7 @@ class BorgService:
         except ValueError:
             return None
 
-        unit = match.group(2).upper()
+        unit = match.group(2).upper().replace("I", "")
         units = {
             "B": 1,
             "KB": 1024,
@@ -296,6 +302,10 @@ class BorgService:
                                     processed_bytes is not None
                                     and total_bytes > 0
                                 ):
+                                    # Autocorrección si los bytes procesados superan la estimación previa
+                                    if processed_bytes > total_bytes:
+                                        total_bytes = int(processed_bytes * 1.1)
+
                                     calc_pct = 10 + int(
                                         (processed_bytes / total_bytes) * 85
                                     )
