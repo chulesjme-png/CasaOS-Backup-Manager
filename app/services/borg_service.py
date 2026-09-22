@@ -202,7 +202,7 @@ class BorgService:
         target_disk: Optional[str] = None,
         **kwargs,
     ) -> bool:
-        """Ejecuta el respaldo Borg respaldando múltiples rutas (Datos + Configuración de CasaOS)."""
+        """Ejecuta el respaldo Borg respaldando múltiples rutas (Datos + Recetas + Configuración de CasaOS)."""
         self._is_cancelled = False
         raw_path = repo_path or target_disk or kwargs.get("target_disk")
         target_repo = self._resolve_repo_path(raw_path)
@@ -218,7 +218,7 @@ class BorgService:
 
         # Configuración por defecto de orígenes si no se especifica
         if not source_paths:
-            source_paths = ["/DATA", "/var/lib/casaos"]
+            source_paths = ["/DATA", "/var/lib/casaos", "/var/lib/casaos/apps"]
         elif isinstance(source_paths, str):
             source_paths = [source_paths]
 
