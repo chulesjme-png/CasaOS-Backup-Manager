@@ -498,7 +498,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         try:
             res = borg_service.run_backup(
                 target_disk=str(base_backups_dir),
-                source_paths=["/DATA", "/var/lib/casaos"]
+                source_paths=["/DATA", "/var/lib/casaos", "/var/lib/casaos/apps"]
             )
             if isinstance(res, bool):
                 borg_res = {"success": res, "error": "" if res else "Error durante el respaldo Borg."}
@@ -906,6 +906,10 @@ def list_backups(max_keep_per_app: int = 3):
                 if fn_lower.endswith((".tar.gz", ".tgz", ".zip")):
                     fp = os.path.join(root, file)
                     try:
+                        # Verificación estricta de que el archivo existe en disco
+                        if not os.path.exists(fp):
+                            continue
+
                         real_path = os.path.realpath(fp)
                         if real_path in seen_files:
                             continue
@@ -953,6 +957,9 @@ def list_backups(max_keep_per_app: int = 3):
                 logger.error(f"[ERROR] No se pudo borrar {old['filepath']}: {e}")
 
         for item in to_keep:
+            if not os.path.exists(item["filepath"]):
+                continue
+
             dt = datetime.fromtimestamp(item["timestamp"])
             sz = item["size"]
             size_mb = round(sz / (1024 * 1024), 2)
