@@ -641,6 +641,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             send_telegram_notification(f"*Copia cancelada*: {app_name}")
             return
 
+        # Ejecuta la rotación tras completar la copia
         list_backups(max_keep_per_app=3)
 
         elapsed = round(time.time() - start, 2)
@@ -711,7 +712,7 @@ def perform_real_restore(filename: str, job_id: str):
         elif fn_lower.startswith("disaster_recovery_") or fn_lower.startswith("full_system_"):
             app_key = "sistema_completo"
         else:
-            app_key = fn_lower.split(".")[0]
+            app_key = fn_lower.split(".")[0].replace("_backup", "")
 
         active_jobs[job_id]["progress"] = 30
         active_jobs[job_id]["message"] = "Descomprimiendo archivos en el sistema..."
@@ -723,7 +724,6 @@ def perform_real_restore(filename: str, job_id: str):
             extract_dest = Path("/") if has_root_paths else Path(f"/DATA/AppData/{app_key}")
             extract_dest.mkdir(parents=True, exist_ok=True)
 
-            # Extracción segura: Omitir FIFOs, Sockets y archivos especiales durante la extracción
             safe_members = [
                 m for m in members
                 if m.isreg() or m.isdir() or m.issym() or m.islnk()
@@ -906,7 +906,7 @@ def list_backups(max_keep_per_app: int = 3):
                 if fn_lower.endswith((".tar.gz", ".tgz", ".zip")):
                     fp = os.path.join(root, file)
                     try:
-                        # Verificación estricta de que el archivo existe en disco
+                        # 1. Comprobación estricta de la existencia física del archivo
                         if not os.path.exists(fp):
                             continue
 
@@ -916,17 +916,17 @@ def list_backups(max_keep_per_app: int = 3):
                         seen_files.add(real_path)
 
                         stats = os.stat(fp)
+                        parent_folder = os.path.basename(root).lower()
                         
-                        if "_backup_" in fn_lower:
+                        # 2. Resolución robusta de la aplicación (agrupa por carpeta padre o nombre de archivo)
+                        if parent_folder and parent_folder not in ("backups", "apps", "casaos"):
+                            app_key = parent_folder
+                        elif "_backup_" in fn_lower:
                             app_key = fn_lower.split("_backup_")[0]
                         elif fn_lower.startswith("disaster_recovery_") or fn_lower.startswith("full_system_"):
                             app_key = "disaster_recovery"
                         else:
-                            parent_name = os.path.basename(root).lower()
-                            if parent_name and parent_name not in ("backups", "apps", "casaos"):
-                                app_key = parent_name
-                            else:
-                                app_key = fn_lower.split(".")[0].split("_")[0]
+                            app_key = fn_lower.split(".")[0].replace("_backup", "").split("_")[0]
 
                         if app_key not in app_groups:
                             app_groups[app_key] = []
@@ -943,19 +943,23 @@ def list_backups(max_keep_per_app: int = 3):
 
     retained_backups = []
 
+    # 3. Proceso de rotación automática
     for app_key, entries in app_groups.items():
         entries.sort(key=lambda x: x["timestamp"], reverse=True)
 
         to_keep = entries[:max_keep_per_app]
         to_delete = entries[max_keep_per_app:]
 
+        # Limpieza física en disco de copias antiguas o sobrantes
         for old in to_delete:
             try:
                 if os.path.exists(old["filepath"]):
                     os.remove(old["filepath"])
+                    logger.info(f"Rotación automática: Eliminado archivo antiguo {old['filepath']}")
             except Exception as e:
                 logger.error(f"[ERROR] No se pudo borrar {old['filepath']}: {e}")
 
+        # Retención de los elementos válidos
         for item in to_keep:
             if not os.path.exists(item["filepath"]):
                 continue
