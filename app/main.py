@@ -20,6 +20,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+# Evita que la interfaz del chat rompa el contenedor al leer símbolos HTML
+LT = chr(60)  # Signo '<'
+GT = chr(62)  # Signo '>'
+
 try:
     from app.services.disk_service import disk_service
 except ImportError:
@@ -47,7 +51,7 @@ try:
 except ImportError:
     class DummyBorgService:
         def run_backup(self, target_disk: str, source_paths: list = None, **kwargs):
-            return {"success": False, "error": "Módulo BorgService no disponible."}
+            return {"success": False, "error": "Modulo BorgService no disponible."}
         def cancel_backup(self):
             pass
     borg_service = DummyBorgService()
@@ -94,7 +98,7 @@ def load_config():
             defaults.update(data)
             return defaults
         except Exception as e:
-            logger.error(f"Error al leer la configuración: {e}")
+            logger.error(f"Error al leer la configuracion: {e}")
     return defaults
 
 def save_config_file(data: dict):
@@ -113,16 +117,16 @@ def kill_rsync_processes():
 def send_telegram_notification(message: str):
     cfg = load_config()
     if not cfg.get("telegram_enabled") or not cfg.get("telegram_token") or not cfg.get("telegram_chat_id"):
-        logger.warning("Telegram no enviado: Configuración incompleta o deshabilitada.")
+        logger.warning("Telegram no enviado: Configuracion incompleta o deshabilitada.")
         return
     
     token = cfg['telegram_token'].strip()
     chat_id = cfg['telegram_chat_id'].strip()
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     
-    html_message = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    html_message = re.sub(r'`([^`]+)`', r'<code>\1</code>', html_message)
-    html_message = re.sub(r'\*([^*]+)\*', r'<b>\1</b>', html_message)
+    html_message = message.replace("&", "&").replace(LT, "<").replace(GT, ">")
+    html_message = re.sub(r'\x60([^\x60]+)\x60', rf'{LT}code{GT}\1{LT}/code{GT}', html_message)
+    html_message = re.sub(r'\*([^*]+)\*', rf'{LT}b{GT}\1{LT}/b{GT}', html_message)
 
     payload = {"chat_id": chat_id, "text": html_message, "parse_mode": "HTML"}
     try:
@@ -130,7 +134,7 @@ def send_telegram_notification(message: str):
         if res.status_code != 200:
             logger.error(f"Error Telegram API HTTP {res.status_code}: {res.text}")
     except Exception as e:
-        logger.error(f"Error enviando notificación a Telegram: {e}")
+        logger.error(f"Error enviando notificacion a Telegram: {e}")
 
 def get_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -190,7 +194,7 @@ def read_root():
     for path in possible_paths:
         if path.exists():
             return path.read_text(encoding="utf-8")
-    return "<h1>Error: No se encontró index.html</h1>"
+    return f"{LT}h1{GT}Error: No se encontro index.html{LT}/h1{GT}"
 
 @app.get("/api/v1/backends")
 def list_backends():
@@ -230,7 +234,7 @@ def get_system_info():
     try:
         if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
             raw_temp = int(Path("/sys/class/thermal/thermal_zone0/temp").read_text().strip())
-            temp_info = f"{round(raw_temp / 1000, 1)} °C"
+            temp_info = f"{round(raw_temp / 1000, 1)} C"
     except Exception:
         pass
 
@@ -268,20 +272,20 @@ def test_telegram(data: TelegramTestModel):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": "<b>CasaOS Backup Manager</b>: Mensaje de prueba exitoso.",
+        "text": f"{LT}b{GT}CasaOS Backup Manager{LT}/b{GT}: Mensaje de prueba exitoso.",
         "parse_mode": "HTML"
     }
     try:
         res = requests.post(url, json=payload, timeout=8)
         res_data = res.json()
         if res.status_code == 200 and res_data.get("ok"):
-            return {"status": "ok", "message": "Mensaje enviado con éxito"}
+            return {"status": "ok", "message": "Mensaje enviado con exito"}
         error_desc = res_data.get("description", "Error desconocido de Telegram")
         raise HTTPException(status_code=400, detail=f"Telegram API: {error_desc}")
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error de conexión: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error de conexion: {str(e)}")
 
 @app.get("/api/v1/apps")
 def get_apps():
@@ -398,7 +402,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             elif isinstance(res, dict):
                 borg_res = res
             else:
-                borg_res = {"success": False, "error": "Respuesta no válida del servicio Borg."}
+                borg_res = {"success": False, "error": "Respuesta no valida del servicio Borg."}
         except Exception as b_err:
             borg_res = {"success": False, "error": str(b_err)}
 
@@ -408,7 +412,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             active_jobs[job_id] = {
                 "status": "success",
                 "progress": 100,
-                "message": "Copia de seguridad Borg completada con éxito"
+                "message": "Copia de seguridad Borg completada con exito"
             }
 
             with get_db() as conn:
@@ -419,12 +423,12 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                 conn.commit()
 
             send_telegram_notification(
-                f"✅ *Copia de Sistema Completo finalizada*: {app_name}\n"
-                f"Motor: `BorgBackup`\n"
-                f"Duración: {elapsed}s"
+                f"*Copia de Sistema Completo finalizada*: {app_name}\n"
+                f"Motor: BorgBackup\n"
+                f"Duracion: {elapsed}s"
             )
         else:
-            err_msg = borg_res.get("error", "Error en la ejecución de Borg")
+            err_msg = borg_res.get("error", "Error en la ejecucion de Borg")
             active_jobs[job_id] = {"status": "failed", "progress": 100, "message": err_msg}
 
             with get_db() as conn:
@@ -434,7 +438,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                 )
                 conn.commit()
 
-            send_telegram_notification(f"❌ *Copia fallida en Borg*: {app_name}\n{err_msg}")
+            send_telegram_notification(f"*Copia fallida en Borg*: {app_name}\n{err_msg}")
 
         return
 
@@ -451,7 +455,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     try:
         if not app_data_dir.exists():
             active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Origen {app_data_dir} no existe"}
-            send_telegram_notification(f"❌ *Copia fallida*: {app_name}\nOrigen `{app_data_dir}` no existe.")
+            send_telegram_notification(f"*Copia fallida*: {app_name}\nOrigen {app_data_dir} no existe.")
             return
 
         active_jobs[job_id]["message"] = "Verificando espacio libre en disco..."
@@ -487,7 +491,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                 )
                 conn.commit()
 
-            send_telegram_notification(f"⚠️ *Copia abortada (Sin espacio)*: {app_name}\nSe requieren ~{req_mb} MB y solo hay {free_mb} MB libres.")
+            send_telegram_notification(f"*Copia abortada (Sin espacio)*: {app_name}\nSe requieren ~{req_mb} MB y solo hay {free_mb} MB libres.")
             return
 
         active_jobs[job_id]["progress"] = 35
@@ -495,7 +499,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
 
         was_cancelled = False
         with tarfile.open(dest_file, "w:gz") as tar:
-            # 1. Empaquetar Datos
             if app_data_dir.exists():
                 for root, _, files in os.walk(app_data_dir):
                     for f in files:
@@ -505,7 +508,6 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                         rel = os.path.relpath(fp, app_data_dir)
                         tar.add(fp, arcname=os.path.join("DATA/AppData", app_name, rel))
 
-            # 2. Empaquetar Receta CasaOS (si existe)
             if casaos_app_dir.exists() and not was_cancelled:
                 for root, _, files in os.walk(casaos_app_dir):
                     for f in files:
@@ -532,13 +534,13 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                 )
                 conn.commit()
 
-            send_telegram_notification(f"⚠️ *Copia cancelada*: {app_name}")
+            send_telegram_notification(f"*Copia cancelada*: {app_name}")
             return
 
         list_backups(max_keep_per_app=3)
 
         elapsed = round(time.time() - start, 2)
-        active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Copia completada con éxito", "file": filename}
+        active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Copia completada con exito", "file": filename}
 
         with get_db() as conn:
             conn.cursor().execute(
@@ -547,7 +549,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             )
             conn.commit()
 
-        send_telegram_notification(f"✅ *Copia finalizada*: {app_name}\nArchivo: `{filename}`\nDuración: {elapsed}s")
+        send_telegram_notification(f"*Copia finalizada*: {app_name}\nArchivo: {filename}\nDuracion: {elapsed}s")
 
     except Exception as e:
         if dest_file.exists():
@@ -565,7 +567,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
             )
             conn.commit()
             
-        send_telegram_notification(f"❌ *Error en copia*: {app_name}\nDetalle: {str(e)}")
+        send_telegram_notification(f"*Error en copia*: {app_name}\nDetalle: {str(e)}")
 
 def perform_real_restore(filename: str, job_id: str):
     start = time.time()
@@ -595,7 +597,7 @@ def perform_real_restore(filename: str, job_id: str):
 
     if not target_file or not target_file.exists():
         active_jobs[job_id] = {"status": "failed", "progress": 100, "message": f"Archivo {filename} no encontrado."}
-        send_telegram_notification(f"❌ *Restauración fallida*: Archivo `{filename}` no encontrado.")
+        send_telegram_notification(f"*Restauracion fallida*: Archivo {filename} no encontrado.")
         return
 
     try:
@@ -607,14 +609,13 @@ def perform_real_restore(filename: str, job_id: str):
         else:
             app_key = fn_lower.split(".")[0]
 
-        active_jobs[job_id]["progress"] = 40
+        active_jobs[job_id]["progress"] = 30
         active_jobs[job_id]["message"] = "Descomprimiendo archivos en el sistema..."
 
         with tarfile.open(target_file, "r:gz") as tar:
             members = tar.getmembers()
             has_root_paths = any(m.name.startswith("DATA/") or m.name.startswith("var/") for m in members)
             
-            # Compatibilidad con copias legadas vs estructura nueva
             extract_dest = Path("/") if has_root_paths else Path(f"/DATA/AppData/{app_key}")
             extract_dest.mkdir(parents=True, exist_ok=True)
 
@@ -623,17 +624,46 @@ def perform_real_restore(filename: str, job_id: str):
             else:
                 tar.extractall(path=extract_dest)
 
-        # --- AUTO-DESPLIEGUE POST RESTAURACIÓN ---
-        active_jobs[job_id]["progress"] = 80
+        active_jobs[job_id]["progress"] = 70
+        active_jobs[job_id]["message"] = f"Ajustando permisos para {app_key}..."
+
+        casaos_app_dir = Path(f"/var/lib/casaos/apps/{app_key}")
+        if casaos_app_dir.exists():
+            try:
+                os.chmod(casaos_app_dir, 0o755)
+                for root, dirs, files in os.walk(casaos_app_dir):
+                    for d in dirs:
+                        os.chmod(os.path.join(root, d), 0o755)
+                    for f in files:
+                        os.chmod(os.path.join(root, f), 0o644)
+                logger.info(f"Permisos ajustados correctamente en {casaos_app_dir}")
+            except Exception as perm_err:
+                logger.error(f"Error ajustando permisos en {casaos_app_dir}: {perm_err}")
+
+        active_jobs[job_id]["progress"] = 85
         active_jobs[job_id]["message"] = f"Re-activando contenedor Docker para {app_key}..."
 
-        compose_file = Path(f"/var/lib/casaos/apps/{app_key}/docker-compose.yml")
+        compose_file = casaos_app_dir / "docker-compose.yml"
         if compose_file.exists():
-            subprocess.run(["docker", "compose", "-f", str(compose_file), "up", "-d"], capture_output=True, text=True)
-            subprocess.run(["systemctl", "restart", "casaos"], capture_output=True, text=True)
+            try:
+                res_dc = subprocess.run(
+                    ["docker", "compose", "up", "-d"],
+                    cwd=str(casaos_app_dir),
+                    capture_output=True,
+                    text=True
+                )
+                if res_dc.returncode != 0:
+                    logger.error(f"Error docker compose up: {res_dc.stderr}")
+            except Exception as dc_err:
+                logger.error(f"Excepcion al ejecutar docker compose: {dc_err}")
+
+        try:
+            subprocess.run(["systemctl", "restart", "casaos-app-management"], capture_output=True, text=True)
+        except Exception as sys_err:
+            logger.error(f"Error reiniciando casaos-app-management: {sys_err}")
 
         elapsed = round(time.time() - start, 2)
-        active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Restauración completada con éxito", "file": filename}
+        active_jobs[job_id] = {"status": "success", "progress": 100, "message": "Restauracion completada con exito", "file": filename}
 
         with get_db() as conn:
             conn.cursor().execute(
@@ -642,7 +672,7 @@ def perform_real_restore(filename: str, job_id: str):
             )
             conn.commit()
 
-        send_telegram_notification(f"🔄 *Restauración completada*: {app_key.capitalize()}\nArchivo: `{filename}`")
+        send_telegram_notification(f"*Restauracion completada*: {app_key.capitalize()}\nArchivo: {filename}")
 
     except Exception as e:
         elapsed = round(time.time() - start, 2)
@@ -654,7 +684,7 @@ def perform_real_restore(filename: str, job_id: str):
             )
             conn.commit()
 
-        send_telegram_notification(f"❌ *Error al restaurar*: {filename}\nDetalle: {str(e)}")
+        send_telegram_notification(f"*Error al restaurar*: {filename}\nDetalle: {str(e)}")
 
 @app.post("/api/v1/backups/run-app/{app_name}")
 def run_backup(app_name: str, background_tasks: BackgroundTasks, target_disk: str = Query(None)):
@@ -689,7 +719,7 @@ def get_job_status(job_id: str):
 @app.post("/api/v1/backups/cancel/{job_id}")
 @app.post("/api/v1/executions/cancel/{job_id}")
 def cancel_job(job_id: str):
-    logger.info(f"🛑 Solicitud de cancelación recibida para: {job_id}")
+    logger.info(f"Solicitud de cancelacion recibida para: {job_id}")
 
     if job_id in active_jobs:
         active_jobs[job_id]["cancelled"] = True
@@ -702,13 +732,13 @@ def cancel_job(job_id: str):
         logger.warning(f"Error cancelando servicio Borg: {e}")
 
     kill_rsync_processes()
-    os.system("pkill -9 -f borg > /dev/null 2>&1")
-    os.system("pkill -9 -f tar > /dev/null 2>&1")
-    os.system("pkill -9 -f rsync > /dev/null 2>&1")
+    os.system(f"pkill -9 -f borg {GT} /dev/null 2{GT}&1")
+    os.system(f"pkill -9 -f tar {GT} /dev/null 2{GT}&1")
+    os.system(f"pkill -9 -f rsync {GT} /dev/null 2{GT}&1")
 
     send_telegram_notification(
-        f"⚠️ *Copia de seguridad cancelada*\n"
-        f"Identificador: `{job_id}`\n"
+        f"*Copia de seguridad cancelada*\n"
+        f"Identificador: {job_id}\n"
         f"Estado: Proceso detenido por el usuario."
     )
 
@@ -720,7 +750,7 @@ def cancel_job(job_id: str):
             )
             conn.commit()
     except Exception as e:
-        logger.error(f"Error guardando cancelación en BD: {e}")
+        logger.error(f"Error guardando cancelacion en BD: {e}")
 
     return {"status": "cancelled", "job_id": job_id}
 
