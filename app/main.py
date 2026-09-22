@@ -1,4 +1,6 @@
 import os
+import sys
+import stat
 import sqlite3
 import time
 import logging
@@ -24,15 +26,106 @@ from pydantic import BaseModel
 LT = chr(60)  # Signo '<'
 GT = chr(62)  # Signo '>'
 
-# --- FILTRO UNIVERSAL DE ARCHIVOS ESPECIALES ---
+# --- FUNCIONES DE FILTRADO Y RESOLUCIÓN DE RUTAS DE RESPALDO ---
+def is_special_file(path: Path) -> bool:
+    """Detecta sockets UNIX, FIFOs u otros archivos especiales no soportados por tar."""
+    try:
+        mode = path.lstat().st_mode
+        return (
+            stat.S_ISSOCK(mode)
+            or stat.S_ISFIFO(mode)
+            or stat.S_ISBLK(mode)
+            or stat.S_ISCHR(mode)
+        )
+    except Exception:
+        return True
+
+
 def universal_tar_filter(tarinfo):
     """
-    Filtro agnóstico a la aplicación: ignora tuberías nombradas (FIFO),
-    sockets UNIX y archivos de dispositivo para evitar fallos en tar.
+    Filtro agnóstico a la aplicación (PEP 706 / Python 3.12+): ignora tuberías
+    nombradas (FIFO), sockets UNIX y archivos de dispositivo para evitar fallos en tar.
     """
     if tarinfo.isfifo() or tarinfo.issock() or tarinfo.isdev() or tarinfo.ischr() or tarinfo.isblk():
         return None
     return tarinfo
+
+
+def find_casaos_app_dir(app_name: str) -> Path | None:
+    """Busca de forma flexible la receta en /var/lib/casaos/apps/ evitando errores por mayúsculas o prefijos."""
+    base_dir = Path("/var/lib/casaos/apps")
+    if not base_dir.exists():
+        return None
+
+    # 1. Coincidencia directa
+    direct_match = base_dir / app_name
+    if direct_match.exists():
+        return direct_match
+
+    # 2. Búsqueda insensible a mayúsculas, guiones y guiones bajos
+    target_clean = app_name.lower().replace("-", "").replace("_", "")
+    for child in base_dir.iterdir():
+        if child.is_dir():
+            child_clean = child.name.lower().replace("-", "").replace("_", "")
+            if target_clean in child_clean or child_clean in target_clean:
+                return child
+
+    return None
+
+
+def add_directory_to_tar(
+    tar: tarfile.TarFile,
+    source_dir: Path,
+    arcname_prefix: str,
+    active_jobs_dict: dict = None,
+    job_id: str = None
+) -> bool:
+    """
+    Añade un directorio completo al archivo TAR de forma recursiva.
+    Preserva estructuras de directorios vacíos y filtra archivos especiales de forma retrocompatible.
+    """
+    python_312_plus = sys.version_info >= (3, 12)
+
+    for root, dirs, files in os.walk(source_dir):
+        if active_jobs_dict and job_id and active_jobs_dict.get(job_id, {}).get("cancelled"):
+            return False
+
+        root_path = Path(root)
+        rel_path = root_path.relative_to(source_dir)
+        arcname = Path(arcname_prefix) / rel_path
+
+        # Preservar directorios vacíos en la estructura del archivo
+        if not dirs and not files:
+            try:
+                if python_312_plus:
+                    tar.add(root_path, arcname=str(arcname), recursive=False, filter=universal_tar_filter)
+                else:
+                    tar.add(root_path, arcname=str(arcname), recursive=False)
+            except Exception as e:
+                logging.error(f"Error agregando carpeta vacía {root_path}: {e}")
+            continue
+
+        # Agregar archivos válidos omitiendo sockets y tuberías
+        for file in files:
+            if active_jobs_dict and job_id and active_jobs_dict.get(job_id, {}).get("cancelled"):
+                return False
+
+            file_path = root_path / file
+            file_arcname = arcname / file
+
+            if is_special_file(file_path):
+                continue
+
+            try:
+                if python_312_plus:
+                    tar.add(file_path, arcname=str(file_arcname), recursive=False, filter=universal_tar_filter)
+                else:
+                    tar.add(file_path, arcname=str(file_arcname), recursive=False)
+            except Exception as e:
+                logging.error(f"Error al añadir {file_path}: {e}")
+
+    return True
+
 
 try:
     from app.services.disk_service import disk_service
@@ -460,7 +553,7 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
     dest_file = dest_dir / filename
 
     app_data_dir = Path(f"/DATA/AppData/{app_name}")
-    casaos_app_dir = Path(f"/var/lib/casaos/apps/{app_name}")
+    casaos_app_dir = find_casaos_app_dir(app_name)
 
     try:
         if not app_data_dir.exists():
@@ -472,16 +565,19 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
         active_jobs[job_id]["progress"] = 15
 
         required_bytes = 0
-        for scan_target in [app_data_dir, casaos_app_dir]:
-            if scan_target.exists():
-                for root, _, files in os.walk(scan_target):
-                    for f in files:
-                        fp = os.path.join(root, f)
-                        if os.path.exists(fp):
-                            try:
-                                required_bytes += os.path.getsize(fp)
-                            except OSError:
-                                pass
+        scan_targets = [app_data_dir]
+        if casaos_app_dir and casaos_app_dir.exists():
+            scan_targets.append(casaos_app_dir)
+
+        for scan_target in scan_targets:
+            for root, _, files in os.walk(scan_target):
+                for f in files:
+                    fp = Path(root) / f
+                    if not is_special_file(fp) and fp.exists():
+                        try:
+                            required_bytes += fp.stat().st_size
+                        except OSError:
+                            pass
 
         dest_usage = shutil.disk_usage(dest_dir)
         free_bytes = dest_usage.free
@@ -509,25 +605,21 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
 
         was_cancelled = False
         with tarfile.open(dest_file, "w:gz") as tar:
+            # 1. Copia de AppData
             if app_data_dir.exists():
-                for root, _, files in os.walk(app_data_dir):
-                    for f in files:
-                        if active_jobs[job_id].get("cancelled"):
-                            was_cancelled = True; break
-                        fp = os.path.join(root, f)
-                        rel = os.path.relpath(fp, app_data_dir)
-                        # Se aplica el filtro universal al añadir cada archivo
-                        tar.add(fp, arcname=os.path.join("DATA/AppData", app_name, rel), filter=universal_tar_filter)
+                success = add_directory_to_tar(
+                    tar, app_data_dir, f"DATA/AppData/{app_name}", active_jobs, job_id
+                )
+                if not success:
+                    was_cancelled = True
 
-            if casaos_app_dir.exists() and not was_cancelled:
-                for root, _, files in os.walk(casaos_app_dir):
-                    for f in files:
-                        if active_jobs[job_id].get("cancelled"):
-                            was_cancelled = True; break
-                        fp = os.path.join(root, f)
-                        rel = os.path.relpath(fp, casaos_app_dir)
-                        # Se aplica el filtro universal al añadir cada archivo
-                        tar.add(fp, arcname=os.path.join("var/lib/casaos/apps", app_name, rel), filter=universal_tar_filter)
+            # 2. Copia de Receta CasaOS
+            if not was_cancelled and casaos_app_dir and casaos_app_dir.exists():
+                success = add_directory_to_tar(
+                    tar, casaos_app_dir, f"var/lib/casaos/apps/{casaos_app_dir.name}", active_jobs, job_id
+                )
+                if not success:
+                    was_cancelled = True
 
         if was_cancelled:
             if dest_file.exists():
@@ -641,8 +733,8 @@ def perform_real_restore(filename: str, job_id: str):
         active_jobs[job_id]["progress"] = 70
         active_jobs[job_id]["message"] = f"Ajustando permisos para {app_key}..."
 
-        casaos_app_dir = Path(f"/var/lib/casaos/apps/{app_key}")
-        if casaos_app_dir.exists():
+        casaos_app_dir = find_casaos_app_dir(app_key) or Path(f"/var/lib/casaos/apps/{app_key}")
+        if casaos_app_dir and casaos_app_dir.exists():
             try:
                 os.chmod(casaos_app_dir, 0o755)
                 for root, dirs, files in os.walk(casaos_app_dir):
@@ -657,29 +749,30 @@ def perform_real_restore(filename: str, job_id: str):
         active_jobs[job_id]["progress"] = 85
         active_jobs[job_id]["message"] = f"Re-activando contenedor Docker para {app_key}..."
 
-        compose_file = casaos_app_dir / "docker-compose.yml"
-        if compose_file.exists():
-            try:
-                res_dc = subprocess.run(
-                    ["docker", "compose", "up", "-d"],
-                    cwd=str(casaos_app_dir),
-                    capture_output=True,
-                    text=True
-                )
-                if res_dc.returncode != 0:
+        if casaos_app_dir and casaos_app_dir.exists():
+            compose_file = casaos_app_dir / "docker-compose.yml"
+            if compose_file.exists():
+                try:
                     res_dc = subprocess.run(
-                        ["docker-compose", "up", "-d"],
+                        ["docker", "compose", "up", "-d"],
                         cwd=str(casaos_app_dir),
                         capture_output=True,
                         text=True
                     )
+                    if res_dc.returncode != 0:
+                        res_dc = subprocess.run(
+                            ["docker-compose", "up", "-d"],
+                            cwd=str(casaos_app_dir),
+                            capture_output=True,
+                            text=True
+                        )
 
-                if res_dc.returncode != 0:
-                    logger.error(f"Error docker compose up: {res_dc.stderr}")
-                else:
-                    logger.info(f"Contenedor {app_key} levantado con exito via Docker Compose.")
-            except Exception as dc_err:
-                logger.error(f"Excepcion al ejecutar docker compose: {dc_err}")
+                    if res_dc.returncode != 0:
+                        logger.error(f"Error docker compose up: {res_dc.stderr}")
+                    else:
+                        logger.info(f"Contenedor {app_key} levantado con exito via Docker Compose.")
+                except Exception as dc_err:
+                    logger.error(f"Excepcion al ejecutar docker compose: {dc_err}")
 
         try:
             subprocess.run(["docker", "restart", "casaos-app-management"], capture_output=True, text=True)
