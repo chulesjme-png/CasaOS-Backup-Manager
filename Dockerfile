@@ -1,10 +1,12 @@
 FROM python:3.11-slim
 
-# Instalacion de herramientas de sistema y motor BorgBackup
+# Instalacion de herramientas de sistema, Compose y BorgBackup
 RUN apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     curl \
     docker.io \
+    docker-compose-plugin \
+    docker-compose \
     rsync \
     procps \
     psmisc \

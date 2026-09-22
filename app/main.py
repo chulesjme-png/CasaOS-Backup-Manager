@@ -653,12 +653,23 @@ def perform_real_restore(filename: str, job_id: str):
                     text=True
                 )
                 if res_dc.returncode != 0:
+                    res_dc = subprocess.run(
+                        ["docker-compose", "up", "-d"],
+                        cwd=str(casaos_app_dir),
+                        capture_output=True,
+                        text=True
+                    )
+
+                if res_dc.returncode != 0:
                     logger.error(f"Error docker compose up: {res_dc.stderr}")
+                else:
+                    logger.info(f"Contenedor {app_key} levantado con exito via Docker Compose.")
             except Exception as dc_err:
                 logger.error(f"Excepcion al ejecutar docker compose: {dc_err}")
 
         try:
-            subprocess.run(["systemctl", "restart", "casaos-app-management"], capture_output=True, text=True)
+            subprocess.run(["docker", "restart", "casaos-app-management"], capture_output=True, text=True)
+            logger.info("Servicio casaos-app-management reiniciado via Docker.")
         except Exception as sys_err:
             logger.error(f"Error reiniciando casaos-app-management: {sys_err}")
 
