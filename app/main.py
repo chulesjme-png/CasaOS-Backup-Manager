@@ -24,6 +24,16 @@ from pydantic import BaseModel
 LT = chr(60)  # Signo '<'
 GT = chr(62)  # Signo '>'
 
+# --- FILTRO UNIVERSAL DE ARCHIVOS ESPECIALES ---
+def universal_tar_filter(tarinfo):
+    """
+    Filtro agnóstico a la aplicación: ignora tuberías nombradas (FIFO),
+    sockets UNIX y archivos de dispositivo para evitar fallos en tar.
+    """
+    if tarinfo.isfifo() or tarinfo.issock() or tarinfo.isdev() or tarinfo.ischr() or tarinfo.isblk():
+        return None
+    return tarinfo
+
 try:
     from app.services.disk_service import disk_service
 except ImportError:
@@ -506,7 +516,8 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                             was_cancelled = True; break
                         fp = os.path.join(root, f)
                         rel = os.path.relpath(fp, app_data_dir)
-                        tar.add(fp, arcname=os.path.join("DATA/AppData", app_name, rel))
+                        # Se aplica el filtro universal al añadir cada archivo
+                        tar.add(fp, arcname=os.path.join("DATA/AppData", app_name, rel), filter=universal_tar_filter)
 
             if casaos_app_dir.exists() and not was_cancelled:
                 for root, _, files in os.walk(casaos_app_dir):
@@ -515,7 +526,8 @@ def perform_real_backup(app_name: str, target_disk: str, job_id: str):
                             was_cancelled = True; break
                         fp = os.path.join(root, f)
                         rel = os.path.relpath(fp, casaos_app_dir)
-                        tar.add(fp, arcname=os.path.join("var/lib/casaos/apps", app_name, rel))
+                        # Se aplica el filtro universal al añadir cada archivo
+                        tar.add(fp, arcname=os.path.join("var/lib/casaos/apps", app_name, rel), filter=universal_tar_filter)
 
         if was_cancelled:
             if dest_file.exists():
@@ -619,10 +631,12 @@ def perform_real_restore(filename: str, job_id: str):
             extract_dest = Path("/") if has_root_paths else Path(f"/DATA/AppData/{app_key}")
             extract_dest.mkdir(parents=True, exist_ok=True)
 
-            if hasattr(tarfile, 'data_filter'):
-                tar.extractall(path=extract_dest, filter='data')
-            else:
-                tar.extractall(path=extract_dest)
+            # Extracción segura: Omitir FIFOs, Sockets y archivos especiales durante la extracción
+            safe_members = [
+                m for m in members
+                if m.isreg() or m.isdir() or m.issym() or m.islnk()
+            ]
+            tar.extractall(path=extract_dest, members=safe_members)
 
         active_jobs[job_id]["progress"] = 70
         active_jobs[job_id]["message"] = f"Ajustando permisos para {app_key}..."
