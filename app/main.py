@@ -266,6 +266,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- REGISTRO DE ROUTERS (FASE 1: BORG RESTORE & DRY-RUN) ---
+try:
+    from app.routers import restore
+    app.include_router(restore.router)
+    logger.info("Router 'restore' (Borg Dry-Run/Restauración) cargado correctamente.")
+except ImportError:
+    try:
+        import restore
+        app.include_router(restore.router)
+        logger.info("Router 'restore' (Borg Dry-Run/Restauración) cargado correctamente.")
+    except Exception as e:
+        logger.warning(f"No se pudo cargar el router 'restore': {e}")
+
 @app.get("/health")
 @app.get("/api/v1/health")
 def health_check():
