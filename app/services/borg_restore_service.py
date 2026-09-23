@@ -45,6 +45,8 @@ class BorgRestoreService:
 
     def _run_dry_run_thread(self, repo_path: str, archive_name: str, passphrase: str = None):
         env = os.environ.copy()
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
 
@@ -54,10 +56,13 @@ class BorgRestoreService:
         ]
 
         try:
+            # stdin=DEVNULL evita bloqueos si Borg solicita confirmación por consola
+            # stderr=STDOUT redirige errores al mismo flujo de lectura
             self._process = subprocess.Popen(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
                 env=env,
                 bufsize=1
@@ -66,18 +71,21 @@ class BorgRestoreService:
             for line in self._process.stdout:
                 clean_line = line.strip()
                 if clean_line:
-                    self.restore_state["processed_files"] += 1
-                    self.restore_state["current_file"] = clean_line
+                    if clean_line.startswith("Error:") or "Exception" in clean_line or "passphrase" in clean_line.lower():
+                        self.restore_state["error_log"].append(clean_line)
+                    else:
+                        self.restore_state["processed_files"] += 1
+                        self.restore_state["current_file"] = clean_line
 
             self._process.wait()
 
             if self._process.returncode == 0:
                 self.restore_state["status"] = "COMPLETED"
             else:
-                stderr_output = self._process.stderr.read()
-                self.restore_state["error_log"] = stderr_output.strip().split("\n")
                 if self.restore_state["status"] != "CANCELLED":
                     self.restore_state["status"] = "FAILED"
+                    if not self.restore_state["error_log"]:
+                        self.restore_state["error_log"].append(f"Proceso finalizado con código de error {self._process.returncode}")
 
         except Exception as e:
             logger.error(f"Error en Borg dry-run: {e}")
