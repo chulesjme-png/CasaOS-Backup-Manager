@@ -20,7 +20,7 @@ class BorgRestoreService:
         self._process = None
         self._thread = None
 
-    def start_dry_run(self, repo_path: str, archive_name: str, passphrase: str = None):
+    def run_dry_run_simulation(self, repo_path: str, archive_name: str, passphrase: str = None):
         if self.restore_state["status"] == "RUNNING":
             return False, "Ya hay un proceso de simulación o restauración en curso."
 
@@ -40,12 +40,14 @@ class BorgRestoreService:
         self._thread.start()
         return True, "Simulación iniciada."
 
+    def start_dry_run(self, repo_path: str, archive_name: str, passphrase: str = None):
+        return self.run_dry_run_simulation(repo_path, archive_name, passphrase)
+
     def _run_dry_run_thread(self, repo_path: str, archive_name: str, passphrase: str = None):
         env = os.environ.copy()
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
 
-        # Uso de --list para máxima compatibilidad con Borg 1.x
         cmd = [
             "borg", "extract", "--dry-run", "--list",
             f"{repo_path}::{archive_name}"
