@@ -8,38 +8,29 @@ logger = logging.getLogger("casaos-backup")
 
 class BorgRestoreService:
     def __init__(self):
-        self.status = "IDLE"  # IDLE, RUNNING, COMPLETED, FAILED, CANCELLED
-        self.archive_name = ""
-        self.processed_files = 0
-        self.current_file = ""
-        self.start_time = None
-        self.end_time = None
-        self.error_log = []
+        self.restore_state = {
+            "status": "IDLE",  # IDLE, RUNNING, COMPLETED, FAILED, CANCELLED
+            "archive_name": "",
+            "processed_files": 0,
+            "current_file": "",
+            "start_time": None,
+            "end_time": None,
+            "error_log": []
+        }
         self._process = None
         self._thread = None
 
-    def get_status(self):
-        return {
-            "status": self.status,
-            "archive_name": self.archive_name,
-            "processed_files": self.processed_files,
-            "current_file": self.current_file,
-            "start_time": self.start_time.isoformat() if self.start_time else None,
-            "end_time": self.end_time.isoformat() if self.end_time else None,
-            "error_log": self.error_log
-        }
-
     def start_dry_run(self, repo_path: str, archive_name: str, passphrase: str = None):
-        if self.status == "RUNNING":
+        if self.restore_state["status"] == "RUNNING":
             return False, "Ya hay un proceso de simulación o restauración en curso."
 
-        self.status = "RUNNING"
-        self.archive_name = archive_name
-        self.processed_files = 0
-        self.current_file = ""
-        self.start_time = datetime.now()
-        self.end_time = None
-        self.error_log = []
+        self.restore_state["status"] = "RUNNING"
+        self.restore_state["archive_name"] = archive_name
+        self.restore_state["processed_files"] = 0
+        self.restore_state["current_file"] = ""
+        self.restore_state["start_time"] = datetime.now().isoformat()
+        self.restore_state["end_time"] = None
+        self.restore_state["error_log"] = []
 
         self._thread = threading.Thread(
             target=self._run_dry_run_thread,
@@ -54,7 +45,7 @@ class BorgRestoreService:
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
 
-        # Se utiliza --list en lugar de --json-lines para compatibilidad general con Borg
+        # Uso de --list para máxima compatibilidad con Borg 1.x
         cmd = [
             "borg", "extract", "--dry-run", "--list",
             f"{repo_path}::{archive_name}"
@@ -70,33 +61,32 @@ class BorgRestoreService:
                 bufsize=1
             )
 
-            # Lectura en tiempo real de los archivos procesados desde stdout
             for line in self._process.stdout:
                 clean_line = line.strip()
                 if clean_line:
-                    self.processed_files += 1
-                    self.current_file = clean_line
+                    self.restore_state["processed_files"] += 1
+                    self.restore_state["current_file"] = clean_line
 
             self._process.wait()
 
             if self._process.returncode == 0:
-                self.status = "COMPLETED"
+                self.restore_state["status"] = "COMPLETED"
             else:
                 stderr_output = self._process.stderr.read()
-                self.error_log = stderr_output.strip().split("\n")
-                if self.status != "CANCELLED":
-                    self.status = "FAILED"
+                self.restore_state["error_log"] = stderr_output.strip().split("\n")
+                if self.restore_state["status"] != "CANCELLED":
+                    self.restore_state["status"] = "FAILED"
 
         except Exception as e:
             logger.error(f"Error en Borg dry-run: {e}")
-            self.error_log.append(str(e))
-            self.status = "FAILED"
+            self.restore_state["error_log"].append(str(e))
+            self.restore_state["status"] = "FAILED"
         finally:
-            self.end_time = datetime.now()
+            self.restore_state["end_time"] = datetime.now().isoformat()
 
     def cancel(self):
-        if self.status == "RUNNING" and self._process:
-            self.status = "CANCELLED"
+        if self.restore_state["status"] == "RUNNING" and self._process:
+            self.restore_state["status"] = "CANCELLED"
             try:
                 self._process.terminate()
             except Exception:
