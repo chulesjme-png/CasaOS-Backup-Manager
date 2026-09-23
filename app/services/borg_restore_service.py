@@ -1,118 +1,107 @@
-import asyncio
-import json
+import subprocess
+import threading
+import os
 import logging
-from typing import Dict, Any, Optional
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("casaos-backup")
 
 class BorgRestoreService:
     def __init__(self):
-        self.active_process: Optional[asyncio.subprocess.Process] = None
-        self.restore_state: Dict[str, Any] = {
-            "status": "IDLE",  # IDLE, RUNNING, COMPLETED, FAILED, CANCELLED
-            "archive_name": None,
-            "processed_files": 0,
-            "current_file": "",
-            "start_time": None,
-            "end_time": None,
-            "error_log": []
+        self.status = "IDLE"  # IDLE, RUNNING, COMPLETED, FAILED, CANCELLED
+        self.archive_name = ""
+        self.processed_files = 0
+        self.current_file = ""
+        self.start_time = None
+        self.end_time = None
+        self.error_log = []
+        self._process = None
+        self._thread = None
+
+    def get_status(self):
+        return {
+            "status": self.status,
+            "archive_name": self.archive_name,
+            "processed_files": self.processed_files,
+            "current_file": self.current_file,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "error_log": self.error_log
         }
 
-    async def run_dry_run_simulation(self, repo_path: str, archive_name: str, passphrase: Optional[str] = None):
-        """Ejecuta una simulación de extracción (Dry-Run) en segundo plano."""
-        if self.restore_state["status"] == "RUNNING":
-            raise RuntimeError("Ya hay una simulación o restauración en curso.")
+    def start_dry_run(self, repo_path: str, archive_name: str, passphrase: str = None):
+        if self.status == "RUNNING":
+            return False, "Ya hay un proceso de simulación o restauración en curso."
 
-        self.restore_state.update({
-            "status": "RUNNING",
-            "archive_name": archive_name,
-            "processed_files": 0,
-            "current_file": "",
-            "start_time": datetime.now().isoformat(),
-            "end_time": None,
-            "error_log": []
-        })
+        self.status = "RUNNING"
+        self.archive_name = archive_name
+        self.processed_files = 0
+        self.current_file = ""
+        self.start_time = datetime.now()
+        self.end_time = None
+        self.error_log = []
 
-        env = {}
+        self._thread = threading.Thread(
+            target=self._run_dry_run_thread,
+            args=(repo_path, archive_name, passphrase),
+            daemon=True
+        )
+        self._thread.start()
+        return True, "Simulación iniciada."
+
+    def _run_dry_run_thread(self, repo_path: str, archive_name: str, passphrase: str = None):
+        env = os.environ.copy()
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
 
+        # Se utiliza --list en lugar de --json-lines para compatibilidad general con Borg
         cmd = [
-            "borg", "extract",
-            "--dry-run",
-            "--list",
-            "--json-lines",
+            "borg", "extract", "--dry-run", "--list",
             f"{repo_path}::{archive_name}"
         ]
 
         try:
-            self.active_process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env
+            self._process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+                bufsize=1
             )
 
-            # Tareas para consumir logs en tiempo real
-            asyncio.create_task(self._consume_stdout())
-            asyncio.create_task(self._consume_stderr())
+            # Lectura en tiempo real de los archivos procesados desde stdout
+            for line in self._process.stdout:
+                clean_line = line.strip()
+                if clean_line:
+                    self.processed_files += 1
+                    self.current_file = clean_line
 
-            return_code = await self.active_process.wait()
+            self._process.wait()
 
-            self.restore_state["end_time"] = datetime.now().isoformat()
-            if return_code == 0:
-                self.restore_state["status"] = "COMPLETED"
-                logger.info(f"Simulación Dry-Run finalizada con éxito para {archive_name}")
+            if self._process.returncode == 0:
+                self.status = "COMPLETED"
             else:
-                self.restore_state["status"] = "FAILED"
-                logger.error(f"Simulación Dry-Run falló con código {return_code}")
+                stderr_output = self._process.stderr.read()
+                self.error_log = stderr_output.strip().split("\n")
+                if self.status != "CANCELLED":
+                    self.status = "FAILED"
 
         except Exception as e:
-            self.restore_state["status"] = "FAILED"
-            self.restore_state["error_log"].append(str(e))
-            logger.exception("Error durante la simulación de restauración")
+            logger.error(f"Error en Borg dry-run: {e}")
+            self.error_log.append(str(e))
+            self.status = "FAILED"
         finally:
-            self.active_process = None
+            self.end_time = datetime.now()
 
-    async def _consume_stdout(self):
-        """Parsea la salida JSON de Borg para medir el progreso."""
-        if not self.active_process or not self.active_process.stdout:
-            return
-
-        while True:
-            line = await self.active_process.stdout.readline()
-            if not line:
-                break
+    def cancel(self):
+        if self.status == "RUNNING" and self._process:
+            self.status = "CANCELLED"
             try:
-                data = json.loads(line.decode().strip())
-                if data.get("type") == "archive_progress":
-                    self.restore_state["processed_files"] += 1
-                    self.restore_state["current_file"] = data.get("path", "")
-            except json.JSONDecodeError:
-                continue
+                self._process.terminate()
+            except Exception:
+                pass
+            return True, "Proceso cancelado."
+        return False, "No hay ningún proceso activo para cancelar."
 
-    async def _consume_stderr(self):
-        """Captura advertencias o errores reportados por Borg."""
-        if not self.active_process or not self.active_process.stderr:
-            return
-
-        while True:
-            line = await self.active_process.stderr.readline()
-            if not line:
-                break
-            err_line = line.decode().strip()
-            if err_line:
-                self.restore_state["error_log"].append(err_line)
-
-    def cancel_simulation(self) -> bool:
-        """Detiene la simulación en caso de emergencia."""
-        if self.active_process and self.restore_state["status"] == "RUNNING":
-            self.active_process.terminate()
-            self.restore_state["status"] = "CANCELLED"
-            self.restore_state["end_time"] = datetime.now().isoformat()
-            return True
-        return False
-
-# Instancia singleton accesible desde la API
 borg_restore_service = BorgRestoreService()
