@@ -71,7 +71,14 @@ class BorgRestoreService:
             for line in self._process.stdout:
                 clean_line = line.strip()
                 if clean_line:
-                    if clean_line.startswith("Error:") or "Exception" in clean_line or "passphrase" in clean_line.lower():
+                    # Detección precisa de errores reales para evitar falsos positivos con archivos del sistema/PHP
+                    is_real_error = (
+                        clean_line.startswith(("Error:", "E ", "[ERROR]", "CRITICAL:", "Traceback", "BorgError:")) or
+                        "exception:" in clean_line.lower() or
+                        "passphrase" in clean_line.lower()
+                    )
+
+                    if is_real_error:
                         self.restore_state["error_log"].append(clean_line)
                     else:
                         self.restore_state["processed_files"] += 1
@@ -94,13 +101,20 @@ class BorgRestoreService:
         finally:
             self.restore_state["end_time"] = datetime.now().isoformat()
 
-    def cancel(self):
+    def cancel_simulation(self):
+        """Cancela el proceso activo de simulación o restauración."""
         if self.restore_state["status"] == "RUNNING" and self._process:
             self.restore_state["status"] = "CANCELLED"
             try:
                 self._process.terminate()
             except Exception:
                 pass
+            return True
+        return False
+
+    def cancel(self):
+        ok = self.cancel_simulation()
+        if ok:
             return True, "Proceso cancelado."
         return False, "No hay ningún proceso activo para cancelar."
 
