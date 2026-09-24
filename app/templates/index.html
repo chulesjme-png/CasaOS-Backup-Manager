@@ -35,6 +35,9 @@
         .progress-bar {
             transition: width 0.3s ease-in-out;
         }
+        .mono-font {
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
     </style>
 </head>
 <body>
@@ -92,7 +95,7 @@
                 <div class="d-flex gap-2 flex-wrap">
                     <button class="btn btn-outline-secondary btn-sm" onclick="loadApps()">🔍 Escanear</button>
                     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalLogs">📜 Historial</button>
-                    <button class="btn btn-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Copias</button>
+                    <button class="btn btn-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalRestore">📦 Restaurar Apps</button>
                     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalConfig">⚙️ Configuración</button>
                 </div>
             </div>
@@ -114,21 +117,26 @@
         <!-- Grid Principal -->
         <div class="row">
             <div class="col-lg-8">
-                <!-- Backup Completo -->
+                <!-- Backup Completo (Disaster Recovery) -->
                 <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                         <div class="d-flex gap-3 align-items-center">
                             <div class="fs-1 text-primary">🛡️</div>
                             <div>
                                 <h5 class="fw-bold text-dark mb-1">Copia de Seguridad del Sistema (Disaster Recovery)</h5>
-                                <p class="text-muted small mb-2">Resguarda la configuración de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>).</p>
-                                <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Completa</span>
+                                <p class="text-muted small mb-2">Resguarda la configuración de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>) mediante BorgBackup.</p>
+                                <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Borg Deduplicado</span>
                                 <span class="badge bg-success-subtle text-success border border-success-subtle" id="system-status-badge">🟢 Listo para resguardo</span>
                             </div>
                         </div>
-                        <button class="btn btn-primary px-4 py-2 fw-semibold shadow-sm" onclick="requestAppBackup('Sistema_Completo')">
-                            📦 Copiar Sistema Completo
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-primary px-3 py-2 fw-semibold shadow-sm" onclick="openBorgRestoreModal()">
+                                🛡️ Simular / Restaurar Borg
+                            </button>
+                            <button class="btn btn-primary px-4 py-2 fw-semibold shadow-sm" onclick="requestAppBackup('Sistema_Completo')">
+                                📦 Copiar Sistema Completo
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Progreso en tarjeta (Inline) -->
@@ -218,14 +226,60 @@
         </div>
     </div>
 
+    <!-- Modal Disaster Recovery / Borg Dry-Run -->
+    <div class="modal fade" id="modalBorgRestore" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold">🛡️ Verificación / Simulación Borg (Disaster Recovery)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" id="btnCloseBorgModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning border-warning d-flex align-items-start gap-3 shadow-sm mb-4" role="alert">
+                        <span class="fs-2">⏳</span>
+                        <div>
+                            <strong class="d-block mb-1 text-dark fs-6">⚠️ AVISO DE PROCESO DE LARGA DURACIÓN</strong>
+                            <span class="small text-secondary">
+                                La simulación (Dry-Run) o restauración verificará los <strong>casi 900.000 archivos</strong> de tu copia de seguridad. 
+                                Este análisis en segundo plano es exigente e intensivo para el disco, pudiendo tardar <strong>entre 1 y 3 horas</strong>.
+                                Puedes iniciar el proceso y seguir el conteo de archivos procesados en tiempo real.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark small">Seleccionar Copia de Seguridad (Snapshot):</label>
+                        <select class="form-select border-primary" id="borgArchiveSelect">
+                            <option value="">Cargando snapshots disponibles...</option>
+                        </select>
+                    </div>
+
+                    <div id="borgProgressContainer" class="card bg-light border-0 p-3 mt-3 d-none">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold text-dark small" id="borgStatusHeader">Estado: Procesando...</span>
+                            <span class="badge bg-primary fs-6" id="borgProcessedCount">0 archivos</span>
+                        </div>
+                        <div class="progress mb-2" style="height: 12px;">
+                            <div id="borgProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar" style="width: 100%;"></div>
+                        </div>
+                        <div class="text-muted small text-truncate mono-font" id="borgCurrentFile">Iniciando lectura...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger btn-sm d-none" id="btnCancelBorgDryRun" onclick="cancelBorgDryRun()">🛑 Cancelar Simulación</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-warning btn-sm text-dark fw-bold px-3" id="btnStartBorgDryRun" onclick="startBorgDryRun()">🔬 Iniciar Simulación (Dry-Run)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Confirmación Previa -->
     <div class="modal fade" id="modalConfirmBackup" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header bg-warning-subtle text-dark border-0">
-                    <h5 class="modal-title fw-bold">
-                        ⚠️ Confirmar Inicio de Resguardo
-                    </h5>
+                    <h5 class="modal-title fw-bold">⚠️ Confirmar Inicio de Resguardo</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body py-4">
@@ -295,12 +349,12 @@
         </div>
     </div>
 
-    <!-- Modal Restauración -->
+    <!-- Modal Restauración App -->
     <div class="modal fade" id="modalRestore" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header">
-                    <h5 class="modal-title fw-bold">📦 Copias Disponibles para Restauración</h5>
+                    <h5 class="modal-title fw-bold">📦 Copias de Aplicación (.tar.gz)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -376,11 +430,12 @@
     <!-- Scripts JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let currentJobId = null;
-        let jobInterval = null;
-        let pendingBackupAppName = null;
+        var currentJobId = null;
+        var jobInterval = null;
+        var borgInterval = null;
+        var pendingBackupAppName = null;
+        var currentBorgRepoPath = "";
 
-        // Helpers seguros para LocalStorage
         function getStorage(key) {
             try { return localStorage.getItem(key); } catch (e) { return null; }
         }
@@ -389,16 +444,14 @@
         }
 
         function togglePasswordVisibility(inputId) {
-            const input = document.getElementById(inputId);
-            if (input) {
-                input.type = input.type === 'password' ? 'text' : 'password';
-            }
+            var input = document.getElementById(inputId);
+            if (input) input.type = input.type === 'password' ? 'text' : 'password';
         }
 
         function switchTab(evt, tabName) {
-            const btn = evt.currentTarget || evt.target;
-            document.querySelectorAll('#sideTabs .nav-link').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-pane-content').forEach(pane => pane.classList.add('d-none'));
+            var btn = evt.currentTarget || evt.target;
+            document.querySelectorAll('#sideTabs .nav-link').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-pane-content').forEach(function(pane) { pane.classList.add('d-none'); });
 
             btn.classList.add('active');
             if (tabName === 'rpi') { document.getElementById('tabContentRpi').classList.remove('d-none'); loadRpiInfo(); }
@@ -408,9 +461,9 @@
 
         async function loadRpiInfo() {
             try {
-                const res = await fetch('/api/v1/system/info');
+                var res = await fetch('/api/v1/system/info');
                 if (!res.ok) return;
-                const data = await res.json();
+                var data = await res.json();
                 document.getElementById('rpiModel').innerText = data.model || 'Raspberry Pi / Host';
                 document.getElementById('rpiOs').innerText = data.os || 'CasaOS Linux';
                 document.getElementById('rpiArch').innerText = data.arch || 'aarch64';
@@ -422,31 +475,31 @@
         }
 
         async function loadApps() {
-            const container = document.getElementById('appsContainer');
+            var container = document.getElementById('appsContainer');
             try {
-                const res = await fetch('/api/v1/apps');
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                const apps = data.apps || [];
-                document.getElementById('appsCountHeader').innerText = `${apps.length} Detectadas`;
-                document.getElementById('appsCountBadge').innerText = `${apps.length} Apps`;
+                var res = await fetch('/api/v1/apps');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                var apps = data.apps || [];
+                document.getElementById('appsCountHeader').innerText = apps.length + ' Detectadas';
+                document.getElementById('appsCountBadge').innerText = apps.length + ' Apps';
                 
                 if (!apps.length) {
                     container.innerHTML = '<div class="text-center text-muted py-4">No se detectaron aplicaciones en /DATA/AppData</div>';
                     return;
                 }
 
-                container.innerHTML = apps.map(app => `
-                    <div class="list-group-item px-0 py-3 border-bottom">
-                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <div>
-                                <div class="fw-bold text-dark text-capitalize fs-6">${app.name}</div>
-                                <div class="text-muted small mt-1">Ruta: <code>${app.path}</code></div>
-                            </div>
-                            <button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="requestAppBackup('${app.name}')">⚡ Copiar Ahora</button>
-                        </div>
-                    </div>
-                `).join('');
+                container.innerHTML = apps.map(function(app) {
+                    return '<div class="list-group-item px-0 py-3 border-bottom">' +
+                        '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">' +
+                            '<div>' +
+                                '<div class="fw-bold text-dark text-capitalize fs-6">' + app.name + '</div>' +
+                                '<div class="text-muted small mt-1">Ruta: <code>' + app.path + '</code></div>' +
+                            '</div>' +
+                            '<button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="requestAppBackup(\'' + app.name + '\')">⚡ Copiar Ahora</button>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
             } catch (err) {
                 console.error("Error cargando aplicaciones:", err);
                 container.innerHTML = '<div class="text-center text-danger py-4">Error al cargar las aplicaciones</div>';
@@ -454,48 +507,50 @@
         }
 
         async function loadDockerInfo() {
-            const container = document.getElementById('dockerList');
+            var container = document.getElementById('dockerList');
             container.innerHTML = '<div class="text-muted py-2 text-center">Cargando contenedores...</div>';
             try {
-                const res = await fetch('/api/v1/system/docker');
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                const list = data.containers || [];
+                var res = await fetch('/api/v1/system/docker');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                var list = data.containers || [];
                 
-                container.innerHTML = list.length ? list.map(c => `
-                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom overflow-hidden">
-                        <div style="min-width: 0; flex: 1;" class="me-2">
-                            <div class="fw-bold text-dark text-truncate">${c.name}</div>
-                            <div class="text-muted text-truncate" style="font-size: 0.75rem;" title="${c.image}">${c.image}</div>
-                        </div>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle text-nowrap">${c.status}</span>
-                    </div>
-                `).join('') : '<div class="text-muted py-2 text-center">No hay contenedores ejecutándose</div>';
+                container.innerHTML = list.length ? list.map(function(c) {
+                    return '<div class="d-flex justify-content-between align-items-center py-2 border-bottom overflow-hidden">' +
+                        '<div style="min-width: 0; flex: 1;" class="me-2">' +
+                            '<div class="fw-bold text-dark text-truncate">' + c.name + '</div>' +
+                            '<div class="text-muted text-truncate" style="font-size: 0.75rem;" title="' + c.image + '">' + c.image + '</div>' +
+                        '</div>' +
+                        '<span class="badge bg-success-subtle text-success border border-success-subtle text-nowrap">' + c.status + '</span>' +
+                    '</div>';
+                }).join('') : '<div class="text-muted py-2 text-center">No hay contenedores ejecutándose</div>';
             } catch (err) {
                 container.innerHTML = '<div class="text-danger py-2 text-center">Error al obtener Docker</div>';
             }
         }
 
         async function loadDisksInfo() {
-            const container = document.getElementById('disksList');
-            const select = document.getElementById('targetDiskSelect');
+            var container = document.getElementById('disksList');
+            var select = document.getElementById('targetDiskSelect');
             container.innerHTML = '<div class="text-muted py-2 text-center">Cargando discos...</div>';
             
             try {
-                const res = await fetch('/api/v1/system/disks');
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                const list = data.disks || [];
+                var res = await fetch('/api/v1/system/disks');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                var list = data.disks || [];
 
-                const savedTargetDisk = getStorage('selected_target_disk');
+                var savedTargetDisk = getStorage('selected_target_disk');
 
                 if (list.length > 0) {
-                    select.innerHTML = list.map(d => {
-                        const path = d.mountpoint || d.mount || '';
-                        return `<option value="${path}">Disco: ${d.name || path} (${path}) - ${d.free_gb ?? '?'} GB libres</option>`;
+                    select.innerHTML = list.map(function(d) {
+                        var path = d.mountpoint || d.mount || '';
+                        var freeGb = (d.free_gb !== undefined && d.free_gb !== null) ? d.free_gb : '?';
+                        var name = d.name || path;
+                        return '<option value="' + path + '">Disco: ' + name + ' (' + path + ') - ' + freeGb + ' GB libres</option>';
                     }).join('');
 
-                    if (savedTargetDisk && list.some(d => (d.mountpoint || d.mount) === savedTargetDisk)) {
+                    if (savedTargetDisk && list.some(function(d) { return (d.mountpoint || d.mount) === savedTargetDisk; })) {
                         select.value = savedTargetDisk;
                     } else if (select.options.length > 0) {
                         setStorage('selected_target_disk', select.value);
@@ -504,20 +559,21 @@
                     select.innerHTML = '<option value="">Almacenamiento por defecto (/DATA/Backups)</option>';
                 }
 
-                container.innerHTML = list.length ? list.map(d => {
-                    const path = d.mountpoint || d.mount || '';
-                    const percent = d.percent || 0;
-                    return `
-                        <div class="py-2 border-bottom">
-                            <div class="d-flex justify-content-between text-dark fw-bold mb-1">
-                                <span class="text-truncate me-2" style="max-width: 150px;">${path}</span>
-                                <span>${d.used_gb ?? '?'} GB / ${d.total_gb ?? '?'} GB</span>
-                            </div>
-                            <div class="progress" style="height: 10px;">
-                                <div class="progress-bar ${percent > 85 ? 'bg-danger' : 'bg-primary'}" style="width: ${percent}%"></div>
-                            </div>
-                        </div>
-                    `;
+                container.innerHTML = list.length ? list.map(function(d) {
+                    var path = d.mountpoint || d.mount || '';
+                    var percent = d.percent || 0;
+                    var usedGb = (d.used_gb !== undefined && d.used_gb !== null) ? d.used_gb : '?';
+                    var totalGb = (d.total_gb !== undefined && d.total_gb !== null) ? d.total_gb : '?';
+                    var bgClass = percent > 85 ? 'bg-danger' : 'bg-primary';
+                    return '<div class="py-2 border-bottom">' +
+                        '<div class="d-flex justify-content-between text-dark fw-bold mb-1">' +
+                            '<span class="text-truncate me-2" style="max-width: 150px;">' + path + '</span>' +
+                            '<span>' + usedGb + ' GB / ' + totalGb + ' GB</span>' +
+                        '</div>' +
+                        '<div class="progress" style="height: 10px;">' +
+                            '<div class="progress-bar ' + bgClass + '" style="width: ' + percent + '%"></div>' +
+                        '</div>' +
+                    '</div>';
                 }).join('') : '<div class="text-muted py-2 text-center">No se encontraron discos montados adicionales</div>';
             } catch (err) {
                 container.innerHTML = '<div class="text-danger py-2 text-center">Error al leer discos</div>';
@@ -528,22 +584,133 @@
             setStorage('selected_target_disk', value);
         }
 
-        // Abre el modal de confirmación antes de iniciar cualquier copia
+        async function openBorgRestoreModal() {
+            var select = document.getElementById('borgArchiveSelect');
+            select.innerHTML = '<option value="">Consultando snapshots en BorgRepo...</option>';
+            
+            var modalEl = document.getElementById('modalBorgRestore');
+            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+
+            var targetDisk = document.getElementById('targetDiskSelect').value || getStorage('selected_target_disk') || '';
+            var repoPath = targetDisk ? (targetDisk + '/Backups/DisasterRecovery/BorgRepo') : '';
+
+            try {
+                var url = repoPath ? ('/api/v1/borg/restore/archives?repo_path=' + encodeURIComponent(repoPath)) : '/api/v1/borg/restore/archives';
+                var res = await fetch(url);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                
+                currentBorgRepoPath = data.repo_path || repoPath;
+                var archives = data.archives || [];
+
+                if (archives.length > 0) {
+                    select.innerHTML = archives.map(function(a) {
+                        var formattedDate = new Date(a.time).toLocaleString('es-ES');
+                        return '<option value="' + a.name + '">' + a.name + ' (' + formattedDate + ')</option>';
+                    }).join('');
+                } else {
+                    select.innerHTML = '<option value="">No se encontraron snapshots en este repositorio.</option>';
+                }
+            } catch (err) {
+                console.error("Error obteniendo snapshots Borg:", err);
+                select.innerHTML = '<option value="">Error o repositorio Borg no localizado.</option>';
+            }
+        }
+
+        async function startBorgDryRun() {
+            var archiveName = document.getElementById('borgArchiveSelect').value;
+            if (!archiveName) {
+                alert("Por favor selecciona un snapshot válido de la lista.");
+                return;
+            }
+
+            document.getElementById('btnStartBorgDryRun').disabled = true;
+            document.getElementById('btnCancelBorgDryRun').classList.remove('d-none');
+            document.getElementById('borgProgressContainer').classList.remove('d-none');
+
+            try {
+                var res = await fetch('/api/v1/borg/restore/dry-run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        repo_path: currentBorgRepoPath,
+                        archive_name: archiveName
+                    })
+                });
+
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                startPollingBorgStatus();
+            } catch (err) {
+                alert("Fallo al iniciar simulación: " + err.message);
+                document.getElementById('btnStartBorgDryRun').disabled = false;
+                document.getElementById('btnCancelBorgDryRun').classList.add('d-none');
+            }
+        }
+
+        function startPollingBorgStatus() {
+            if (borgInterval) clearInterval(borgInterval);
+
+            borgInterval = setInterval(async function() {
+                try {
+                    var res = await fetch('/api/v1/borg/restore/status');
+                    if (!res.ok) return;
+
+                    var state = await res.json();
+                    var status = state.status;
+                    var processed = state.processed_files || 0;
+                    var currentFile = state.current_file || 'Analizando...';
+
+                    document.getElementById('borgProcessedCount').innerText = processed.toLocaleString('es-ES') + ' archivos';
+                    document.getElementById('borgCurrentFile').innerText = currentFile;
+
+                    if (status === 'RUNNING') {
+                        document.getElementById('borgStatusHeader').innerText = 'Estado: 🔬 Simulando verificación en segundo plano...';
+                    } else if (status === 'COMPLETED') {
+                        clearInterval(borgInterval);
+                        document.getElementById('borgStatusHeader').innerText = 'Estado: ✅ Simulación completada con éxito. Archivos íntegros.';
+                        document.getElementById('borgProgressBar').className = 'progress-bar bg-success';
+                        document.getElementById('btnStartBorgDryRun').disabled = false;
+                        document.getElementById('btnCancelBorgDryRun').classList.add('d-none');
+                    } else if (status === 'FAILED') {
+                        clearInterval(borgInterval);
+                        document.getElementById('borgStatusHeader').innerText = 'Estado: ❌ Error: ' + (state.error || 'Fallo durante el proceso');
+                        document.getElementById('borgProgressBar').className = 'progress-bar bg-danger';
+                        document.getElementById('btnStartBorgDryRun').disabled = false;
+                        document.getElementById('btnCancelBorgDryRun').classList.add('d-none');
+                    } else if (status === 'CANCELLED') {
+                        clearInterval(borgInterval);
+                        document.getElementById('borgStatusHeader').innerText = 'Estado: ⚠️ Simulación cancelada por el usuario.';
+                        document.getElementById('borgProgressBar').className = 'progress-bar bg-warning';
+                        document.getElementById('btnStartBorgDryRun').disabled = false;
+                        document.getElementById('btnCancelBorgDryRun').classList.add('d-none');
+                    }
+                } catch (e) {
+                    console.error("Error obteniendo estado Borg:", e);
+                }
+            }, 1500);
+        }
+
+        async function cancelBorgDryRun() {
+            try {
+                await fetch('/api/v1/borg/restore/cancel', { method: 'POST' });
+            } catch (e) {}
+        }
+
         function requestAppBackup(appName) {
             pendingBackupAppName = appName;
-            const confirmAppLabel = document.getElementById('confirmAppName');
+            var confirmAppLabel = document.getElementById('confirmAppName');
             if (confirmAppLabel) {
                 confirmAppLabel.innerText = appName === 'Sistema_Completo' ? 'Sistema Completo (Disaster Recovery)' : appName;
             }
-            const modalConfirmEl = document.getElementById('modalConfirmBackup');
-            const modalConfirm = bootstrap.Modal.getOrCreateInstance(modalConfirmEl);
+            var modalConfirmEl = document.getElementById('modalConfirmBackup');
+            var modalConfirm = bootstrap.Modal.getOrCreateInstance(modalConfirmEl);
             modalConfirm.show();
         }
 
-        // Se ejecuta al pulsar "Entendido, Iniciar Copia" en el modal de confirmación
         function confirmAndStartBackup() {
-            const modalConfirmEl = document.getElementById('modalConfirmBackup');
-            const modalConfirm = bootstrap.Modal.getInstance(modalConfirmEl);
+            var modalConfirmEl = document.getElementById('modalConfirmBackup');
+            var modalConfirm = bootstrap.Modal.getInstance(modalConfirmEl);
             if (modalConfirm) modalConfirm.hide();
 
             if (pendingBackupAppName) {
@@ -552,11 +719,11 @@
         }
 
         async function triggerAppBackup(appName) {
-            const targetDisk = document.getElementById('targetDiskSelect').value || getStorage('selected_target_disk') || '';
+            var targetDisk = document.getElementById('targetDiskSelect').value || getStorage('selected_target_disk') || '';
             
-            const modalProgressEl = document.getElementById('modalProgress');
-            const modalProgress = bootstrap.Modal.getOrCreateInstance(modalProgressEl);
-            document.getElementById('progressTitle').innerText = `Copia de seguridad: ${appName}`;
+            var modalProgressEl = document.getElementById('modalProgress');
+            var modalProgress = bootstrap.Modal.getOrCreateInstance(modalProgressEl);
+            document.getElementById('progressTitle').innerText = 'Copia de seguridad: ' + appName;
             document.getElementById('progressStatusText').innerText = 'Iniciando copia de seguridad...';
             document.getElementById('progressBar').style.width = '0%';
             document.getElementById('progressBar').innerText = '0%';
@@ -564,7 +731,7 @@
             modalProgress.show();
 
             if (appName === 'Sistema_Completo') {
-                const inlineCard = document.getElementById('systemBackupProgressContainer');
+                var inlineCard = document.getElementById('systemBackupProgressContainer');
                 if (inlineCard) {
                     inlineCard.classList.remove('d-none');
                     document.getElementById('systemBackupProgressText').innerText = 'Iniciando copia...';
@@ -574,22 +741,22 @@
             }
 
             try {
-                const endpoint = appName === 'Sistema_Completo' ? '/api/v1/backups/run-system' : `/api/v1/backups/run-app/${encodeURIComponent(appName)}`;
-                const res = await fetch(`${endpoint}?target_disk=${encodeURIComponent(targetDisk)}`, {
+                var endpoint = appName === 'Sistema_Completo' ? '/api/v1/backups/run-system' : ('/api/v1/backups/run-app/' + encodeURIComponent(appName));
+                var res = await fetch(endpoint + '?target_disk=' + encodeURIComponent(targetDisk), {
                     method: 'POST'
                 });
                 
-                if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+                if (!res.ok) throw new Error('HTTP Error ' + res.status);
 
-                const data = await res.json();
-                const jobId = data.job_id || data.id || data.job;
+                var data = await res.json();
+                var jobId = data.job_id || data.id || data.job;
 
                 if (jobId) {
                     currentJobId = jobId;
                     startPollingJobStatus(jobId);
                 } else {
                     updateProgressUI(100, '✅ Copia completada');
-                    setTimeout(() => modalProgress.hide(), 1500);
+                    setTimeout(function() { modalProgress.hide(); }, 1500);
                 }
             } catch (err) {
                 console.error("Error iniciando backup:", err);
@@ -599,10 +766,10 @@
         }
 
         function resetSystemUIState() {
-            const inlineCard = document.getElementById('systemBackupProgressContainer');
+            var inlineCard = document.getElementById('systemBackupProgressContainer');
             if (inlineCard) inlineCard.classList.add('d-none');
 
-            const systemBadge = document.getElementById('system-status-badge');
+            var systemBadge = document.getElementById('system-status-badge');
             if (systemBadge) {
                 systemBadge.textContent = '🟢 Listo para resguardo';
                 systemBadge.className = 'badge bg-success-subtle text-success border border-success-subtle';
@@ -612,15 +779,15 @@
         function startPollingJobStatus(jobId) {
             if (jobInterval) clearInterval(jobInterval);
 
-            jobInterval = setInterval(async () => {
+            jobInterval = setInterval(async function() {
                 try {
-                    const res = await fetch(`/api/v1/backups/job-status/${jobId}`);
+                    var res = await fetch('/api/v1/backups/job-status/' + jobId);
                     if (!res.ok) return;
 
-                    const data = await res.json();
-                    const progress = data.progress !== undefined ? data.progress : (data.percent || 0);
-                    const status = (data.status || data.state || '').toLowerCase();
-                    const message = data.message || data.msg || 'Procesando...';
+                    var data = await res.json();
+                    var progress = data.progress !== undefined ? data.progress : (data.percent || 0);
+                    var status = (data.status || data.state || '').toLowerCase();
+                    var message = data.message || data.msg || 'Procesando...';
 
                     updateProgressUI(progress, message);
 
@@ -629,11 +796,11 @@
                         jobInterval = null;
                         updateProgressUI(100, message || '✅ Copia completada correctamente');
                         document.getElementById('progressBar').className = 'progress-bar bg-success';
-                        setTimeout(() => resetSystemUIState(), 3000);
+                        setTimeout(function() { resetSystemUIState(); }, 3000);
                     } else if (status === 'failed' || status === 'error') {
                         clearInterval(jobInterval);
                         jobInterval = null;
-                        document.getElementById('progressStatusText').innerText = `❌ Error: ${message}`;
+                        document.getElementById('progressStatusText').innerText = '❌ Error: ' + message;
                         document.getElementById('progressBar').className = 'progress-bar bg-danger';
                         resetSystemUIState();
                     } else if (status === 'cancelled') {
@@ -650,22 +817,22 @@
         }
 
         function updateProgressUI(percent, text) {
-            const p = Math.min(100, Math.max(0, Math.round(percent)));
+            var p = Math.min(100, Math.max(0, Math.round(percent)));
             
-            const progressBar = document.getElementById('progressBar');
-            const statusText = document.getElementById('progressStatusText');
+            var progressBar = document.getElementById('progressBar');
+            var statusText = document.getElementById('progressStatusText');
             if (progressBar) {
-                progressBar.style.width = `${p}%`;
-                progressBar.innerText = `${p}%`;
+                progressBar.style.width = p + '%';
+                progressBar.innerText = p + '%';
             }
             if (statusText && text) statusText.innerText = text;
 
-            const inlineText = document.getElementById('systemBackupProgressText');
-            const inlinePercent = document.getElementById('systemBackupProgressPercent');
-            const inlineBar = document.getElementById('systemBackupProgressBar');
+            var inlineText = document.getElementById('systemBackupProgressText');
+            var inlinePercent = document.getElementById('systemBackupProgressPercent');
+            var inlineBar = document.getElementById('systemBackupProgressBar');
             if (inlineText && text) inlineText.innerText = text;
-            if (inlinePercent) inlinePercent.innerText = `${p}%`;
-            if (inlineBar) inlineBar.style.width = `${p}%`;
+            if (inlinePercent) inlinePercent.innerText = p + '%';
+            if (inlineBar) inlineBar.style.width = p + '%';
         }
 
         async function cancelCurrentJob() {
@@ -675,28 +842,28 @@
             }
             if (currentJobId) {
                 try {
-                    await fetch(`/api/v1/backups/job-cancel/${currentJobId}`, { method: 'POST' });
+                    await fetch('/api/v1/backups/job-cancel/' + currentJobId, { method: 'POST' });
                 } catch (e) {}
                 currentJobId = null;
             }
             updateProgressUI(0, 'Proceso cancelado');
             resetSystemUIState();
 
-            const modalEl = document.getElementById('modalProgress');
-            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            var modalEl = document.getElementById('modalProgress');
+            var modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) modalInstance.hide();
         }
 
         async function triggerRestore(filename) {
-            if (!confirm(`¿Restaurar la copia "${filename}"? Sobrescribirá los datos actuales.`)) return;
+            if (!confirm('¿Restaurar la copia "' + filename + '"? Sobrescribirá los datos actuales.')) return;
 
-            const modalRestoreEl = document.getElementById('modalRestore');
-            const modalRestoreInstance = bootstrap.Modal.getInstance(modalRestoreEl);
+            var modalRestoreEl = document.getElementById('modalRestore');
+            var modalRestoreInstance = bootstrap.Modal.getInstance(modalRestoreEl);
             if (modalRestoreInstance) modalRestoreInstance.hide();
 
-            const modalProgressEl = document.getElementById('modalProgress');
-            const modalProgress = bootstrap.Modal.getOrCreateInstance(modalProgressEl);
-            document.getElementById('progressTitle').innerText = `Restaurando: ${filename}`;
+            var modalProgressEl = document.getElementById('modalProgress');
+            var modalProgress = bootstrap.Modal.getOrCreateInstance(modalProgressEl);
+            document.getElementById('progressTitle').innerText = 'Restaurando: ' + filename;
             document.getElementById('progressStatusText').innerText = 'Iniciando restauración...';
             document.getElementById('progressBar').style.width = '0%';
             document.getElementById('progressBar').innerText = '0%';
@@ -704,9 +871,9 @@
             modalProgress.show();
 
             try {
-                const res = await fetch(`/api/v1/backups/restore/${encodeURIComponent(filename)}`, { method: 'POST' });
+                var res = await fetch('/api/v1/backups/restore/' + encodeURIComponent(filename), { method: 'POST' });
                 if (res.ok) {
-                    const data = await res.json();
+                    var data = await res.json();
                     if (data.job_id) {
                         currentJobId = data.job_id;
                         startPollingJobStatus(data.job_id);
@@ -726,7 +893,7 @@
         async function clearLogs() {
             if (!confirm("¿Deseas borrar el historial de ejecuciones?")) return;
             try {
-                const res = await fetch('/api/v1/executions', { method: 'DELETE' });
+                var res = await fetch('/api/v1/executions', { method: 'DELETE' });
                 if (res.ok) {
                     document.getElementById('logsTableBody').innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">Historial limpiado.</td></tr>';
                 }
@@ -735,26 +902,26 @@
             }
         }
 
-        document.getElementById('modalConfig').addEventListener('show.bs.modal', async () => {
-            const currentSelectedDisk = document.getElementById('targetDiskSelect').value || getStorage('selected_target_disk') || '';
+        document.getElementById('modalConfig').addEventListener('show.bs.modal', async function() {
+            var currentSelectedDisk = document.getElementById('targetDiskSelect').value || getStorage('selected_target_disk') || '';
             document.getElementById('cfgTargetDisk').value = currentSelectedDisk;
 
             try {
-                const res = await fetch('/api/v1/config');
+                var res = await fetch('/api/v1/config');
                 if (res.ok) {
-                    const cfg = await res.json();
+                    var cfg = await res.json();
                     if (cfg.target_disk) document.getElementById('cfgTargetDisk').value = cfg.target_disk;
                     document.getElementById('cfgTelegramEnabled').checked = !!cfg.telegram_enabled;
                     document.getElementById('cfgTelegramToken').value = cfg.telegram_token || '';
                     document.getElementById('cfgTelegramChatId').value = cfg.telegram_chat_id || '';
-                    document.getElementById('cfgBorgPassphrase').value = cfg.borg_passphrase || cfg.duplicati_password || '';
+                    document.getElementById('cfgBorgPassphrase').value = cfg.borg_passphrase || '';
                     document.getElementById('cfgRetentionDays').value = cfg.retention_days || 7;
                 }
             } catch (e) {}
         });
 
         async function saveConfiguration() {
-            const payload = {
+            var payload = {
                 target_disk: document.getElementById('cfgTargetDisk').value,
                 telegram_enabled: document.getElementById('cfgTelegramEnabled').checked,
                 telegram_token: document.getElementById('cfgTelegramToken').value,
@@ -764,7 +931,7 @@
             };
 
             try {
-                const res = await fetch('/api/v1/config', {
+                var res = await fetch('/api/v1/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -775,8 +942,8 @@
                         setStorage('selected_target_disk', payload.target_disk);
                         document.getElementById('targetDiskSelect').value = payload.target_disk;
                     }
-                    const modalEl = document.getElementById('modalConfig');
-                    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                    var modalEl = document.getElementById('modalConfig');
+                    var modalInstance = bootstrap.Modal.getInstance(modalEl);
                     if (modalInstance) modalInstance.hide();
                     alert("✅ Configuración guardada correctamente");
                 } else {
@@ -788,17 +955,17 @@
         }
 
         async function testTelegram() {
-            const resultSpan = document.getElementById('telegramTestResult');
+            var resultSpan = document.getElementById('telegramTestResult');
             resultSpan.className = "small text-muted";
             resultSpan.innerText = "Enviando prueba...";
 
-            const payload = {
+            var payload = {
                 telegram_token: document.getElementById('cfgTelegramToken').value,
                 telegram_chat_id: document.getElementById('cfgTelegramChatId').value
             };
 
             try {
-                const res = await fetch('/api/v1/config/test-telegram', {
+                var res = await fetch('/api/v1/config/test-telegram', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -808,9 +975,9 @@
                     resultSpan.className = "small text-success fw-bold";
                     resultSpan.innerText = "✅ Mensaje enviado";
                 } else {
-                    const data = await res.json();
+                    var data = await res.json();
                     resultSpan.className = "small text-danger fw-bold";
-                    resultSpan.innerText = `❌ ${data.detail || 'Fallo al enviar'}`;
+                    resultSpan.innerText = '❌ ' + (data.detail || 'Fallo al enviar');
                 }
             } catch (e) {
                 resultSpan.className = "small text-danger fw-bold";
@@ -818,51 +985,52 @@
             }
         }
 
-        document.getElementById('modalLogs').addEventListener('show.bs.modal', async () => {
-            const tbody = document.getElementById('logsTableBody');
+        document.getElementById('modalLogs').addEventListener('show.bs.modal', async function() {
+            var tbody = document.getElementById('logsTableBody');
             tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3">Cargando...</td></tr>';
             try {
-                const res = await fetch('/api/v1/executions?limit=50');
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const logs = await res.json();
-                tbody.innerHTML = logs.length ? logs.map(l => `
-                    <tr>
-                        <td class="text-nowrap">${l.fecha}</td>
-                        <td class="fw-semibold">${l.tipo}</td>
-                        <td><code>${l.objetivo}</code></td>
-                        <td><span class="badge ${l.estado === 'success' ? 'bg-success' : 'bg-danger'}">${l.estado}</span></td>
-                        <td><b>${l.duracion}</b></td>
-                    </tr>
-                `).join('') : '<tr><td colspan="5" class="text-center py-3 text-muted">No hay registros aún.</td></tr>';
+                var res = await fetch('/api/v1/executions?limit=50');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var logs = await res.json();
+                tbody.innerHTML = logs.length ? logs.map(function(l) {
+                    var badgeClass = l.estado === 'success' ? 'bg-success' : 'bg-danger';
+                    return '<tr>' +
+                        '<td class="text-nowrap">' + l.fecha + '</td>' +
+                        '<td class="fw-semibold">' + l.tipo + '</td>' +
+                        '<td><code>' + l.objetivo + '</code></td>' +
+                        '<td><span class="badge ' + badgeClass + '">' + l.estado + '</span></td>' +
+                        '<td><b>' + l.duracion + '</b></td>' +
+                    '</tr>';
+                }).join('') : '<tr><td colspan="5" class="text-center py-3 text-muted">No hay registros aún.</td></tr>';
             } catch (e) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-danger">Error al cargar registros</td></tr>';
             }
         });
 
-        document.getElementById('modalRestore').addEventListener('show.bs.modal', async () => {
-            const list = document.getElementById('restoreBackupsList');
+        document.getElementById('modalRestore').addEventListener('show.bs.modal', async function() {
+            var list = document.getElementById('restoreBackupsList');
             list.innerHTML = '<div class="p-3 text-center text-muted">Buscando copias reales...</div>';
             try {
-                const res = await fetch('/api/v1/backups/list');
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                const backups = data.backups || [];
+                var res = await fetch('/api/v1/backups/list');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                var backups = data.backups || [];
                 
-                list.innerHTML = backups.length ? backups.map(b => `
-                    <div class="list-group-item d-flex justify-content-between align-items-center py-3 flex-wrap gap-2">
-                        <div>
-                            <div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>${b.filename}</div>
-                            <div class="small text-muted mt-1">App: <strong class="text-primary">${b.app_name}</strong> &nbsp;|&nbsp; Peso: <strong>${b.size_str}</strong> &nbsp;|&nbsp; Fecha: ${b.fecha}</div>
-                        </div>
-                        <button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore('${b.filename}')">🔄 Restaurar</button>
-                    </div>
-                `).join('') : '<div class="p-4 text-center text-muted">No hay copias válidas registradas.</div>';
+                list.innerHTML = backups.length ? backups.map(function(b) {
+                    return '<div class="list-group-item d-flex justify-content-between align-items-center py-3 flex-wrap gap-2">' +
+                        '<div>' +
+                            '<div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>' + b.filename + '</div>' +
+                            '<div class="small text-muted mt-1">App: <strong class="text-primary">' + b.app_name + '</strong>  |  Peso: <strong>' + b.size_str + '</strong>  |  Fecha: ' + b.fecha + '</div>' +
+                        '</div>' +
+                        '<button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore(\'' + b.filename + '\')">🔄 Restaurar</button>' +
+                    '</div>';
+                }).join('') : '<div class="p-4 text-center text-muted">No hay copias válidas registradas.</div>';
             } catch (e) {
                 list.innerHTML = '<div class="p-4 text-center text-danger">Error al obtener las copias de seguridad.</div>';
             }
         });
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', function() {
             loadApps();
             loadDisksInfo();
             loadRpiInfo();

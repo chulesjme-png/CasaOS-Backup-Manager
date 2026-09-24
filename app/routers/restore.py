@@ -1,4 +1,7 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+import os
+import json
+import subprocess
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Query
 from pydantic import BaseModel
 from typing import Optional
 from app.services.borg_restore_service import borg_restore_service
@@ -9,6 +12,54 @@ class DryRunRequest(BaseModel):
     repo_path: str
     archive_name: str
     passphrase: Optional[str] = None
+
+@router.get("/archives")
+async def list_borg_archives(repo_path: Optional[str] = Query(None)):
+    """Obtiene la lista de snapshots de Borg dentro del repositorio indicado o por defecto."""
+    if not repo_path:
+        candidates = [
+            "/DATA/Backups/DisasterRecovery/BorgRepo",
+            "/host/DATA/Backups/DisasterRecovery/BorgRepo"
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                repo_path = c
+                break
+
+    if not repo_path or not os.path.exists(repo_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Repositorio Borg no encontrado. Verifique la ubicación en el disco."
+        )
+
+    env = os.environ.copy()
+    env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+    env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+
+    try:
+        cmd = ["borg", "list", "--json", repo_path]
+        res = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=20)
+        if res.returncode == 0:
+            data = json.loads(res.stdout)
+            archives = [
+                {
+                    "name": a.get("name"),
+                    "time": a.get("time"),
+                    "id": a.get("id")
+                }
+                for a in data.get("archives", [])
+            ]
+            return {"repo_path": repo_path, "archives": archives}
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error consultando Borg: {res.stderr}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Excepción al listar snapshots: {str(e)}"
+        )
 
 @router.post("/dry-run", status_code=status.HTTP_202_ACCEPTED)
 async def start_dry_run(payload: DryRunRequest, background_tasks: BackgroundTasks):
