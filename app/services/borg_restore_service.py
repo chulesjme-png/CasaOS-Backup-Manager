@@ -75,7 +75,7 @@ class BorgRestoreService:
                     is_real_error = (
                         clean_line.startswith(("Error:", "E ", "[ERROR]", "CRITICAL:", "Traceback", "BorgError:")) or
                         "exception:" in clean_line.lower() or
-                        "passphrase" in clean_line.lower()
+                        any(p in clean_line.lower() for p in ["passphrase required", "enter passphrase", "incorrect passphrase", "invalid passphrase"])
                     )
 
                     if is_real_error:
