@@ -240,7 +240,7 @@
                         <div>
                             <strong class="d-block mb-1 text-dark fs-6">⚠️ AVISO DE PROCESO DE LARGA DURACIÓN</strong>
                             <span class="small text-secondary">
-                                La simulación (Dry-Run) o restauración verificará los <strong>casi 900.000 archivos</strong> de tu copia de seguridad. 
+                                La simulación (Dry-Run) o restauración verificará <strong id="borg-total-files">todos los archivos</strong> de tu copia de seguridad. 
                                 Este análisis en segundo plano es exigente e intensivo para el disco, pudiendo tardar <strong>entre 1 y 3 horas</strong>.
                                 Puedes iniciar el proceso y seguir el conteo de archivos procesados en tiempo real.
                             </span>
@@ -249,7 +249,7 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold text-dark small">Seleccionar Copia de Seguridad (Snapshot):</label>
-                        <select class="form-select border-primary" id="borgArchiveSelect">
+                        <select class="form-select border-primary" id="borgArchiveSelect" onchange="updateBorgSnapshotFiles(this)">
                             <option value="">Cargando snapshots disponibles...</option>
                         </select>
                     </div>
@@ -584,6 +584,25 @@
             setStorage('selected_target_disk', value);
         }
 
+        function updateBorgSnapshotFiles(selectElement) {
+            var filesContainer = document.getElementById('borg-total-files');
+            if (!filesContainer) return;
+
+            if (!selectElement || selectElement.selectedIndex === -1) {
+                filesContainer.textContent = 'todos los archivos';
+                return;
+            }
+
+            var selectedOption = selectElement.options[selectElement.selectedIndex];
+            var filesCount = selectedOption ? selectedOption.getAttribute('data-files') : null;
+
+            if (filesCount && !isNaN(parseInt(filesCount, 10)) && parseInt(filesCount, 10) > 0) {
+                filesContainer.textContent = parseInt(filesCount, 10).toLocaleString('es-ES') + ' archivos';
+            } else {
+                filesContainer.textContent = 'todos los archivos';
+            }
+        }
+
         async function openBorgRestoreModal() {
             var select = document.getElementById('borgArchiveSelect');
             select.innerHTML = '<option value="">Consultando snapshots en BorgRepo...</option>';
@@ -607,14 +626,18 @@
                 if (archives.length > 0) {
                     select.innerHTML = archives.map(function(a) {
                         var formattedDate = new Date(a.time).toLocaleString('es-ES');
-                        return '<option value="' + a.name + '">' + a.name + ' (' + formattedDate + ')</option>';
+                        var nfiles = a.nfiles || (a.stats && a.stats.nfiles) || '';
+                        return '<option value="' + a.name + '" data-files="' + nfiles + '">' + a.name + ' (' + formattedDate + ')</option>';
                     }).join('');
+                    updateBorgSnapshotFiles(select);
                 } else {
                     select.innerHTML = '<option value="">No se encontraron snapshots en este repositorio.</option>';
+                    updateBorgSnapshotFiles(select);
                 }
             } catch (err) {
                 console.error("Error obteniendo snapshots Borg:", err);
                 select.innerHTML = '<option value="">Error o repositorio Borg no localizado.</option>';
+                updateBorgSnapshotFiles(select);
             }
         }
 
@@ -797,7 +820,7 @@
                         updateProgressUI(100, message || '✅ Copia completada correctamente');
                         document.getElementById('progressBar').className = 'progress-bar bg-success';
                         setTimeout(function() { resetSystemUIState(); }, 3000);
-                    } else if (status === 'failed' || status === 'error') {
+                    } else if (status === 'FAILED' || status === 'error' || status === 'failed') {
                         clearInterval(jobInterval);
                         jobInterval = null;
                         document.getElementById('progressStatusText').innerText = '❌ Error: ' + message;
@@ -1020,7 +1043,7 @@
                     return '<div class="list-group-item d-flex justify-content-between align-items-center py-3 flex-wrap gap-2">' +
                         '<div>' +
                             '<div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>' + b.filename + '</div>' +
-                            '<div class="small text-muted mt-1">App: <strong class="text-primary">' + b.app_name + '</strong>  |  Peso: <strong>' + b.size_str + '</strong>  |  Fecha: ' + b.fecha + '</div>' +
+                            '<div class="small text-muted mt-1">App: <strong class="text-primary">' + b.app_name + '</strong> &nbsp;|&nbsp; Peso: <strong>' + b.size_str + '</strong> &nbsp;|&nbsp; Fecha: ' + b.fecha + '</div>' +
                         '</div>' +
                         '<button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore(\'' + b.filename + '\')">🔄 Restaurar</button>' +
                     '</div>';
