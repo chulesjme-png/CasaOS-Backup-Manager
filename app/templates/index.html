@@ -496,7 +496,7 @@
                                 '<div class="fw-bold text-dark text-capitalize fs-6">' + app.name + '</div>' +
                                 '<div class="text-muted small mt-1">Ruta: <code>' + app.path + '</code></div>' +
                             '</div>' +
-                            '<button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="requestAppBackup('' + app.name + '')">⚡ Copiar Ahora</button>' +
+                            '<button class="btn btn-outline-primary btn-sm px-3 rounded-pill" onclick="requestAppBackup(\'' + app.name + '\')">⚡ Copiar Ahora</button>' +
                         '</div>' +
                     '</div>';
                 }).join('');
@@ -1043,9 +1043,9 @@
                     return '<div class="list-group-item d-flex justify-content-between align-items-center py-3 flex-wrap gap-2">' +
                         '<div>' +
                             '<div class="fw-bold text-dark"><span class="fs-5 me-2">📦</span>' + b.filename + '</div>' +
-                            '<div class="small text-muted mt-1">App: <strong class="text-primary">' + b.app_name + '</strong>  |  Peso: <strong>' + b.size_str + '</strong>  |  Fecha: ' + b.fecha + '</div>' +
+                            '<div class="small text-muted mt-1">App: <strong class="text-primary">' + b.app_name + '</strong> &nbsp;|&nbsp; Peso: <strong>' + b.size_str + '</strong> &nbsp;|&nbsp; Fecha: ' + b.fecha + '</div>' +
                         '</div>' +
-                        '<button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore('' + b.filename + '')">🔄 Restaurar</button>' +
+                        '<button class="btn btn-warning text-dark fw-bold btn-sm shadow-sm" onclick="triggerRestore(\'' + b.filename + '\')">🔄 Restaurar</button>' +
                     '</div>';
                 }).join('') : '<div class="p-4 text-center text-muted">No hay copias válidas registradas.</div>';
             } catch (e) {
