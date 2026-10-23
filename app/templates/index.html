@@ -42,12 +42,12 @@
 </head>
 <body>
 
-    <!-- Cabecera Principal (Texto duplicado eliminado) -->
+    <!-- Cabecera Principal -->
     <nav class="navbar navbar-light bg-white border-bottom shadow-sm py-2 mb-4">
         <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">
                 <img src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" height="47" onerror="this.style.display='none'">
-                <span class="badge bg-light text-secondary border rounded-pill px-2 py-1 ms-1" style="font-size: 0.75rem;">v1.0.0</span>
+                <span class="badge bg-light text-secondary border rounded-pill px-2 py-1 ms-1" style="font-size: 0.75rem;">v1.1.0</span>
             </div>
         </div>
     </nav>
@@ -131,7 +131,7 @@
                         Resguarda la configuración completa de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>) mediante un snapshot seguro de BorgBackup.
                     </p>
 
-                    <!-- Botones abajo: Copia principal destacada y Restauración a su derecha -->
+                    <!-- Botones abajo -->
                     <div class="d-flex flex-wrap align-items-center gap-2 pt-2">
                         <button class="btn btn-primary btn-lg flex-grow-1 fw-bold shadow-sm py-2 d-flex align-items-center justify-content-center gap-2" onclick="requestAppBackup('Sistema_Completo')">
                             <span>📦</span>
@@ -396,6 +396,27 @@
                         <div class="mb-3">
                             <label class="form-label small text-muted">Política de Retención (Días a conservar)</label>
                             <input type="number" class="form-control form-control-sm" id="cfgRetentionDays" placeholder="7" min="1" max="365">
+                        </div>
+
+                        <hr class="my-3">
+
+                        <h6 class="fw-bold text-dark mb-3">⏰ Programación Automática del Sistema</h6>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="cfgScheduleEnabled">
+                            <label class="form-check-label small fw-semibold" for="cfgScheduleEnabled">Activar copias automáticas del sistema</label>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small text-muted">Frecuencia</label>
+                                <select class="form-select form-select-sm" id="cfgScheduleFrequency">
+                                    <option value="daily">Todos los días</option>
+                                    <option value="weekly">Cada 7 días</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-muted">Hora de ejecución</label>
+                                <input type="time" class="form-control form-control-sm" id="cfgScheduleTime" value="03:00">
+                            </div>
                         </div>
 
                         <hr class="my-3">
@@ -942,6 +963,11 @@
                     document.getElementById('cfgTelegramChatId').value = cfg.telegram_chat_id || '';
                     document.getElementById('cfgBorgPassphrase').value = cfg.borg_passphrase || '';
                     document.getElementById('cfgRetentionDays').value = cfg.retention_days || 7;
+
+                    // Nuevos campos de programación v1.1.0
+                    document.getElementById('cfgScheduleEnabled').checked = !!cfg.schedule_enabled;
+                    document.getElementById('cfgScheduleFrequency').value = cfg.schedule_frequency || 'daily';
+                    document.getElementById('cfgScheduleTime').value = cfg.schedule_time || '03:00';
                 }
             } catch (e) {}
         });
@@ -953,7 +979,11 @@
                 telegram_token: document.getElementById('cfgTelegramToken').value,
                 telegram_chat_id: document.getElementById('cfgTelegramChatId').value,
                 borg_passphrase: document.getElementById('cfgBorgPassphrase').value,
-                retention_days: parseInt(document.getElementById('cfgRetentionDays').value) || 7
+                retention_days: parseInt(document.getElementById('cfgRetentionDays').value) || 7,
+                // Nuevos campos v1.1.0
+                schedule_enabled: document.getElementById('cfgScheduleEnabled').checked,
+                schedule_frequency: document.getElementById('cfgScheduleFrequency').value,
+                schedule_time: document.getElementById('cfgScheduleTime').value
             };
 
             try {
