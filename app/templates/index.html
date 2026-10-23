@@ -42,13 +42,12 @@
 </head>
 <body>
 
-    <!-- Cabecera Principal -->
+    <!-- Cabecera Principal (Texto duplicado eliminado) -->
     <nav class="navbar navbar-light bg-white border-bottom shadow-sm py-2 mb-4">
         <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">
                 <img src="/static/img/logo-horizontal.svg" alt="CasaOS Backup Manager" height="47" onerror="this.style.display='none'">
-                <span class="fw-bold text-dark fs-5">CasaOS Backup Manager</span>
-                <span class="badge bg-light text-secondary border rounded-pill px-2 py-1 ms-2" style="font-size: 0.75rem;">v0.6.0-beta1</span>
+                <span class="badge bg-light text-secondary border rounded-pill px-2 py-1 ms-1" style="font-size: 0.75rem;">v0.6.0-beta1</span>
             </div>
         </div>
     </nav>
@@ -117,26 +116,33 @@
         <!-- Grid Principal -->
         <div class="row">
             <div class="col-lg-8">
-                <!-- Backup Completo (Disaster Recovery) -->
+                <!-- Backup Completo (Disaster Recovery Rediseñado) -->
                 <div class="card p-4 shadow-sm border-0 mb-4 border-start border-primary border-4">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
                         <div class="d-flex gap-3 align-items-center">
                             <div class="fs-1 text-primary">🛡️</div>
                             <div>
                                 <h5 class="fw-bold text-dark mb-1">Copia de Seguridad del Sistema (Disaster Recovery)</h5>
-                                <p class="text-muted small mb-2">Resguarda la configuración de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>) mediante BorgBackup.</p>
                                 <span class="badge bg-info-subtle text-info border border-info-subtle me-1">🔄 Borg Deduplicado</span>
                                 <span class="badge bg-success-subtle text-success border border-success-subtle" id="system-status-badge">🟢 Listo para resguardo</span>
                             </div>
                         </div>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-primary px-4 py-2 fw-semibold shadow-sm" onclick="requestAppBackup('Sistema_Completo')">
-                                📦 Copiar Sistema Completo
-                            </button>
-                            <button class="btn btn-outline-secondary px-3 py-2 fw-semibold shadow-sm text-secondary" onclick="openBorgRestoreModal()">
-                                🛡️ Simular / Restaurar Borg
-                            </button>
-                        </div>
+                        <!-- Acción excepcional discretamente colocada arriba a la derecha -->
+                        <button class="btn btn-sm btn-outline-secondary opacity-75" onclick="openBorgRestoreModal()" title="Opciones avanzadas de restauración">
+                            🛠️ Simular / Restaurar Borg
+                        </button>
+                    </div>
+
+                    <p class="text-muted small my-3">
+                        Resguarda la configuración completa de CasaOS y los datos de todas las aplicaciones (<code>/DATA/AppData</code>) mediante un snapshot seguro de BorgBackup.
+                    </p>
+
+                    <!-- Acción Principal clara y destacada en toda la anchura -->
+                    <div class="pt-2">
+                        <button class="btn btn-primary btn-lg w-100 fw-bold shadow-sm py-2 d-flex align-items-center justify-content-center gap-2" onclick="requestAppBackup('Sistema_Completo')">
+                            <span>📦</span>
+                            <span>Copiar Sistema Completo Ahora</span>
+                        </button>
                     </div>
 
                     <!-- Progreso en tarjeta (Inline) -->
