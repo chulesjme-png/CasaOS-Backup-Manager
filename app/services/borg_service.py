@@ -177,6 +177,42 @@ class BorgService:
             logger.error(f"Error al ejecutar compact: {e}")
             return False
 
+    def prune_repo(self, repo_path: Optional[str] = None, retention_days: int = 7) -> bool:
+        """Aplica la política de retención (borg prune) para eliminar snapshots antiguos."""
+        target_repo = self._resolve_repo_path(repo_path)
+        if not target_repo or not os.path.exists(os.path.join(target_repo, "config")):
+            return False
+
+        time.sleep(1)
+        logger.info(f"Aplicando política de retención Borg (Prune) - Días: {retention_days}")
+        try:
+            cmd = [
+                "borg",
+                "prune",
+                "--list",
+                "--keep-within",
+                f"{retention_days}d",
+                "--prefix",
+                "Sistema_Completo_",
+                target_repo,
+            ]
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                env=self._get_env(),
+            )
+            if res.returncode == 0:
+                logger.info(f"Borg prune ejecutado con éxito:\n{res.stdout}")
+                self.compact_repo(repo_path)  # Libera el espacio físico en disco
+                return True
+            else:
+                logger.error(f"Error al ejecutar borg prune: {res.stderr.strip()}")
+                return False
+        except Exception as e:
+            logger.error(f"Excepción al ejecutar borg prune: {e}")
+            return False
+
     def _cleanup_after_cancellation(self, repo_path: str, archive_name: str):
         """Elimina únicamente checkpoints parciales incompletos."""
         logger.info(f"Iniciando limpieza de checkpoints temporales en: {repo_path}")
@@ -200,6 +236,7 @@ class BorgService:
         source_paths: Optional[Union[str, List[str]]] = None,
         progress_callback: Optional[Callable[[int, str], None]] = None,
         target_disk: Optional[str] = None,
+        retention_days: int = 7,
         **kwargs,
     ) -> bool:
         """Ejecuta el respaldo Borg respaldando múltiples rutas (Datos + Recetas + Configuración de CasaOS)."""
@@ -308,7 +345,10 @@ class BorgService:
             if progress_callback:
                 progress_callback(100, "Respaldo Borg completado exitosamente.")
 
-            logger.info("Respaldo completado exitosamente.")
+            logger.info("Respaldo completado. Aplicando retención automática...")
+            self.prune_repo(target_repo, retention_days=retention_days)
+
+            logger.info("Respaldo y limpieza completados exitosamente.")
             return True
 
         except Exception as e:
