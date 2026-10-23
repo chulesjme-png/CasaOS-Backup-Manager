@@ -1,5 +1,6 @@
 services:
   casaos-backup-manager:
+    build: .
     image: casaos-backup-manager:latest
     container_name: casaos-backup-manager
     restart: unless-stopped
