@@ -173,6 +173,11 @@ class ConfigModel(BaseModel):
     telegram_enabled: bool = False
     telegram_token: str = ""
     telegram_chat_id: str = ""
+    borg_passphrase: str = ""
+    retention_days: int = 7
+    schedule_enabled: bool = False
+    schedule_frequency: str = "daily"
+    schedule_time: str = "03:00"
 
 class TelegramTestModel(BaseModel):
     telegram_token: str = ""
@@ -191,7 +196,12 @@ def load_config():
         "target_disk": "",
         "telegram_enabled": False,
         "telegram_token": "",
-        "telegram_chat_id": ""
+        "telegram_chat_id": "",
+        "borg_passphrase": "",
+        "retention_days": 7,
+        "schedule_enabled": False,
+        "schedule_frequency": "daily",
+        "schedule_time": "03:00"
     }
     if CONFIG_PATH.exists():
         try:
