@@ -6,6 +6,7 @@ services:
     privileged: true
     ports:
       - "8088:8088"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8088"]
     volumes:
       # Acceso al host para inspección de discos e información real
       - /:/host:ro
@@ -38,6 +39,20 @@ services:
       - BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes
       - BORG_RELOCATED_REPO_ACCESS_IS_OK=yes
       - BORG_UNKNOWN_CLI_OPTION_IS_OK=yes
+    labels:
+      icon: "http://192.168.1.10:8088/static/img/logo-icon.svg"
+    x-casaos:
+      architectures:
+        - amd64
+        - arm64
+      main: casaos-backup-manager
+      title:
+        custom: CasaOS Backup Manager
+      icon: "http://192.168.1.10:8088/static/img/logo-icon.svg"
+      port_map: "8088"
+      scheme: "http"
+      index: "/"
+      show_in_launcher: true
 
 volumes:
   borg_cache:
