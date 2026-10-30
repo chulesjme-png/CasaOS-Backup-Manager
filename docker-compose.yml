@@ -22,6 +22,7 @@ services:
       - /var/lib/casaos:/var/lib/casaos
       - /media:/media:rshared
       - /mnt:/mnt:rshared
+      - /run/media:/run/media:rshared
     environment:
       - TZ=Europe/Madrid
       - PYTHONUNBUFFERED=1
