@@ -368,16 +368,17 @@
         </div>
     </div>
 
-    <!-- Modal Programación -->
+    <!-- Modal Programación y Parámetros Borg -->
     <div class="modal fade" id="modalScheduling" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header">
-                    <h5 class="modal-title fw-bold">📅 Programación Automática del Sistema</h5>
+                    <h5 class="modal-title fw-bold">📅 Programación Automática y Motor Borg</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <form id="schedulingForm" onsubmit="event.preventDefault(); saveSchedulingConfiguration();">
+                        <h6 class="fw-bold text-dark mb-3">⏰ Programación del Sistema</h6>
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" id="cfgScheduleEnabled">
                             <label class="form-check-label small fw-semibold" for="cfgScheduleEnabled">Activar copias automáticas del sistema</label>
@@ -394,6 +395,21 @@
                                 <label class="form-label small text-muted">Hora de ejecución</label>
                                 <input type="time" class="form-control form-control-sm" id="cfgScheduleTime" value="03:00">
                             </div>
+                        </div>
+
+                        <hr class="my-3">
+
+                        <h6 class="fw-bold text-dark mb-3">🛡️ Motor Borg Backup</h6>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Frase de paso (Passphrase) / Clave de Cifrado</label>
+                            <div class="input-group input-group-sm">
+                                <input type="password" class="form-control" id="cfgBorgPassphrase" placeholder="••••••••">
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfgBorgPassphrase')">👁️</button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Política de Retención (Días a conservar)</label>
+                            <input type="number" class="form-control form-control-sm" id="cfgRetentionDays" placeholder="7" min="1" max="365">
                         </div>
                     </form>
                 </div>
@@ -419,21 +435,6 @@
                         <div class="mb-3">
                             <label class="form-label small text-muted">Ruta o Punto de Montaje</label>
                             <input type="text" class="form-control form-control-sm" id="cfgTargetDisk" placeholder="/DATA/Backups">
-                        </div>
-
-                        <hr class="my-3">
-
-                        <h6 class="fw-bold text-dark mb-3">🛡️ Motor Borg Backup</h6>
-                        <div class="mb-3">
-                            <label class="form-label small text-muted">Frase de paso (Passphrase) / Clave de Cifrado</label>
-                            <div class="input-group input-group-sm">
-                                <input type="password" class="form-control" id="cfgBorgPassphrase" placeholder="••••••••">
-                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfgBorgPassphrase')">👁️</button>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small text-muted">Política de Retención (Días a conservar)</label>
-                            <input type="number" class="form-control form-control-sm" id="cfgRetentionDays" placeholder="7" min="1" max="365">
                         </div>
 
                         <hr class="my-3">
@@ -979,13 +980,11 @@
                     document.getElementById('cfgTelegramEnabled').checked = !!cfg.telegram_enabled;
                     document.getElementById('cfgTelegramToken').value = cfg.telegram_token || '';
                     document.getElementById('cfgTelegramChatId').value = cfg.telegram_chat_id || '';
-                    document.getElementById('cfgBorgPassphrase').value = cfg.borg_passphrase || '';
-                    document.getElementById('cfgRetentionDays').value = cfg.retention_days || 7;
                 }
             } catch (e) {}
         });
 
-        // Cargar datos en el modal de Programación
+        // Cargar datos en el modal de Programación y Borg
         document.getElementById('modalScheduling').addEventListener('show.bs.modal', async function() {
             try {
                 var res = await fetch('/api/v1/config');
@@ -994,21 +993,29 @@
                     document.getElementById('cfgScheduleEnabled').checked = !!cfg.schedule_enabled;
                     document.getElementById('cfgScheduleFrequency').value = cfg.schedule_frequency || 'daily';
                     document.getElementById('cfgScheduleTime').value = cfg.schedule_time || '03:00';
+                    document.getElementById('cfgBorgPassphrase').value = cfg.borg_passphrase || '';
+                    document.getElementById('cfgRetentionDays').value = cfg.retention_days || 7;
                 }
             } catch (e) {}
         });
 
         async function saveConfiguration() {
-            var payload = {
-                target_disk: document.getElementById('cfgTargetDisk').value,
-                telegram_enabled: document.getElementById('cfgTelegramEnabled').checked,
-                telegram_token: document.getElementById('cfgTelegramToken').value,
-                telegram_chat_id: document.getElementById('cfgTelegramChatId').value,
-                borg_passphrase: document.getElementById('cfgBorgPassphrase').value,
-                retention_days: parseInt(document.getElementById('cfgRetentionDays').value) || 7
-            };
-
             try {
+                var getRes = await fetch('/api/v1/config');
+                var currentCfg = getRes.ok ? await getRes.json() : {};
+
+                var payload = {
+                    target_disk: document.getElementById('cfgTargetDisk').value,
+                    telegram_enabled: document.getElementById('cfgTelegramEnabled').checked,
+                    telegram_token: document.getElementById('cfgTelegramToken').value,
+                    telegram_chat_id: document.getElementById('cfgTelegramChatId').value,
+                    borg_passphrase: currentCfg.borg_passphrase || '',
+                    retention_days: currentCfg.retention_days || 7,
+                    schedule_enabled: !!currentCfg.schedule_enabled,
+                    schedule_frequency: currentCfg.schedule_frequency || 'daily',
+                    schedule_time: currentCfg.schedule_time || '03:00'
+                };
+
                 var res = await fetch('/api/v1/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1042,8 +1049,8 @@
                     telegram_enabled: !!currentCfg.telegram_enabled,
                     telegram_token: currentCfg.telegram_token || '',
                     telegram_chat_id: currentCfg.telegram_chat_id || '',
-                    borg_passphrase: currentCfg.borg_passphrase || '',
-                    retention_days: currentCfg.retention_days || 7,
+                    borg_passphrase: document.getElementById('cfgBorgPassphrase').value,
+                    retention_days: parseInt(document.getElementById('cfgRetentionDays').value) || 7,
                     schedule_enabled: document.getElementById('cfgScheduleEnabled').checked,
                     schedule_frequency: document.getElementById('cfgScheduleFrequency').value,
                     schedule_time: document.getElementById('cfgScheduleTime').value
@@ -1059,7 +1066,7 @@
                     var modalEl = document.getElementById('modalScheduling');
                     var modalInstance = bootstrap.Modal.getInstance(modalEl);
                     if (modalInstance) modalInstance.hide();
-                    alert("✅ Programación guardada correctamente");
+                    alert("✅ Programación y motor Borg guardados correctamente");
                 } else {
                     alert("❌ Error al guardar programación");
                 }
